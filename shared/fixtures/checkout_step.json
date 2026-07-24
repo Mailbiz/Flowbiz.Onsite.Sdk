@@ -1,0 +1,24 @@
+{
+  "name": "checkout_step",
+  "event": "checkoutStep",
+  "input": {
+    "checkout": {
+      "cartId": "c-9f81b2e0",
+      "step": 2,
+      "totalSteps": 4,
+      "stepName": "pagamento"
+    }
+  },
+  "expected": {
+    "wire_event": "checkout.step",
+    "data": {
+      "checkout": {
+        "cart_id": "c-9f81b2e0",
+        "step": 2,
+        "total_steps": 4,
+        "step_name": "pagamento"
+      }
+    },
+    "data_canonical": "{\"checkout\":{\"cart_id\":\"c-9f81b2e0\",\"step\":2,\"step_name\":\"pagamento\",\"total_steps\":4}}"
+  }
+}

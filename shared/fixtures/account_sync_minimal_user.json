@@ -1,0 +1,20 @@
+{
+  "name": "account_sync_minimal_user",
+  "event": "accountSync",
+  "input": {
+    "user": {
+      "userId": "98412",
+      "email": "maria.oliveira@gmail.com"
+    }
+  },
+  "expected": {
+    "wire_event": "account.sync",
+    "data": {
+      "user": {
+        "user_id": "98412",
+        "email": "maria.oliveira@gmail.com"
+      }
+    },
+    "data_canonical": "{\"user\":{\"email\":\"maria.oliveira@gmail.com\",\"user_id\":\"98412\"}}"
+  }
+}

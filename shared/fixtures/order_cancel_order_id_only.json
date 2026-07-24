@@ -1,0 +1,14 @@
+{
+  "name": "order_cancel_order_id_only",
+  "event": "orderCancel",
+  "input": {
+    "orderId": "v-20260721-8841"
+  },
+  "expected": {
+    "wire_event": "order.cancel",
+    "data": {
+      "order_id": "v-20260721-8841"
+    },
+    "data_canonical": "{\"order_id\":\"v-20260721-8841\"}"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "order_cancel_both_ids",
+  "event": "orderCancel",
+  "input": {
+    "orderId": "ord-2026-000123",
+    "cartId": "c-9f81b2e0"
+  },
+  "expected": {
+    "wire_event": "order.cancel",
+    "data": {
+      "order_id": "ord-2026-000123",
+      "cart_id": "c-9f81b2e0"
+    },
+    "data_canonical": "{\"cart_id\":\"c-9f81b2e0\",\"order_id\":\"ord-2026-000123\"}"
+  }
+}

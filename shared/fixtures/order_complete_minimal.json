@@ -1,0 +1,28 @@
+{
+  "name": "order_complete_minimal",
+  "event": "orderComplete",
+  "input": {
+    "order": {
+      "cartId": "c-9f81b2e0",
+      "subtotal": 439.6,
+      "total": 462.5,
+      "freight": 22.9,
+      "tax": 0,
+      "discounts": 0
+    }
+  },
+  "expected": {
+    "wire_event": "order.complete",
+    "data": {
+      "order": {
+        "cart_id": "c-9f81b2e0",
+        "subtotal": 439.6,
+        "total": 462.5,
+        "freight": 22.9,
+        "tax": 0,
+        "discounts": 0
+      }
+    },
+    "data_canonical": "{\"order\":{\"cart_id\":\"c-9f81b2e0\",\"discounts\":0,\"freight\":22.9,\"subtotal\":439.6,\"tax\":0,\"total\":462.5}}"
+  }
+}

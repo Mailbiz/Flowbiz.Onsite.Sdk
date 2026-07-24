@@ -1,0 +1,110 @@
+{
+  "name": "cart_sync_full",
+  "event": "cartSync",
+  "input": {
+    "cart": {
+      "cartId": "c-9f81b2e0",
+      "subtotal": 439.6,
+      "total": 418.54,
+      "freight": 22.9,
+      "tax": 0,
+      "discounts": 43.96,
+      "currency": "BRL",
+      "coupons": [
+        "BEMVINDA10"
+      ],
+      "items": [
+        {
+          "productId": "CAM-778",
+          "sku": "CAM-778-P-AZ",
+          "quantity": 2,
+          "price": 189.9,
+          "name": "Camisa de Linho Azul Marinho - P",
+          "priceFrom": 249.9,
+          "category": "Roupas > Camisas",
+          "brand": "Reserva",
+          "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+          "imageUrl": "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
+          "properties": {
+            "cor": "Azul Marinho",
+            "tamanho": "P"
+          },
+          "recoveryProperties": {
+            "seller_id": "1"
+          }
+        },
+        {
+          "productId": "MEI-330",
+          "sku": "MEI-330-U",
+          "quantity": 2,
+          "price": 29.9
+        }
+      ],
+      "deliveryAddress": {
+        "postalCode": "01310-100",
+        "addressLine1": "Avenida Paulista",
+        "addressNumber": "1578",
+        "addressLine2": "Apto 82",
+        "city": "São Paulo",
+        "state": "SP",
+        "country": "BR",
+        "neighborhood": "Bela Vista"
+      }
+    }
+  },
+  "expected": {
+    "wire_event": "cart.sync",
+    "data": {
+      "cart": {
+        "cart_id": "c-9f81b2e0",
+        "subtotal": 439.6,
+        "total": 418.54,
+        "freight": 22.9,
+        "tax": 0,
+        "discounts": 43.96,
+        "currency": "BRL",
+        "coupons": [
+          "BEMVINDA10"
+        ],
+        "items": [
+          {
+            "product_id": "CAM-778",
+            "sku": "CAM-778-P-AZ",
+            "quantity": 2,
+            "price": 189.9,
+            "name": "Camisa de Linho Azul Marinho - P",
+            "price_from": 249.9,
+            "category": "Roupas > Camisas",
+            "brand": "Reserva",
+            "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+            "image_url": "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
+            "properties": {
+              "cor": "Azul Marinho",
+              "tamanho": "P"
+            },
+            "recovery_properties": {
+              "seller_id": "1"
+            }
+          },
+          {
+            "product_id": "MEI-330",
+            "sku": "MEI-330-U",
+            "quantity": 2,
+            "price": 29.9
+          }
+        ],
+        "delivery_address": {
+          "postal_code": "01310-100",
+          "address_line1": "Avenida Paulista",
+          "address_number": "1578",
+          "address_line2": "Apto 82",
+          "city": "São Paulo",
+          "state": "SP",
+          "country": "BR",
+          "neighborhood": "Bela Vista"
+        }
+      }
+    },
+    "data_canonical": "{\"cart\":{\"cart_id\":\"c-9f81b2e0\",\"coupons\":[\"BEMVINDA10\"],\"currency\":\"BRL\",\"delivery_address\":{\"address_line1\":\"Avenida Paulista\",\"address_line2\":\"Apto 82\",\"address_number\":\"1578\",\"city\":\"São Paulo\",\"country\":\"BR\",\"neighborhood\":\"Bela Vista\",\"postal_code\":\"01310-100\",\"state\":\"SP\"},\"discounts\":43.96,\"freight\":22.9,\"items\":[{\"brand\":\"Reserva\",\"category\":\"Roupas > Camisas\",\"image_url\":\"https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg\",\"name\":\"Camisa de Linho Azul Marinho - P\",\"price\":189.9,\"price_from\":249.9,\"product_id\":\"CAM-778\",\"properties\":{\"cor\":\"Azul Marinho\",\"tamanho\":\"P\"},\"quantity\":2,\"recovery_properties\":{\"seller_id\":\"1\"},\"sku\":\"CAM-778-P-AZ\",\"url\":\"https://www.belamodastore.com.br/camisa-linho-azul-marinho\"},{\"price\":29.9,\"product_id\":\"MEI-330\",\"quantity\":2,\"sku\":\"MEI-330-U\"}],\"subtotal\":439.6,\"tax\":0,\"total\":418.54}}"
+  }
+}

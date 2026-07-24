@@ -1,0 +1,14 @@
+{
+  "name": "order_cancel_cart_id_only",
+  "event": "orderCancel",
+  "input": {
+    "cartId": "c-9f81b2e0"
+  },
+  "expected": {
+    "wire_event": "order.cancel",
+    "data": {
+      "cart_id": "c-9f81b2e0"
+    },
+    "data_canonical": "{\"cart_id\":\"c-9f81b2e0\"}"
+  }
+}

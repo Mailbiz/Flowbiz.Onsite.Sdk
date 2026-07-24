@@ -1,0 +1,32 @@
+{
+  "name": "cart_sync_empty_cart",
+  "event": "cartSync",
+  "input": {
+    "cart": {
+      "cartId": "c-9f81b2e0",
+      "subtotal": 0,
+      "total": 0,
+      "freight": 0,
+      "tax": 0,
+      "discounts": 0,
+      "currency": "BRL",
+      "items": []
+    }
+  },
+  "expected": {
+    "wire_event": "cart.sync",
+    "data": {
+      "cart": {
+        "cart_id": "c-9f81b2e0",
+        "subtotal": 0,
+        "total": 0,
+        "freight": 0,
+        "tax": 0,
+        "discounts": 0,
+        "currency": "BRL",
+        "items": []
+      }
+    },
+    "data_canonical": "{\"cart\":{\"cart_id\":\"c-9f81b2e0\",\"currency\":\"BRL\",\"discounts\":0,\"freight\":0,\"items\":[],\"subtotal\":0,\"tax\":0,\"total\":0}}"
+  }
+}

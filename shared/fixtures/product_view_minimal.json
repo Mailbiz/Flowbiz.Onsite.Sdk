@@ -1,0 +1,30 @@
+{
+  "name": "product_view_minimal",
+  "event": "productView",
+  "input": {
+    "product": {
+      "productId": "MEI-330",
+      "variants": [
+        {
+          "sku": "MEI-330-U",
+          "price": 29.9
+        }
+      ]
+    }
+  },
+  "expected": {
+    "wire_event": "product.view",
+    "data": {
+      "product": {
+        "product_id": "MEI-330",
+        "variants": [
+          {
+            "sku": "MEI-330-U",
+            "price": 29.9
+          }
+        ]
+      }
+    },
+    "data_canonical": "{\"product\":{\"product_id\":\"MEI-330\",\"variants\":[{\"price\":29.9,\"sku\":\"MEI-330-U\"}]}}"
+  }
+}

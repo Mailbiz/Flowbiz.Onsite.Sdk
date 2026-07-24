@@ -1,6 +1,15 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
+// SPEC §3: warning-clean under strict concurrency checking. Expressed as an
+// upcoming-feature flag (no `unsafeFlags`, which would make the package
+// ineligible as a downstream dependency); on Swift 6 toolchains this enables
+// complete checking while staying in the Swift 5 language mode of
+// tools-version 5.9.
+let strictConcurrency: [SwiftSetting] = [
+    .enableUpcomingFeature("StrictConcurrency")
+]
+
 let package = Package(
     name: "FlowbizOnsite",
     platforms: [
@@ -18,12 +27,14 @@ let package = Package(
     targets: [
         .target(
             name: "FlowbizOnsite",
-            path: "ios/Sources/FlowbizOnsite"
+            path: "ios/Sources/FlowbizOnsite",
+            swiftSettings: strictConcurrency
         ),
         .testTarget(
             name: "FlowbizOnsiteTests",
             dependencies: ["FlowbizOnsite"],
-            path: "ios/Tests/FlowbizOnsiteTests"
+            path: "ios/Tests/FlowbizOnsiteTests",
+            swiftSettings: strictConcurrency
         )
     ]
 )

@@ -1,0 +1,16 @@
+{
+  "name": "cart_set_coupon",
+  "event": "cartSetCoupon",
+  "input": {
+    "cartId": "c-9f81b2e0",
+    "coupon": "FRETEGRATIS"
+  },
+  "expected": {
+    "wire_event": "cart.setcoupon",
+    "data": {
+      "cart_id": "c-9f81b2e0",
+      "coupon": "FRETEGRATIS"
+    },
+    "data_canonical": "{\"cart_id\":\"c-9f81b2e0\",\"coupon\":\"FRETEGRATIS\"}"
+  }
+}

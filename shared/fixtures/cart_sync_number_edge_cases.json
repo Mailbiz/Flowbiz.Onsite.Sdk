@@ -1,0 +1,68 @@
+{
+  "name": "cart_sync_number_edge_cases",
+  "event": "cartSync",
+  "input": {
+    "cart": {
+      "cartId": "c-num-edge",
+      "subtotal": 19.99,
+      "total": 10000000,
+      "freight": 0.1,
+      "tax": 19.0,
+      "discounts": -0.0,
+      "currency": "BRL",
+      "items": [
+        {
+          "productId": "CANECA-01",
+          "sku": "CANECA-01-AZ",
+          "quantity": 1,
+          "price": 19.99,
+          "name": "Caneca “Inverno” — Edição Nº 1 ☕ 😀 por €19,99",
+          "priceFrom": 19,
+          "category": "Casa > Cozinha",
+          "url": "https://shop.example.com.br/colecao/inverno/caneca?ref=a/b",
+          "imageUrl": "https://cdn.example.com.br/img/canecas/caneca-01.jpg",
+          "properties": {
+            "huge": 1e+21,
+            "tiny": 1e-7,
+            "whole": 10000000,
+            "fraction": 0.1
+          }
+        }
+      ]
+    }
+  },
+  "expected": {
+    "wire_event": "cart.sync",
+    "data": {
+      "cart": {
+        "cart_id": "c-num-edge",
+        "subtotal": 19.99,
+        "total": 10000000,
+        "freight": 0.1,
+        "tax": 19,
+        "discounts": 0,
+        "currency": "BRL",
+        "items": [
+          {
+            "product_id": "CANECA-01",
+            "sku": "CANECA-01-AZ",
+            "quantity": 1,
+            "price": 19.99,
+            "name": "Caneca “Inverno” — Edição Nº 1 ☕ 😀 por €19,99",
+            "price_from": 19,
+            "category": "Casa > Cozinha",
+            "url": "https://shop.example.com.br/colecao/inverno/caneca?ref=a/b",
+            "image_url": "https://cdn.example.com.br/img/canecas/caneca-01.jpg",
+            "properties": {
+              "huge": 1e+21,
+              "tiny": 1e-7,
+              "whole": 10000000,
+              "fraction": 0.1
+            }
+          }
+        ]
+      }
+    },
+    "data_canonical": "{\"cart\":{\"cart_id\":\"c-num-edge\",\"currency\":\"BRL\",\"discounts\":0,\"freight\":0.1,\"items\":[{\"category\":\"Casa > Cozinha\",\"image_url\":\"https://cdn.example.com.br/img/canecas/caneca-01.jpg\",\"name\":\"Caneca “Inverno” — Edição Nº 1 ☕ 😀 por €19,99\",\"price\":19.99,\"price_from\":19,\"product_id\":\"CANECA-01\",\"properties\":{\"fraction\":0.1,\"huge\":1e+21,\"tiny\":1e-7,\"whole\":10000000},\"quantity\":1,\"sku\":\"CANECA-01-AZ\",\"url\":\"https://shop.example.com.br/colecao/inverno/caneca?ref=a/b\"}],\"subtotal\":19.99,\"tax\":19,\"total\":10000000}}"
+  }
+}

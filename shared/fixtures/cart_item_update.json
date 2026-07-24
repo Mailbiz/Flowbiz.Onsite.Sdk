@@ -1,0 +1,20 @@
+{
+  "name": "cart_item_update",
+  "event": "cartItemUpdate",
+  "input": {
+    "cartId": "c-9f81b2e0",
+    "productId": "CAM-778",
+    "sku": "CAM-778-P-AZ",
+    "quantity": 3
+  },
+  "expected": {
+    "wire_event": "cart.item.update",
+    "data": {
+      "cart_id": "c-9f81b2e0",
+      "product_id": "CAM-778",
+      "sku": "CAM-778-P-AZ",
+      "quantity": 3
+    },
+    "data_canonical": "{\"cart_id\":\"c-9f81b2e0\",\"product_id\":\"CAM-778\",\"quantity\":3,\"sku\":\"CAM-778-P-AZ\"}"
+  }
+}

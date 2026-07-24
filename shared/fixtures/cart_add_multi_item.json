@@ -1,0 +1,80 @@
+{
+  "name": "cart_add_multi_item",
+  "event": "addToCart",
+  "input": {
+    "products": [
+      {
+        "productId": "CAM-778",
+        "sku": "CAM-778-P-AZ",
+        "quantity": 2,
+        "price": 189.9,
+        "name": "Camisa de Linho Azul Marinho - P",
+        "priceFrom": 249.9,
+        "category": "Roupas > Camisas",
+        "brand": "Reserva",
+        "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+        "imageUrl": "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
+        "properties": {
+          "cor": "Azul Marinho",
+          "tamanho": "P"
+        }
+      },
+      {
+        "productId": "CAL-102",
+        "sku": "CAL-102-40",
+        "quantity": 1,
+        "price": 329.5
+      },
+      {
+        "productId": "MEIA-3",
+        "sku": "MEIA-3-KIT",
+        "quantity": 3,
+        "price": 39.99,
+        "name": "Kit 3 Meias Cano Alto",
+        "recoveryProperties": {
+          "seller_id": "2"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "wire_event": "cart.add",
+    "data": {
+      "products": [
+        {
+          "product_id": "CAM-778",
+          "sku": "CAM-778-P-AZ",
+          "quantity": 2,
+          "price": 189.9,
+          "name": "Camisa de Linho Azul Marinho - P",
+          "price_from": 249.9,
+          "category": "Roupas > Camisas",
+          "brand": "Reserva",
+          "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+          "image_url": "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
+          "properties": {
+            "cor": "Azul Marinho",
+            "tamanho": "P"
+          }
+        },
+        {
+          "product_id": "CAL-102",
+          "sku": "CAL-102-40",
+          "quantity": 1,
+          "price": 329.5
+        },
+        {
+          "product_id": "MEIA-3",
+          "sku": "MEIA-3-KIT",
+          "quantity": 3,
+          "price": 39.99,
+          "name": "Kit 3 Meias Cano Alto",
+          "recovery_properties": {
+            "seller_id": "2"
+          }
+        }
+      ]
+    },
+    "data_canonical": "{\"products\":[{\"brand\":\"Reserva\",\"category\":\"Roupas > Camisas\",\"image_url\":\"https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg\",\"name\":\"Camisa de Linho Azul Marinho - P\",\"price\":189.9,\"price_from\":249.9,\"product_id\":\"CAM-778\",\"properties\":{\"cor\":\"Azul Marinho\",\"tamanho\":\"P\"},\"quantity\":2,\"sku\":\"CAM-778-P-AZ\",\"url\":\"https://www.belamodastore.com.br/camisa-linho-azul-marinho\"},{\"price\":329.5,\"product_id\":\"CAL-102\",\"quantity\":1,\"sku\":\"CAL-102-40\"},{\"name\":\"Kit 3 Meias Cano Alto\",\"price\":39.99,\"product_id\":\"MEIA-3\",\"quantity\":3,\"recovery_properties\":{\"seller_id\":\"2\"},\"sku\":\"MEIA-3-KIT\"}]}"
+  }
+}

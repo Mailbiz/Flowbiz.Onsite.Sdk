@@ -1,0 +1,94 @@
+{
+  "name": "product_view_multi_variant",
+  "event": "productView",
+  "input": {
+    "product": {
+      "productId": "CAM-778",
+      "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+      "category": "Roupas > Camisas",
+      "brand": "Reserva",
+      "variants": [
+        {
+          "sku": "CAM-778-P-AZ",
+          "price": 189.9,
+          "name": "Camisa de Linho Azul Marinho - P",
+          "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho?sku=CAM-778-P-AZ",
+          "imageUrl": "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
+          "priceFrom": 249.9,
+          "stock": 12,
+          "available": true,
+          "properties": {
+            "cor": "Azul Marinho",
+            "tamanho": "P",
+            "tecido": "Linho",
+            "medidas": {
+              "busto_cm": 96,
+              "comprimento_cm": 68.5
+            },
+            "tags": [
+              "colecao-inverno",
+              "linho"
+            ]
+          },
+          "recoveryProperties": {
+            "seller_id": "1",
+            "list_id": "colecao-inverno"
+          }
+        },
+        {
+          "sku": "CAM-778-M-AZ",
+          "price": 189.9,
+          "stock": 0,
+          "available": false
+        }
+      ]
+    }
+  },
+  "expected": {
+    "wire_event": "product.view",
+    "data": {
+      "product": {
+        "product_id": "CAM-778",
+        "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+        "category": "Roupas > Camisas",
+        "brand": "Reserva",
+        "variants": [
+          {
+            "sku": "CAM-778-P-AZ",
+            "price": 189.9,
+            "name": "Camisa de Linho Azul Marinho - P",
+            "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho?sku=CAM-778-P-AZ",
+            "image_url": "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
+            "price_from": 249.9,
+            "stock": 12,
+            "available": true,
+            "properties": {
+              "cor": "Azul Marinho",
+              "tamanho": "P",
+              "tecido": "Linho",
+              "medidas": {
+                "busto_cm": 96,
+                "comprimento_cm": 68.5
+              },
+              "tags": [
+                "colecao-inverno",
+                "linho"
+              ]
+            },
+            "recovery_properties": {
+              "seller_id": "1",
+              "list_id": "colecao-inverno"
+            }
+          },
+          {
+            "sku": "CAM-778-M-AZ",
+            "price": 189.9,
+            "stock": 0,
+            "available": false
+          }
+        ]
+      }
+    },
+    "data_canonical": "{\"product\":{\"brand\":\"Reserva\",\"category\":\"Roupas > Camisas\",\"product_id\":\"CAM-778\",\"url\":\"https://www.belamodastore.com.br/camisa-linho-azul-marinho\",\"variants\":[{\"available\":true,\"image_url\":\"https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg\",\"name\":\"Camisa de Linho Azul Marinho - P\",\"price\":189.9,\"price_from\":249.9,\"properties\":{\"cor\":\"Azul Marinho\",\"medidas\":{\"busto_cm\":96,\"comprimento_cm\":68.5},\"tags\":[\"colecao-inverno\",\"linho\"],\"tamanho\":\"P\",\"tecido\":\"Linho\"},\"recovery_properties\":{\"list_id\":\"colecao-inverno\",\"seller_id\":\"1\"},\"sku\":\"CAM-778-P-AZ\",\"stock\":12,\"url\":\"https://www.belamodastore.com.br/camisa-linho-azul-marinho?sku=CAM-778-P-AZ\"},{\"available\":false,\"price\":189.9,\"sku\":\"CAM-778-M-AZ\",\"stock\":0}]}}"
+  }
+}

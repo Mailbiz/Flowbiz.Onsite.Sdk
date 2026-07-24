@@ -1,0 +1,12 @@
+{
+  "name": "page_view_without_screen_name",
+  "event": "pageView",
+  "input": {},
+  "expected": {
+    "wire_event": "page.view",
+    "data": {
+      "page": {}
+    },
+    "data_canonical": "{\"page\":{}}"
+  }
+}

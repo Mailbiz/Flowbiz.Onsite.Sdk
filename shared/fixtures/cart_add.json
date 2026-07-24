@@ -1,0 +1,56 @@
+{
+  "name": "cart_add",
+  "event": "addToCart",
+  "input": {
+    "products": [
+      {
+        "productId": "CAM-778",
+        "sku": "CAM-778-P-AZ",
+        "quantity": 1,
+        "price": 189.9,
+        "name": "Camisa de Linho Azul Marinho - P",
+        "priceFrom": 249.9,
+        "category": "Roupas > Camisas",
+        "brand": "Reserva",
+        "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+        "imageUrl": "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
+        "properties": {
+          "cor": "Azul Marinho",
+          "tamanho": "P"
+        },
+        "recoveryProperties": {
+          "seller_id": "1",
+          "list_id": "colecao-inverno"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "wire_event": "cart.add",
+    "data": {
+      "products": [
+        {
+          "product_id": "CAM-778",
+          "sku": "CAM-778-P-AZ",
+          "quantity": 1,
+          "price": 189.9,
+          "name": "Camisa de Linho Azul Marinho - P",
+          "price_from": 249.9,
+          "category": "Roupas > Camisas",
+          "brand": "Reserva",
+          "url": "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+          "image_url": "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
+          "properties": {
+            "cor": "Azul Marinho",
+            "tamanho": "P"
+          },
+          "recovery_properties": {
+            "seller_id": "1",
+            "list_id": "colecao-inverno"
+          }
+        }
+      ]
+    },
+    "data_canonical": "{\"products\":[{\"brand\":\"Reserva\",\"category\":\"Roupas > Camisas\",\"image_url\":\"https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg\",\"name\":\"Camisa de Linho Azul Marinho - P\",\"price\":189.9,\"price_from\":249.9,\"product_id\":\"CAM-778\",\"properties\":{\"cor\":\"Azul Marinho\",\"tamanho\":\"P\"},\"quantity\":1,\"recovery_properties\":{\"list_id\":\"colecao-inverno\",\"seller_id\":\"1\"},\"sku\":\"CAM-778-P-AZ\",\"url\":\"https://www.belamodastore.com.br/camisa-linho-azul-marinho\"}]}"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "cart_set_postal_code",
+  "event": "cartSetPostalCode",
+  "input": {
+    "cartId": "c-9f81b2e0",
+    "postalCode": "01310-100"
+  },
+  "expected": {
+    "wire_event": "cart.setpostalcode",
+    "data": {
+      "cart_id": "c-9f81b2e0",
+      "postal_code": "01310-100"
+    },
+    "data_canonical": "{\"cart_id\":\"c-9f81b2e0\",\"postal_code\":\"01310-100\"}"
+  }
+}

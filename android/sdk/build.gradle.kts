@@ -25,4 +25,6 @@ kotlin {
 dependencies {
     // Zero runtime dependencies by design (SPEC §1) — Kotlin stdlib + platform APIs only.
     testImplementation(libs.junit)
+    // Real org.json for local unit tests (the android.jar stub throws); test-only, not shipped.
+    testImplementation(libs.json)
 }
