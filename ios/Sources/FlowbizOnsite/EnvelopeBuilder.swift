@@ -81,6 +81,88 @@ enum EnvelopeBuilder {
         platform: String,
         sdkVersion: String
     ) throws -> [String: Any] {
+        var contextUrl: String?
+        if case .pageView(let screenName) = event, let screenName {
+            contextUrl = "app://\(screenName)"
+        }
+        return buildEntry(
+            wireName: EventSerializer.wireName(event),
+            dataJSON: try EventSerializer.dataJSONString(event),
+            contextUrl: contextUrl,
+            hash: hash,
+            createdAtMillis: createdAtMillis,
+            sentAtMillis: sentAtMillis,
+            timezone: timezone,
+            userId: userId,
+            anonymousId: anonymousId,
+            sessionId: sessionId,
+            visitCount: visitCount,
+            language: language,
+            screen: screen,
+            appId: appId,
+            platform: platform,
+            sdkVersion: sdkVersion
+        )
+    }
+
+    /// Builds a SPEC §8 `page.ping` heartbeat entry. Not part of the `Event`
+    /// catalog (the heartbeat is automatic, never tracked by the host app);
+    /// payload is an empty object — the ping is pure session-keepalive
+    /// signal, all meaning lives in the envelope. Same shape rules as
+    /// `build`; no `context.url`.
+    static func buildPing(
+        hash: String,
+        createdAtMillis: Int64,
+        sentAtMillis: Int64,
+        timezone: String,
+        userId: String?,
+        anonymousId: String,
+        sessionId: String,
+        visitCount: Int,
+        language: String,
+        screen: String,
+        appId: String,
+        platform: String,
+        sdkVersion: String
+    ) -> [String: Any] {
+        buildEntry(
+            wireName: "page.ping",
+            dataJSON: "{}",
+            contextUrl: nil,
+            hash: hash,
+            createdAtMillis: createdAtMillis,
+            sentAtMillis: sentAtMillis,
+            timezone: timezone,
+            userId: userId,
+            anonymousId: anonymousId,
+            sessionId: sessionId,
+            visitCount: visitCount,
+            language: language,
+            screen: screen,
+            appId: appId,
+            platform: platform,
+            sdkVersion: sdkVersion
+        )
+    }
+
+    private static func buildEntry(
+        wireName: String,
+        dataJSON: String,
+        contextUrl: String?,
+        hash: String,
+        createdAtMillis: Int64,
+        sentAtMillis: Int64,
+        timezone: String,
+        userId: String?,
+        anonymousId: String,
+        sessionId: String,
+        visitCount: Int,
+        language: String,
+        screen: String,
+        appId: String,
+        platform: String,
+        sdkVersion: String
+    ) -> [String: Any] {
         let vendor = "flowbiz-\(platform)-sdk"
 
         let timings: [String: Any] = [
@@ -103,14 +185,14 @@ enum EnvelopeBuilder {
             "vendor": vendor,
             "onsite_version": sdkVersion,
         ]
-        if case .pageView(let screenName) = event, let screenName {
-            context["url"] = "app://\(screenName)"
+        if let contextUrl {
+            context["url"] = contextUrl
         }
 
         return [
-            "event": EventSerializer.wireName(event),
+            "event": wireName,
             "hash": hash,
-            "data": try EventSerializer.dataJSONString(event),
+            "data": dataJSON,
             "timings": timings,
             "identity": identity,
             "context": context,

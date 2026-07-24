@@ -227,4 +227,61 @@ class SessionManagerTest {
         val next = SessionManager(store, FakeClock(monotonic = 1_000L, wall = clock.wall))
         assertEquals(1, next.currentSession().visitCount)
     }
+
+    @Test
+    fun nonUuidShapedStoredSessionIdRotatesAtInit() {
+        manager.touch()
+        store.values[StorageKeys.SESSION_ID] = "definitely-not-a-uuid"
+        val next = SessionManager(store, FakeClock(monotonic = 1_000L, wall = clock.wall))
+        val session = next.currentSession()
+        assertNotEquals("definitely-not-a-uuid", session.sessionId)
+        assertTrue(
+            Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+                .matches(session.sessionId)
+        )
+        assertEquals(2, session.visitCount)
+    }
+
+    @Test
+    fun negativeStoredVisitCountClampsToOneOnRotation() {
+        val fresh = FakeKeyValueStore()
+        fresh.values[StorageKeys.VISIT_COUNT] = -7
+        val next = SessionManager(fresh, FakeClock())
+        // max(0, stored) + 1 — never 0 or negative on the wire.
+        assertEquals(1, next.currentSession().visitCount)
+        assertEquals(1, fresh.values[StorageKeys.VISIT_COUNT])
+    }
+
+    // --- Forced rotation (logout support, Slice 4) ---
+
+    @Test
+    fun rotateForcesANewSessionAndIncrementsVisitCount() {
+        val original = manager.currentSession()
+        manager.rotate()
+        val rotated = manager.currentSession()
+        assertNotEquals(original.sessionId, rotated.sessionId)
+        assertEquals(original.visitCount + 1, rotated.visitCount)
+        // Persisted immediately.
+        assertEquals(rotated.sessionId, store.values[StorageKeys.SESSION_ID])
+        assertEquals(rotated.visitCount, store.values[StorageKeys.VISIT_COUNT])
+    }
+
+    @Test
+    fun rotateReanchorsTheInactivityWindow() {
+        clock.advance(29 * MINUTE_MS)
+        manager.rotate()
+        val rotated = manager.currentSession()
+        // 29 more minutes: within the freshly-anchored window — no rotation.
+        clock.advance(29 * MINUTE_MS)
+        manager.touch()
+        assertEquals(rotated, manager.currentSession())
+    }
+
+    @Test
+    fun rotateInsideAnExpiredWindowIncrementsExactlyOnce() {
+        val original = manager.currentSession()
+        clock.advance(timeout + MINUTE_MS)
+        manager.rotate()
+        assertEquals(original.visitCount + 1, manager.currentSession().visitCount)
+    }
 }

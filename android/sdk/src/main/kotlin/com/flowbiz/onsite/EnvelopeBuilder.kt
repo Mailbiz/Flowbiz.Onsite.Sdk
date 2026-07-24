@@ -55,6 +55,82 @@ internal object EnvelopeBuilder {
         appId: String,
         platform: String,
         sdkVersion: String,
+    ): JSONObject = buildEntry(
+        wireName = EventSerializer.wireName(event),
+        dataJson = EventSerializer.dataJson(event),
+        contextUrl = (event as? Event.PageView)?.screenName?.let { "app://$it" },
+        hash = hash,
+        createdAtMillis = createdAtMillis,
+        sentAtMillis = sentAtMillis,
+        timezone = timezone,
+        userId = userId,
+        anonymousId = anonymousId,
+        sessionId = sessionId,
+        visitCount = visitCount,
+        language = language,
+        screen = screen,
+        appId = appId,
+        platform = platform,
+        sdkVersion = sdkVersion,
+    )
+
+    /**
+     * Builds a SPEC §8 `page.ping` heartbeat entry. Not part of the [Event]
+     * catalog (the heartbeat is automatic, never tracked by the host app);
+     * payload is an empty object — the ping is pure session-keepalive
+     * signal, all meaning lives in the envelope. Same shape rules as
+     * [build]; no `context.url`.
+     */
+    fun buildPing(
+        hash: String,
+        createdAtMillis: Long,
+        sentAtMillis: Long,
+        timezone: String,
+        userId: String?,
+        anonymousId: String,
+        sessionId: String,
+        visitCount: Int,
+        language: String,
+        screen: String,
+        appId: String,
+        platform: String,
+        sdkVersion: String,
+    ): JSONObject = buildEntry(
+        wireName = "page.ping",
+        dataJson = "{}",
+        contextUrl = null,
+        hash = hash,
+        createdAtMillis = createdAtMillis,
+        sentAtMillis = sentAtMillis,
+        timezone = timezone,
+        userId = userId,
+        anonymousId = anonymousId,
+        sessionId = sessionId,
+        visitCount = visitCount,
+        language = language,
+        screen = screen,
+        appId = appId,
+        platform = platform,
+        sdkVersion = sdkVersion,
+    )
+
+    private fun buildEntry(
+        wireName: String,
+        dataJson: String,
+        contextUrl: String?,
+        hash: String,
+        createdAtMillis: Long,
+        sentAtMillis: Long,
+        timezone: String,
+        userId: String?,
+        anonymousId: String,
+        sessionId: String,
+        visitCount: Int,
+        language: String,
+        screen: String,
+        appId: String,
+        platform: String,
+        sdkVersion: String,
     ): JSONObject {
         val vendor = "flowbiz-$platform-sdk"
 
@@ -76,15 +152,14 @@ internal object EnvelopeBuilder {
             .put("screen", screen)
             .put("vendor", vendor)
             .put("onsite_version", sdkVersion)
-        val screenName = (event as? Event.PageView)?.screenName
-        if (screenName != null) {
-            context.put("url", "app://$screenName")
+        if (contextUrl != null) {
+            context.put("url", contextUrl)
         }
 
         return JSONObject()
-            .put("event", EventSerializer.wireName(event))
+            .put("event", wireName)
             .put("hash", hash)
-            .put("data", EventSerializer.dataJson(event))
+            .put("data", dataJson)
             .put("timings", timings)
             .put("identity", identity)
             .put("context", context)

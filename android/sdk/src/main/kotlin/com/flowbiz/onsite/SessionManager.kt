@@ -52,7 +52,9 @@ internal class SessionManager(
         val storedWall = store.getLong(StorageKeys.LAST_ACTIVITY_WALL_MS)
 
         val wallElapsed = if (storedWall != null) wallNow - storedWall else null
-        val sessionStillLive = storedId != null && wallElapsed != null &&
+        // A corrupt (non-UUID-shaped) stored id is untrusted → rotate.
+        val sessionStillLive = storedId != null && IdentityStore.UUID_SHAPE.matches(storedId) &&
+            wallElapsed != null &&
             wallElapsed < SESSION_TIMEOUT_MS && wallElapsed > -WALL_FUTURE_TOLERANCE_MS
 
         if (sessionStillLive) {
@@ -63,7 +65,8 @@ internal class SessionManager(
             lastActivityMonotonic = monotonicNow - maxOf(0L, wallElapsed!!)
         } else {
             sessionId = UUID.randomUUID().toString()
-            visitCount = storedVisits + 1
+            // Corrupt negative counters clamp to 0 before the increment.
+            visitCount = maxOf(0, storedVisits) + 1
             lastActivityMonotonic = monotonicNow
             persistSession(wallNow)
         }
@@ -92,6 +95,18 @@ internal class SessionManager(
      * performs the same expire-then-slide as [touch].
      */
     fun onForeground() = touch()
+
+    /**
+     * Forced rotation regardless of the inactivity window — `logout()`
+     * support (SPEC §6, wired in Slice 4). Increments `visit_count` and
+     * re-anchors the activity window.
+     */
+    fun rotate() {
+        synchronized(lock) {
+            rotateLocked()
+            lastActivityMonotonic = clock.monotonicMillis()
+        }
+    }
 
     private fun rotateLocked() {
         sessionId = UUID.randomUUID().toString()

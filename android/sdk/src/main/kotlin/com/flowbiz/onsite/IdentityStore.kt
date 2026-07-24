@@ -60,13 +60,14 @@ internal class IdentityStore(private val store: KeyValueStore) {
         }
     }
 
-    private companion object {
+    companion object {
         /**
          * 8-4-4-4-12 hex shape (any case). Deliberately not v4-strict: an id
          * from a future/other generator is still a usable stable identifier,
-         * only garbage forces regeneration.
+         * only garbage forces regeneration. Shared with [SessionManager]'s
+         * stored-session validation.
          */
-        val UUID_SHAPE = Regex(
+        internal val UUID_SHAPE = Regex(
             "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
         )
     }

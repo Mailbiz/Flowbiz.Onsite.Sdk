@@ -62,7 +62,8 @@ final class SessionManager: @unchecked Sendable {
 
         let wallElapsed = storedWall.map { wallNow - $0 }
         let sessionStillLive: Bool
-        if let storedId, let wallElapsed,
+        // A corrupt (non-UUID-shaped) stored id is untrusted → rotate.
+        if let storedId, UUID(uuidString: storedId) != nil, let wallElapsed,
            wallElapsed < Self.sessionTimeoutMillis, wallElapsed > -Self.wallFutureToleranceMillis {
             sessionStillLive = true
             sessionId = storedId
@@ -73,7 +74,8 @@ final class SessionManager: @unchecked Sendable {
         } else {
             sessionStillLive = false
             sessionId = UUID().uuidString.lowercased()
-            visitCount = storedVisits + 1
+            // Corrupt negative counters clamp to 0 before the increment.
+            visitCount = max(0, storedVisits) + 1
             lastActivityMonotonic = monotonicNow
         }
         if !sessionStillLive {
@@ -107,6 +109,16 @@ final class SessionManager: @unchecked Sendable {
     /// performs the same expire-then-slide as `touch()`.
     func onForeground() {
         touch()
+    }
+
+    /// Forced rotation regardless of the inactivity window — `logout()`
+    /// support (SPEC §6, wired in Slice 4). Increments `visit_count` and
+    /// re-anchors the activity window.
+    func rotate() {
+        lock.lock()
+        defer { lock.unlock() }
+        rotateLocked()
+        lastActivityMonotonic = clock.monotonicMillis()
     }
 
     private func rotateLocked() {

@@ -207,5 +207,54 @@ import Testing
         let next = SessionManager(store: store, clock: FakeClock(monotonic: 1_000, wall: clock.wall))
         #expect(next.currentSession().visitCount == 1)
     }
+
+    @Test func nonUuidShapedStoredSessionIdRotatesAtInit() {
+        manager.touch()
+        store[StorageKeys.sessionId] = "definitely-not-a-uuid"
+        let next = SessionManager(store: store, clock: FakeClock(monotonic: 1_000, wall: clock.wall))
+        let session = next.currentSession()
+        #expect(session.sessionId != "definitely-not-a-uuid")
+        #expect(UUID(uuidString: session.sessionId) != nil)
+        #expect(session.visitCount == 2)
+    }
+
+    @Test func negativeStoredVisitCountClampsToOneOnRotation() {
+        let fresh = FakeKeyValueStore()
+        fresh[StorageKeys.visitCount] = -7
+        let next = SessionManager(store: fresh, clock: FakeClock())
+        // max(0, stored) + 1 — never 0 or negative on the wire.
+        #expect(next.currentSession().visitCount == 1)
+        #expect(fresh[StorageKeys.visitCount] as? Int == 1)
+    }
+
+    // MARK: Forced rotation (logout support, Slice 4)
+
+    @Test func rotateForcesANewSessionAndIncrementsVisitCount() {
+        let original = manager.currentSession()
+        manager.rotate()
+        let rotated = manager.currentSession()
+        #expect(rotated.sessionId != original.sessionId)
+        #expect(rotated.visitCount == original.visitCount + 1)
+        // Persisted immediately.
+        #expect(store[StorageKeys.sessionId] as? String == rotated.sessionId)
+        #expect(store[StorageKeys.visitCount] as? Int == rotated.visitCount)
+    }
+
+    @Test func rotateReanchorsTheInactivityWindow() {
+        clock.advance(29 * minuteMs)
+        manager.rotate()
+        let rotated = manager.currentSession()
+        // 29 more minutes: within the freshly-anchored window — no rotation.
+        clock.advance(29 * minuteMs)
+        manager.touch()
+        #expect(manager.currentSession() == rotated)
+    }
+
+    @Test func rotateInsideAnExpiredWindowIncrementsExactlyOnce() {
+        let original = manager.currentSession()
+        clock.advance(timeout + minuteMs)
+        manager.rotate()
+        #expect(manager.currentSession().visitCount == original.visitCount + 1)
+    }
 }
 #endif
