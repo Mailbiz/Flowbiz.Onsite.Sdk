@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Privacy manifest for the FlowbizOnsite SDK (SPEC §12).
+
+  Bundled as an SPM resource so host apps' privacy reports aggregate the
+  SDK's declarations (mandatory for third-party SDKs since spring 2024).
+
+  Notes / pending legal review before 1.0 (SPEC §12):
+  - NSPrivacyTracking is declared `false`: the SDK sends data only to the
+    first-party Flowbiz collector, does not link data with third-party data
+    for advertising measurement, and contacts no ATT-defined tracking
+    domains (NSPrivacyTrackingDomains is empty accordingly). Legal review
+    MUST confirm this classification before the 1.0 release.
+  - Collected-data purposes are declared as Analytics + App Functionality
+    (cart state powers the in-app cart-recovery flow). Legal/marketing
+    review should confirm whether the Developer's Advertising or Marketing
+    purpose (NSPrivacyCollectedDataTypePurposeDeveloperAdvertising) must be
+    added for the contact fields, given the platform's cart-recovery
+    messaging.
+  - "Device ID" declares the SDK's `anonymous_id` (a random per-install
+    UUID persisted in UserDefaults, SPEC §6); the SDK never reads IDFA/IDFV.
+  - All types are declared linked-to-identity: every envelope carries
+    `anonymous_id`, and `user_id`/email are attached after account events.
+  - Push tokens (push.token.sync/remove, SPEC §10) are not declared: per
+    Apple's privacy-manifest FAQ, device tokens used solely to deliver
+    push notifications are generally exempt from collection declaration.
+    Legal review to confirm the exemption applies here.
+  - context.language, context.screen (resolution) and timings.timezone
+    (UTC offset) were considered and deliberately not declared: they are
+    device/context metadata sent for rendering/diagnostics, not one of the
+    enumerated user-data collection types requiring declaration. Legal
+    review to confirm (same review bucket as the items above).
+
+  Accessed-API declaration: the SDK persists identity/session/opt-out state
+  in UserDefaults (SPEC §1/§6) — category User Defaults, reason CA92.1
+  ("access info from same app, per documentation").
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<!-- accountLogin/accountSync: user.email (SPEC §5) -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- accountLogin/accountSync: user.phone (SPEC §5) -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhoneNumber</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- accountLogin/accountSync: user.name (SPEC §5) -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- cartSync/orderComplete/orderCancel: carts, orders, payment methods (SPEC §5) -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- pageView/productView/cart.*/checkoutStep + page.ping heartbeat (SPEC §5/§8) -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- cartSync/orderComplete: delivery_address street/city/state/postal;
+		     cartSetPostalCode: data.postal_code (SPEC §5) -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhysicalAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- identity.user_id, set by account events (SPEC §5/§6) -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- identity.anonymous_id: random per-install UUID (SPEC §6); no IDFA/IDFV -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

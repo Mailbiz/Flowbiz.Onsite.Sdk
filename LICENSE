@@ -1,0 +1,11 @@
+Copyright (c) 2026 Flowbiz. All rights reserved.
+
+This software and its source code are proprietary. No license, express or
+implied, is granted for use, copying, modification, or distribution of this
+software except as agreed in writing with Flowbiz.
+
+NOTE (flagged for legal review before 1.0, SPEC §13): this is a placeholder
+proprietary license. The repository layout currently source-distributes both
+SDKs from this repo (see SPEC §13 "Decision (flagged)"); the final license
+text, and whether distribution remains source-based, must be confirmed by
+legal before the 1.0 release.

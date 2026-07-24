@@ -95,6 +95,57 @@ import Testing
         #expect(harness.store[StorageKeys.pushToken] == nil)
     }
 
+    /// SPEC §10.1: emitting `push.token.remove` clears the
+    /// `push.token.sync` dedup anchor — a re-registered identical token
+    /// within the 20-minute window must re-sync (the collector no longer
+    /// associates it).
+    @Test func removeClearsTheSyncDedupAnchorSoTheSameTokenResyncs() throws {
+        let harness = CoreHarness()
+        harness.core.setPushToken("apns-token-1")
+        harness.core.removePushToken()
+        harness.core.setPushToken("apns-token-1") // same token, well within 20 min
+        #expect(try entries(harness, event: "push.token.sync").count == 2)
+    }
+
+    /// Same anchor-clearing via the logout() removal path (SPEC §10.1).
+    @Test func logoutRemovalAlsoClearsTheSyncDedupAnchor() throws {
+        let harness = CoreHarness()
+        harness.core.setPushToken("apns-token-1")
+        harness.core.logout()
+        harness.core.setPushToken("apns-token-1")
+        #expect(try entries(harness, event: "push.token.sync").count == 2)
+    }
+
+    /// SPEC §10.1/§12: setEnabled(true) re-emits `push.token.sync` for the
+    /// stored token — covers a token registered while the SDK was disabled
+    /// (persisted, but its sync event was dropped).
+    @Test func reEnableReEmitsSyncForTheStoredToken() throws {
+        let harness = CoreHarness()
+        harness.core.setEnabled(false)
+        harness.core.setPushToken("apns-token-1")
+        #expect(try harness.sentEntries().isEmpty)
+        harness.core.setEnabled(true)
+        let syncs = try entries(harness, event: "push.token.sync")
+        #expect(syncs.count == 1)
+        #expect(syncs.first?["data"] as? String == #"{"platform":"ios","token":"apns-token-1"}"#)
+    }
+
+    @Test func reEnableWithoutAStoredTokenEmitsNoSync() throws {
+        let harness = CoreHarness()
+        harness.core.setEnabled(false)
+        harness.core.setEnabled(true)
+        #expect(try entries(harness, event: "push.token.sync").isEmpty)
+    }
+
+    /// The re-enable re-emit rides the normal pipeline: dedup still applies.
+    @Test func reEnableReEmitIsSuppressedWhenTheTokenWasAlreadySyncedWithinTheWindow() throws {
+        let harness = CoreHarness()
+        harness.core.setPushToken("apns-token-1") // synced while enabled -> dedup anchor recorded
+        harness.core.setEnabled(false)
+        harness.core.setEnabled(true) // within the 20-min window
+        #expect(try entries(harness, event: "push.token.sync").count == 1)
+    }
+
     @Test func disabledRemoveStillClearsTheStoredToken() throws {
         let harness = CoreHarness()
         harness.core.setPushToken("apns-token-1")

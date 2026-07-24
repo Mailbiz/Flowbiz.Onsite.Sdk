@@ -112,6 +112,65 @@ class PushTokenPipelineTest {
         assertFalse(harness.store.values.containsKey(StorageKeys.PUSH_TOKEN))
     }
 
+    /**
+     * SPEC §10.1: emitting `push.token.remove` clears the `push.token.sync`
+     * dedup anchor — a re-registered identical token within the 20-minute
+     * window must re-sync (the collector no longer associates it).
+     */
+    @Test
+    fun removeClearsTheSyncDedupAnchorSoTheSameTokenResyncs() {
+        val harness = harness()
+        harness.core.setPushToken("fcm-token-1")
+        harness.core.removePushToken()
+        harness.core.setPushToken("fcm-token-1") // same token, well within 20 min
+        assertEquals(2, harness.sentEntries().count { it.getString("event") == "push.token.sync" })
+    }
+
+    /** Same anchor-clearing via the logout() removal path (SPEC §10.1). */
+    @Test
+    fun logoutRemovalAlsoClearsTheSyncDedupAnchor() {
+        val harness = harness()
+        harness.core.setPushToken("fcm-token-1")
+        harness.core.logout()
+        harness.core.setPushToken("fcm-token-1")
+        assertEquals(2, harness.sentEntries().count { it.getString("event") == "push.token.sync" })
+    }
+
+    /**
+     * SPEC §10.1/§12: setEnabled(true) re-emits `push.token.sync` for the
+     * stored token — covers a token registered while the SDK was disabled
+     * (persisted, but its sync event was dropped).
+     */
+    @Test
+    fun reEnableReEmitsSyncForTheStoredToken() {
+        val harness = harness()
+        harness.core.setEnabled(false)
+        harness.core.setPushToken("fcm-token-1")
+        assertTrue(harness.sentEntries().isEmpty())
+        harness.core.setEnabled(true)
+        val syncs = harness.sentEntries().filter { it.getString("event") == "push.token.sync" }
+        assertEquals(1, syncs.size)
+        assertEquals("""{"platform":"android","token":"fcm-token-1"}""", syncs.single().getString("data"))
+    }
+
+    @Test
+    fun reEnableWithoutAStoredTokenEmitsNoSync() {
+        val harness = harness()
+        harness.core.setEnabled(false)
+        harness.core.setEnabled(true)
+        assertEquals(0, harness.sentEntries().count { it.getString("event") == "push.token.sync" })
+    }
+
+    /** The re-enable re-emit rides the normal pipeline: dedup still applies. */
+    @Test
+    fun reEnableReEmitIsSuppressedWhenTheTokenWasAlreadySyncedWithinTheWindow() {
+        val harness = harness()
+        harness.core.setPushToken("fcm-token-1") // synced while enabled -> dedup anchor recorded
+        harness.core.setEnabled(false)
+        harness.core.setEnabled(true) // within the 20-min window
+        assertEquals(1, harness.sentEntries().count { it.getString("event") == "push.token.sync" })
+    }
+
     @Test
     fun disabledRemoveStillClearsTheStoredToken() {
         val harness = harness()

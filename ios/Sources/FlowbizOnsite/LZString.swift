@@ -23,8 +23,11 @@ import Foundation
 /// - JS returns `""` for a *null* input and `null` for `""`; the Swift
 ///   signature folds both to nil (nil-in → nil-out is the idiomatic port).
 /// - A first 2-bit token of 3 is impossible in real compressed output (the
-///   compressor emits 0/1/2 first); JS then concatenates the string
-///   `"undefined"` into the result — this port returns nil instead.
+///   compressor emits 0/1/2 first); on such input the reference library
+///   returns `""` or throws a `TypeError` (reading a property of the
+///   `undefined` first entry), and the web tracker's wrapper masks the
+///   throw to `''` — this port returns nil instead: safer and unambiguous
+///   (pinned by the shared `garbage_first_token_3` vector).
 /// - Garbage input can decode to lone UTF-16 surrogates, which JS strings
 ///   tolerate; Swift's UTF-16 decoding replaces them with U+FFFD. Valid
 ///   compressed data never hits this (surrogate pairs stay adjacent).
@@ -109,7 +112,8 @@ enum LZString {
         case 2:
             return ""
         default:
-            // Impossible in real output; JS degrades to "undefined" strings.
+            // Impossible in real output; the reference returns ""/throws
+            // (masked to '' by the web wrapper) — see class doc.
             return nil
         }
         dictionary.append(first) // index 3

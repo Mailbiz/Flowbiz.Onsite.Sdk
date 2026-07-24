@@ -106,6 +106,12 @@
     "expected_decompressed": ""
   },
   {
+    "name": "garbage_first_token_3",
+    "compressed": "wAAA",
+    "expect_null": true,
+    "note": "first 2-bit token decodes to 3, impossible in real compressed output; the reference JS returns '' or throws (masked to '' by the web tracker wrapper) — the native ports return null"
+  },
+  {
     "name": "garbage_null_path_1",
     "compressed": "h7twshJDOS$urXQG632",
     "expect_null": true,

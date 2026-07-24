@@ -159,7 +159,7 @@ final class FlowbizCore: @unchecked Sendable {
     func logout() {
         submit { core in
             if let token = core.pushTokenStore.token {
-                core.emitInternal(wireName: "push.token.remove", dataJSON: Self.tokenDataJSON(token))
+                core.emitTokenRemoval(token)
             }
             core.identityStore.clearUser()
             core.sessionManager.rotate()
@@ -191,7 +191,7 @@ final class FlowbizCore: @unchecked Sendable {
                 SdkLog.debug("removePushToken ignored: no token stored")
                 return
             }
-            core.emitInternal(wireName: "push.token.remove", dataJSON: Self.tokenDataJSON(token))
+            core.emitTokenRemoval(token)
             core.pushTokenStore.clear()
         }
     }
@@ -209,6 +209,13 @@ final class FlowbizCore: @unchecked Sendable {
             } else if !wasEnabled {
                 if core.foregrounded {
                     core.heartbeat.start(intervalMillis: core.heartbeatIntervalMillis)
+                }
+                // SPEC §10.1/§12: a token registered while disabled was
+                // persisted but its sync event was dropped — re-emit for the
+                // stored token (normal pipeline, so dedup still applies: a
+                // token already synced <20 min ago is not re-sent).
+                if let token = core.pushTokenStore.token {
+                    core.emitInternal(wireName: "push.token.sync", dataJSON: Self.tokenDataJSON(token))
                 }
                 core.flushController.requestFlush(.explicit)
                 SdkLog.debug("SDK re-enabled")
@@ -297,6 +304,17 @@ final class FlowbizCore: @unchecked Sendable {
         // CanonicalJSON only throws for non-finite numbers; unreachable for
         // two strings — the fallback is pure defensiveness.
         (try? CanonicalJSON.render(["token": token, "platform": platform])) ?? "{}"
+    }
+
+    /// Emits `push.token.remove` and clears the `push.token.sync` dedup
+    /// anchor (SPEC §10.1): after a removal, re-registering the *same* token
+    /// within the 20-minute window must re-sync — the collector no longer
+    /// associates it. The anchor is cleared even when the removal event
+    /// itself is dropped (disabled) or suppressed, mirroring how the token
+    /// cell is cleared regardless.
+    private func emitTokenRemoval(_ token: String) {
+        emitInternal(wireName: "push.token.remove", dataJSON: Self.tokenDataJSON(token))
+        dedupStore.clear(wireName: "push.token.sync")
     }
 
     /// Sends an internal raw event (a wire name outside the public `Event`

@@ -67,6 +67,15 @@ final class DedupStore: @unchecked Sendable {
         return false
     }
 
+    /// Drops the dedup anchor for `wireName` so the next payload always
+    /// sends. Used by the token pipeline (SPEC §10.1): emitting
+    /// `push.token.remove` clears the `push.token.sync` anchor, so a
+    /// re-registered identical token within the window re-syncs.
+    func clear(wireName: String) {
+        store.removeValue(forKey: Self.digestKeyPrefix + wireName)
+        store.removeValue(forKey: Self.atKeyPrefix + wireName)
+    }
+
     /// Lowercase hex SHA-256.
     static func sha256Hex(_ value: String) -> String {
         let digest = SHA256.hash(data: Data(value.utf8))

@@ -209,6 +209,8 @@ The SDK never integrates FCM/APNs (zero dependencies). The host app owns push se
 
 These are **new event types**: the collector passes them through today, but a downstream consumer must eventually be built to associate tokens with users. That backend work is out of SDK scope; this defines its contract.
 
+Emitting `push.token.remove` (via `removePushToken()` or `logout()`) also clears the `push.token.sync` dedup anchor, so re-registering the same token within the 20-minute dedup window re-syncs instead of being suppressed. `setEnabled(true)` re-emits `push.token.sync` for the stored token if one exists — through the normal pipeline, so dedup still applies — covering a token registered while the SDK was disabled (see §12).
+
 ### 10.2 Push payload contract
 A Flowbiz push is an FCM/APNs **data payload** containing the marker key `flowbiz` (snake_case wire, consistent with the rest of the ecosystem). Because FCM data messages are flat `Map<String, String>`, the value of `flowbiz` is a **JSON-encoded string on both platforms** — one contract, one parser:
 
@@ -265,7 +267,7 @@ The SDK transports PII (`email`, `phone`, `name`, purchase history) — complian
 
 - **iOS privacy manifest**: a `PrivacyInfo.xcprivacy` is bundled in the SPM target (mandatory for third-party SDKs since 2024; missing/incomplete manifests cause App Store rejections for host apps). It must declare: the `UserDefaults` required-reason API (reason `CA92.1`), and the collected data types (contact info, identifiers, purchase/product-interaction data). Exact declarations (`NSPrivacyTracking` in particular) to be finalized with legal review before 1.0.
 - **Android disclosure**: the SDK publishes a data-collection disclosure document so integrators can complete Google Play's **Data safety** form accurately. Registration in Google's **SDK Console** (Play SDK Index) once public.
-- **Opt-out**: `setEnabled(false)` — persisted across launches; while disabled the SDK drops new events, stops the heartbeat, and makes no network calls. Re-enabling resumes normal operation. This is the hook for LGPD/GDPR consent gating; the consent UI/decision itself is the host app's responsibility.
+- **Opt-out**: `setEnabled(false)` — persisted across launches; while disabled the SDK drops new events, stops the heartbeat, and makes no network calls. Re-enabling resumes normal operation and re-emits `push.token.sync` for a stored push token (see §10.1), so a token registered while disabled is relayed once consent is granted. This is the hook for LGPD/GDPR consent gating; the consent UI/decision itself is the host app's responsibility.
 - **Logging**: `debug` logging never prints PII (`email`, `phone`, `name` are redacted).
 
 ## 13. Repo layout & distribution
@@ -291,7 +293,7 @@ Distribution: **Maven Central** (`com.flowbiz:onsite-sdk`, Sonatype namespace se
 
 Release engineering:
 
-- Android AAR ships **consumer R8/ProGuard rules** (`consumerProguardFiles`) so release builds of host apps don't strip/rename SDK classes.
+- Android AAR ships a **consumer R8 rules file** (`consumerProguardFiles`) — empty by audit: the SDK uses no reflection/JNI/name-based serialization, so R8 keeps referenced public APIs automatically; the file is the placeholder where keep rules must land if that ever changes.
 - POM carries complete metadata including the license entry; artifacts are **GPG-signed** for Central.
 - One **CI pipeline releases both platforms from a single `vX.Y.Z` tag**: publish AAR to Central, cut the SPM release.
 - **Decision (flagged)**: the current layout (`Sources/` in this repo) means the iOS SDK is **source-distributed from a public repo** — and the Android sources ride along. If closed-source distribution is required, the SPM route must switch to a binary XCFramework target and the repo split into public-manifest/private-source. Confirm before 1.0.

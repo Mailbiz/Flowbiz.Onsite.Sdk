@@ -1,0 +1,104 @@
+# SPEC §14: the shared-fixture drift guard only guards if it is enforced —
+# both platform jobs run on every PR and push to main. The shared-fixture
+# suites (wire fixtures, LZ-string vectors, push samples) are part of each
+# platform's regular unit-test task, so running the unit tests IS running
+# the drift guard; no separate step is needed.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android (ubuntu, JDK 17)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      # testDebugUnitTest includes the shared-fixture suites
+      # (WireFixtureTest, LZStringTest, PushParserTest) — SPEC §14 layer 1.
+      - name: Unit tests, release AAR, lint
+        working-directory: android
+        run: ./gradlew :sdk:testDebugUnitTest :sdk:assembleRelease :sdk:lint
+
+  ios:
+    name: iOS (macOS 15, Xcode 16.4)
+    runs-on: macos-15
+    env:
+      # Pin the toolchain explicitly. The test suites are Swift Testing
+      # (`#if canImport(Testing)`-guarded): an older Xcode (15.x, Swift 5.10)
+      # compiles them AWAY and the job goes green having run only the 2
+      # XCTest cases. Xcode 16.4 (Swift 6.1) is the documented default on
+      # the macos-15 runner image (actions/runner-images macos-15 README);
+      # pinning via DEVELOPER_DIR makes an image-default change loud
+      # (missing path fails the job) instead of silently downgrading.
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain sanity (Swift >= 6 required for Swift Testing)
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          swift --version
+      # 1) Plain SwiftPM run on the macOS host — fast, no simulator boot.
+      #    Includes the shared-fixture suites (WireFixtureSuite,
+      #    LZStringSuite, PushParserSuite) — SPEC §14 layer 1.
+      - name: swift test (macOS host)
+        run: |
+          set -euo pipefail
+          swift test 2>&1 | tee swift-test.log
+      # Green-wash guard: the full suite is ~191 Swift Testing tests. If the
+      # toolchain ever compiles the `canImport(Testing)` suites away again,
+      # `swift test` still exits 0 — so assert the executed-test count from
+      # the "Test run with N tests passed" summary line stays above a floor.
+      - name: Assert swift test actually ran the suite (>= 150 tests)
+        run: |
+          set -euo pipefail
+          FLOOR=150
+          COUNT=$(sed -nE 's/.*Test run with ([0-9]+) tests? passed.*/\1/p' swift-test.log | tail -1)
+          echo "Swift Testing executed-test count: ${COUNT:-<none>}"
+          if [ -z "${COUNT}" ] || [ "${COUNT}" -lt "${FLOOR}" ]; then
+            echo "::error::swift test ran ${COUNT:-0} tests (< ${FLOOR}) — Swift Testing suites were not executed (toolchain too old?)"
+            exit 1
+          fi
+      # 2) Simulator build + test — this closes the UIKit-compile gate
+      #    deferred from Slice 4: the UIKit-conditional code (lifecycle
+      #    observers, UIScreen, canImport(UIKit) branches) only compiles in
+      #    an iOS build, which no macOS host run exercises.
+      #    The destination resolves to the image's iOS runtime for
+      #    iPhone 16 (Xcode 16.4 simulators on the macos-15 image); the OS
+      #    version is deliberately not pinned so image updates don't break
+      #    the job.
+      - name: xcodebuild test (iOS Simulator, iPhone 16)
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -scheme FlowbizOnsite \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            2>&1 | tee xcodebuild-test.log
+      # Same green-wash guard for the simulator run. Full xcresult parsing is
+      # heavier than it is worth here; a grep floor over xcodebuild's console
+      # summary lines ("Executed N tests" for XCTest, "Test run with N tests
+      # passed" for Swift Testing under Xcode 16) is honest enough.
+      - name: Assert xcodebuild actually ran the suite (>= 150 tests)
+        run: |
+          set -euo pipefail
+          FLOOR=150
+          MAX=$( { sed -nE 's/.*Test run with ([0-9]+) tests? passed.*/\1/p' xcodebuild-test.log; \
+                   sed -nE 's/.*Executed ([0-9]+) tests?,.*/\1/p' xcodebuild-test.log; } \
+                 | sort -n | tail -1 )
+          echo "xcodebuild max executed-test count: ${MAX:-<none>}"
+          if [ -z "${MAX}" ] || [ "${MAX}" -lt "${FLOOR}" ]; then
+            echo "::error::xcodebuild ran ${MAX:-0} tests (< ${FLOOR}) — simulator run did not execute the full suite"
+            exit 1
+          fi

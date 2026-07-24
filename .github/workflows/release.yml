@@ -1,0 +1,97 @@
+# SPEC §13: one pipeline releases both platforms from a single vX.Y.Z tag —
+# the AAR is published to Maven Central; the iOS release is the git tag
+# itself (SPM resolves it, source-distributed package).
+#
+# SKELETON STATUS: this workflow is authored but not yet fully operational.
+# Pending before the first real release (marked TODO below):
+#   - Sonatype Central Portal namespace registration for com.flowbiz
+#   - repository secrets: CENTRAL_USERNAME, CENTRAL_PASSWORD (portal token),
+#     SIGNING_IN_MEMORY_KEY (ASCII-armored GPG private key),
+#     SIGNING_IN_MEMORY_KEY_PASSWORD
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  verify-versions:
+    name: Tag matches SDK version constants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The two SDKs version in lockstep (SPEC §13); a tag that does not
+      # match every version constant must never publish anything.
+      # Extract the actual version value from each file and string-compare
+      # against the tag (rather than grepping for a whole expected line, which
+      # cannot report WHAT the file says when it mismatches and silently
+      # passes if the expected string appears anywhere).
+      - name: Assert SdkVersion.CURRENT / SDKVersion.current / Gradle version == tag
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Tag version: ${TAG_VERSION}"
+
+          ANDROID_VERSION=$(sed -nE 's/^[[:space:]]*const val CURRENT: String = "([^"]+)".*/\1/p' \
+            android/sdk/src/main/kotlin/com/flowbiz/onsite/SdkVersion.kt)
+          IOS_VERSION=$(sed -nE 's/^[[:space:]]*static let current = "([^"]+)".*/\1/p' \
+            ios/Sources/FlowbizOnsite/SDKVersion.swift)
+          GRADLE_VERSION=$(sed -nE 's/^version = "([^"]+)".*/\1/p' \
+            android/sdk/build.gradle.kts)
+
+          echo "Android SdkVersion.CURRENT: ${ANDROID_VERSION:-<not found>}"
+          echo "iOS SDKVersion.current:     ${IOS_VERSION:-<not found>}"
+          echo "Gradle publish version:     ${GRADLE_VERSION:-<not found>}"
+
+          FAIL=0
+          [ "${ANDROID_VERSION}" = "${TAG_VERSION}" ] \
+            || { echo "::error::Android SdkVersion.CURRENT is '${ANDROID_VERSION:-<not found>}', tag is '${TAG_VERSION}'"; FAIL=1; }
+          [ "${IOS_VERSION}" = "${TAG_VERSION}" ] \
+            || { echo "::error::iOS SDKVersion.current is '${IOS_VERSION:-<not found>}', tag is '${TAG_VERSION}'"; FAIL=1; }
+          [ "${GRADLE_VERSION}" = "${TAG_VERSION}" ] \
+            || { echo "::error::Gradle publish version is '${GRADLE_VERSION:-<not found>}', tag is '${TAG_VERSION}'"; FAIL=1; }
+          exit "${FAIL}"
+
+  android-publish:
+    name: Publish AAR to Maven Central
+    needs: verify-versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests (gate before publishing)
+        working-directory: android
+        run: ./gradlew :sdk:testDebugUnitTest
+      # TODO(SPEC §13): requires the Central namespace + secrets listed in
+      # the header. Until they exist this step fails at authentication —
+      # intentionally, so a tag can never silently "release" nothing.
+      # Signing activates via the ORG_GRADLE_PROJECT_* properties (see
+      # android/sdk/build.gradle.kts); without them artifacts would be
+      # unsigned and Central would reject them.
+      - name: Publish signed artifacts to Central staging
+        working-directory: android
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+        run: ./gradlew :sdk:publishReleasePublicationToCentralRepository
+      # TODO(SPEC §13): after staging upload, the deployment must be
+      # released in the Central Portal (manually, or automate here via the
+      # portal API once the namespace exists).
+
+  ios-release:
+    name: iOS release (SPM = the tag)
+    needs: verify-versions
+    runs-on: ubuntu-latest
+    steps:
+      # Swift Package Manager consumes the git tag directly — there is no
+      # artifact to build or upload for iOS (SPEC §13 source-distributed
+      # decision; this job would become an XCFramework build + upload if
+      # the closed-source option is chosen before 1.0).
+      - name: Nothing to upload
+        run: echo "The vX.Y.Z git tag itself is the iOS release — SPM resolves it."

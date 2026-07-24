@@ -144,7 +144,7 @@ internal class FlowbizCore(
      */
     fun logout() = submit("logout") {
         pushTokenStore.token?.let { token ->
-            emitInternal("push.token.remove", tokenDataJson(token))
+            emitTokenRemoval(token)
         }
         identityStore.clearUser()
         sessionManager.rotate()
@@ -177,7 +177,7 @@ internal class FlowbizCore(
             SdkLog.debug("removePushToken ignored: no token stored")
             return@submit
         }
-        emitInternal("push.token.remove", tokenDataJson(token))
+        emitTokenRemoval(token)
         pushTokenStore.clear()
     }
 
@@ -192,6 +192,13 @@ internal class FlowbizCore(
             SdkLog.debug("SDK disabled: heartbeat stopped, events dropped, network gated")
         } else if (!wasEnabled) {
             if (foregrounded) heartbeat.start(heartbeatIntervalMillis)
+            // SPEC §10.1/§12: a token registered while disabled was persisted
+            // but its sync event was dropped — re-emit for the stored token
+            // (normal pipeline, so dedup still applies: a token already
+            // synced <20 min ago is not re-sent).
+            pushTokenStore.token?.let { token ->
+                emitInternal("push.token.sync", tokenDataJson(token))
+            }
             flushController.requestFlush(FlushController.FlushReason.EXPLICIT)
             SdkLog.debug("SDK re-enabled")
         }
@@ -277,6 +284,19 @@ internal class FlowbizCore(
 
     private fun tokenDataJson(token: String): String =
         CanonicalJson.render(JSONObject().put("token", token).put("platform", PLATFORM))
+
+    /**
+     * Emits `push.token.remove` and clears the `push.token.sync` dedup
+     * anchor (SPEC §10.1): after a removal, re-registering the *same* token
+     * within the 20-minute window must re-sync — the collector no longer
+     * associates it. The anchor is cleared even when the removal event
+     * itself is dropped (disabled) or suppressed, mirroring how the token
+     * cell is cleared regardless.
+     */
+    private fun emitTokenRemoval(token: String) {
+        emitInternal("push.token.remove", tokenDataJson(token))
+        dedupStore.clear("push.token.sync")
+    }
 
     /**
      * Sends an internal raw event (a wire name outside the public [Event]

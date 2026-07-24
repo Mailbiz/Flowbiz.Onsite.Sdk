@@ -60,6 +60,17 @@ internal class DedupStore(
         return false
     }
 
+    /**
+     * Drops the dedup anchor for [wireName] so the next payload always
+     * sends. Used by the token pipeline (SPEC §10.1): emitting
+     * `push.token.remove` clears the `push.token.sync` anchor, so a
+     * re-registered identical token within the window re-syncs.
+     */
+    fun clear(wireName: String) {
+        store.remove(DIGEST_KEY_PREFIX + wireName)
+        store.remove(AT_KEY_PREFIX + wireName)
+    }
+
     companion object {
         /** SPEC §7: 20 min — internal constant, not a config knob. */
         const val WINDOW_MS: Long = 20L * 60L * 1000L

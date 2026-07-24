@@ -28,6 +28,14 @@ let package = Package(
         .target(
             name: "FlowbizOnsite",
             path: "ios/Sources/FlowbizOnsite",
+            // SPEC §12: the privacy manifest ships inside the target's
+            // resource bundle so host apps' privacy reports aggregate the
+            // SDK's declarations. `.copy` keeps the file verbatim (no plist
+            // processing); no code reads it, so `Bundle.module` availability
+            // is irrelevant beyond the bundle existing.
+            resources: [
+                .copy("PrivacyInfo.xcprivacy")
+            ],
             swiftSettings: strictConcurrency
         ),
         .testTarget(
