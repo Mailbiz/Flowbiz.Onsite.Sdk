@@ -27,4 +27,6 @@ kotlin {
 
 dependencies {
     implementation(project(":sdk"))
+
+    testImplementation(libs.junit)
 }

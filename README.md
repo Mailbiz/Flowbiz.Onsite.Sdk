@@ -149,6 +149,24 @@ push token registered while disabled (SPEC §12). The consent UI/decision is
 the host app's responsibility — the SDK collects by default until told
 otherwise.
 
+## Demo apps
+
+Each platform ships a minimal fake store (SPEC §14) that exercises **every
+public API** — product list/detail, cart, 3-step checkout, login, a
+settings/debug panel (opt-out, push-token relay, flush, simulated SPEC §10.2
+push payload) and deep-link cart recovery (real intent/URL plus an in-app
+"simulate recovery link" button using the shared LZ-string vectors). Every
+SDK call site is commented with the SPEC section it demonstrates. Run them
+offline on purpose: failing collector POSTs demonstrate the SPEC §9 durable
+queue + backoff.
+
+- **Android**: `cd android && ./gradlew :demo:installDebug` (or open in
+  Android Studio and run the `demo` configuration). Deep link:
+  `adb shell am start -a android.intent.action.VIEW -d "flowbizdemo://recover?mb_recovery=<hash>"`.
+- **iOS**: `ios/Demo/` is a source set + XcodeGen spec (no checked-in
+  `.xcodeproj`): `brew install xcodegen && cd ios/Demo && xcodegen generate && open FlowbizDemo.xcodeproj`.
+  Manual-Xcode instructions in [ios/Demo/README.md](ios/Demo/README.md).
+
 ## Behavior in one paragraph
 
 `track()` never throws, never blocks, and survives offline: events are

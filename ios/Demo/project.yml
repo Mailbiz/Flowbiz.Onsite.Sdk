@@ -1,0 +1,38 @@
+# XcodeGen spec for the Flowbiz demo app (SPEC §14).
+# Generate the project with:  cd ios/Demo && xcodegen generate
+# The generated FlowbizDemo.xcodeproj and Sources/Info.plist are gitignored.
+name: FlowbizDemo
+options:
+  bundleIdPrefix: com.flowbiz.onsite
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+packages:
+  # Local package dependency on the repo root (Package.swift → FlowbizOnsite).
+  FlowbizOnsite:
+    path: ../..
+targets:
+  FlowbizDemo:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    dependencies:
+      - package: FlowbizOnsite
+        product: FlowbizOnsite
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Flowbiz Demo
+        UILaunchScreen: {}
+        # SPEC §11 deep-link entry point. A custom scheme keeps the demo
+        # self-contained (a real integration uses Universal Links, which
+        # require an entitlement + apple-app-site-association). Try it with:
+        #   xcrun simctl openurl booted "flowbizdemo://recover?mb_recovery=<hash>"
+        # — or use the in-app "simulate recovery link" button.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.flowbiz.onsite.demo
+            CFBundleURLSchemes:
+              - flowbizdemo
