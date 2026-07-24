@@ -14,10 +14,17 @@ import kotlin.math.abs
  * of U+2000–U+20FF characters, and `<\/` slash escaping. This writer emits
  * the canonical cross-platform form instead:
  *
- * - **numbers**: shortest round-trip digits, formatted with the ECMAScript
+ * - **numbers**: `Double.toString` digits formatted with the ECMAScript
  *   `Number::toString` layout rules — `19.99`, `0.1`, whole doubles without
  *   a fraction part (`19.0` → `19`), fixed notation up to 21 digits
- *   (`10000000`, not `1.0E7`), exponent form beyond (`1e+21`), `-0.0` → `0`
+ *   (`10000000`, not `1.0E7`), exponent form beyond (`1e+21`), `-0.0` → `0`.
+ *   Caveat: on JDK ≤ 18 (Android included) `Double.toString` is *not*
+ *   guaranteed shortest-round-trip (JDK-4511638, fixed in JDK 19), so a few
+ *   extreme magnitudes carry extra digits vs JS/Swift — e.g. `1e23` renders
+ *   `9.999999999999999e+22` (JS: `1e+23`) and `5e-324` renders `4.9e-324`
+ *   (JS: `5e-324`). Both parse back to the identical double; realistic
+ *   payload values (prices, quantities) are unaffected. Pinned by
+ *   `CanonicalJsonNumberTest`.
  * - **strings**: minimal escaping — only `"` `\` and control characters;
  *   raw slashes, raw unicode
  * - **objects**: keys sorted by UTF-16 code units (deterministic output;
@@ -109,7 +116,8 @@ internal object CanonicalJson {
 
     /**
      * ECMAScript `Number::toString(10)` rendering of a finite double, built
-     * from Java's shortest-round-trip `Double.toString` digits.
+     * from Java's `Double.toString` digits (shortest round-trip only from
+     * JDK 19; see the class doc for the JDK-4511638 caveat).
      */
     fun numberToJson(value: Double): String {
         require(!value.isNaN() && !value.isInfinite()) {

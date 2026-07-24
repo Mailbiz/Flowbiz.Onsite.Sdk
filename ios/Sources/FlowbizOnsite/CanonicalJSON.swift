@@ -12,7 +12,11 @@ import Foundation
 /// - **numbers**: shortest round-trip digits, formatted with the ECMAScript
 ///   `Number::toString` layout rules — `19.99`, `0.1`, whole doubles without
 ///   a fraction part (`19.0` → `19`), fixed notation up to 21 digits
-///   (`10000000`, not `1.0E7`), exponent form beyond (`1e+21`), `-0.0` → `0`
+///   (`10000000`, not `1.0E7`), exponent form beyond (`1e+21`), `-0.0` → `0`.
+///   Swift's `"\(Double)"` is genuinely shortest-round-trip, so this side
+///   matches JS everywhere; Kotlin on JDK ≤ 18 diverges at a few extreme
+///   magnitudes (JDK-4511638 — see `CanonicalJson.kt`), pinned by
+///   `CanonicalNumberSuite` / `CanonicalJsonNumberTest`.
 /// - **strings**: minimal escaping — only `"` `\` and control characters;
 ///   raw slashes, raw unicode
 /// - **objects**: keys sorted by UTF-16 code units (deterministic output;
