@@ -1,0 +1,171 @@
+[
+  {
+    "name": "valid_full",
+    "payload": {
+      "flowbiz": "{\"v\":1,\"type\":\"promo\",\"title\":\"Oferta relâmpago ⚡\",\"body\":\"Só hoje: 20% off em toda a loja\",\"deep_link\":\"https://store.com/promo\",\"data\":{\"campaign_id\":\"abc123\",\"pct\":20,\"flash\":true}}",
+      "other_key": "ignored"
+    },
+    "expected": {
+      "version": 1,
+      "type": "promo",
+      "title": "Oferta relâmpago ⚡",
+      "body": "Só hoje: 20% off em toda a loja",
+      "deepLink": "https://store.com/promo",
+      "data": {
+        "campaign_id": "abc123",
+        "pct": 20,
+        "flash": true
+      }
+    }
+  },
+  {
+    "name": "valid_minimal_type_only",
+    "payload": {
+      "flowbiz": "{\"v\":1,\"type\":\"ping\"}"
+    },
+    "expected": {
+      "version": 1,
+      "type": "ping",
+      "title": null,
+      "body": null,
+      "deepLink": null,
+      "data": {}
+    }
+  },
+  {
+    "name": "cart_recovery_with_real_mb_recovery_deep_link",
+    "payload": {
+      "flowbiz": "{\"v\":1,\"type\":\"cart_recovery\",\"title\":\"Sua sacola te espera!\",\"body\":\"Finalize sua compra...\",\"deep_link\":\"https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMeWAAdSgHscmyJoCCALxQAbTYk1gaAWxoA7ABZa9msZoC+IALqJhXZDEiKWQ5RWC2PABZH28PIA\",\"data\":{\"campaign_id\":\"cr-42\"}}"
+    },
+    "expected": {
+      "version": 1,
+      "type": "cart_recovery",
+      "title": "Sua sacola te espera!",
+      "body": "Finalize sua compra...",
+      "deepLink": "https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMeWAAdSgHscmyJoCCALxQAbTYk1gaAWxoA7ABZa9msZoC+IALqJhXZDEiKWQ5RWC2PABZH28PIA",
+      "data": {
+        "campaign_id": "cr-42"
+      }
+    },
+    "expected_recovery": {
+      "cartId": "cart-abc-001",
+      "userId": "user-123",
+      "products": [
+        {
+          "productId": "P100",
+          "sku": "SKU-100-P",
+          "quantity": 2,
+          "recoveryProperties": {
+            "cor": "Azul",
+            "tamanho": "P"
+          }
+        },
+        {
+          "productId": "P200",
+          "sku": "SKU-200-M",
+          "quantity": 1,
+          "recoveryProperties": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "unknown_version_tolerated",
+    "payload": {
+      "flowbiz": "{\"v\":7,\"type\":\"future_kind\",\"title\":\"Novo recurso\",\"extra_unknown_field\":{\"nested\":true}}"
+    },
+    "expected": {
+      "version": 7,
+      "type": "future_kind",
+      "title": "Novo recurso",
+      "body": null,
+      "deepLink": null,
+      "data": {}
+    }
+  },
+  {
+    "name": "missing_version_defaults_to_1",
+    "payload": {
+      "flowbiz": "{\"type\":\"promo\",\"body\":\"sem versão\"}"
+    },
+    "expected": {
+      "version": 1,
+      "type": "promo",
+      "title": null,
+      "body": "sem versão",
+      "deepLink": null,
+      "data": {}
+    }
+  },
+  {
+    "name": "missing_marker_null",
+    "payload": {
+      "some_other_sdk": "{\"v\":1,\"type\":\"promo\"}",
+      "title": "not ours"
+    },
+    "expected": null
+  },
+  {
+    "name": "garbage_json_null",
+    "payload": {
+      "flowbiz": "{v:1, type: promo"
+    },
+    "expected": null
+  },
+  {
+    "name": "missing_type_null",
+    "payload": {
+      "flowbiz": "{\"v\":1,\"title\":\"sem tipo\"}"
+    },
+    "expected": null
+  },
+  {
+    "name": "empty_type_null",
+    "payload": {
+      "flowbiz": "{\"v\":1,\"type\":\"\"}"
+    },
+    "expected": null
+  },
+  {
+    "name": "marker_not_json_object_null",
+    "payload": {
+      "flowbiz": "\"just a string\""
+    },
+    "expected": null
+  },
+  {
+    "name": "invalid_deep_link_keeps_push",
+    "payload": {
+      "flowbiz": "{\"v\":1,\"type\":\"promo\",\"deep_link\":\"ht!tp: //not a url  \"}"
+    },
+    "expected": {
+      "version": 1,
+      "type": "promo",
+      "title": null,
+      "body": null,
+      "deepLink": "ht!tp: //not a url  ",
+      "data": {}
+    },
+    "note": "deepLink here is the RAW string the parser keeps; the platform URL type may reject it (iOS URL(string:) -> nil field) while the push itself is still returned"
+  },
+  {
+    "name": "non_string_marker_dict",
+    "payload": {
+      "flowbiz": {
+        "v": 1,
+        "type": "promo",
+        "title": "nested object"
+      }
+    },
+    "expected_android": null,
+    "expected_ios": {
+      "version": 1,
+      "type": "promo",
+      "title": "nested object",
+      "body": null,
+      "deepLink": null,
+      "data": {}
+    },
+    "note": "SPEC 10.2: the contract is a JSON-encoded STRING on both platforms. FCM data payloads are Map<String,String>, so a dict value cannot occur on Android (-> null). APNs userInfo CAN nest a dictionary; iOS tolerates it leniently."
+  }
+]

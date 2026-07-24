@@ -33,8 +33,10 @@ class FlowbizFacadeSmokeTest {
             Flowbiz.setEnabled(false)
             Flowbiz.setEnabled(true)
             Flowbiz.flush()
+            Flowbiz.setPushToken("fcm-token-1")
+            Flowbiz.removePushToken()
             assertTrue(warnings.all { it.contains("ignored") })
-            assertTrue(warnings.size == 6) // each call logged a debug warning
+            assertTrue(warnings.size == 8) // each call logged a debug warning
         } finally {
             SdkLog.sink = null
         }
@@ -55,8 +57,31 @@ class FlowbizFacadeSmokeTest {
             Flowbiz.track(null)
             Flowbiz.initialize(null, FlowbizConfig(appId = "77777"))
             Flowbiz.initialize(null, null)
-            assertTrue(warnings.size == 3)
-            assertTrue(warnings.all { it.contains("ignored") && it.contains("null") })
+            Flowbiz.setPushToken(null)
+            Flowbiz.setPushToken("   ")
+            assertTrue(warnings.size == 5)
+            assertTrue(warnings.all { it.contains("ignored") })
+        } finally {
+            SdkLog.sink = null
+        }
+    }
+
+    /**
+     * SPEC §3: `handlePush`/`handleLink` are pure functions — they *work*
+     * before initialize (no warning, real result), unlike the pipeline
+     * entry points above. `handleLink` with a real `Uri` needs Android
+     * (demo app); the string-level behavior is `RecoveryLinkParserTest`.
+     */
+    @Test
+    fun pureHandlersWorkBeforeInitialize() {
+        val warnings = mutableListOf<String>()
+        SdkLog.sink = { warnings += it }
+        try {
+            val push = Flowbiz.handlePush(mapOf("flowbiz" to """{"v":1,"type":"promo","title":"t"}"""))
+            assertTrue(push != null && push.type == "promo")
+            assertTrue(Flowbiz.handlePush(mapOf("other" to "x")) == null)
+            assertTrue(Flowbiz.handleLink(null) == null)
+            assertTrue(warnings.isEmpty()) // pure: no "initialize was not called" warnings
         } finally {
             SdkLog.sink = null
         }

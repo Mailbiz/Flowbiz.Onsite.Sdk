@@ -11,15 +11,19 @@ enum FixtureSupport {
         init(_ description: String) { self.description = description }
     }
 
-    /// `shared/fixtures` resolved relative to this source file
-    /// (`ios/Tests/FlowbizOnsiteTests/` → repo root → `shared/fixtures`).
-    static func fixturesDirectory() -> URL {
+    /// `shared/<name>` resolved relative to this source file
+    /// (`ios/Tests/FlowbizOnsiteTests/` → repo root → `shared/<name>`).
+    static func sharedDirectory(_ name: String) -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent() // FixtureSupport.swift
             .deletingLastPathComponent() // FlowbizOnsiteTests
             .deletingLastPathComponent() // Tests
             .deletingLastPathComponent() // ios
-            .appendingPathComponent("shared/fixtures", isDirectory: true)
+            .appendingPathComponent("shared/\(name)", isDirectory: true)
+    }
+
+    static func fixturesDirectory() -> URL {
+        sharedDirectory("fixtures")
     }
 
     static func fixtureFiles() throws -> [URL] {

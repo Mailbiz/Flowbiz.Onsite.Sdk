@@ -132,14 +132,53 @@ internal class FlowbizCore(
         }
     }
 
-    /** SPEC §6 logout: clear user, rotate session, clear stored push token. */
+    /**
+     * SPEC §6/§10.1 logout: emit `push.token.remove` (if a token is stored),
+     * then clear user identity, rotate the session and clear the token.
+     *
+     * **Order matters (decision, flagged)**: the removal event is emitted
+     * *before* the identity is cleared so it carries the outgoing `user_id`
+     * — the backend needs to know *whose* token to disassociate. While
+     * disabled the event is dropped (SPEC §12) but the local state is still
+     * cleared so identity never outlives a logout.
+     */
     fun logout() = submit("logout") {
+        pushTokenStore.token?.let { token ->
+            emitInternal("push.token.remove", tokenDataJson(token))
+        }
         identityStore.clearUser()
         sessionManager.rotate()
-        // Slice 5: emit `push.token.remove` with the stored token through the
-        // normal pipeline BEFORE clearing it here (SPEC §10.1).
         pushTokenStore.clear()
         SdkLog.debug("logout: user cleared, session rotated, push token cleared")
+    }
+
+    /**
+     * SPEC §10.1 token relay: persist the token, emit `push.token.sync`
+     * through the normal pipeline (queued, deduped, session-touched).
+     *
+     * While disabled the event is dropped (SPEC §12) but the token is
+     * **still persisted** (decision, flagged): a later enable + logout must
+     * be able to emit a coherent removal for the token that is actually
+     * registered with FCM/APNs.
+     */
+    fun setPushToken(token: String) = submit("setPushToken") {
+        pushTokenStore.set(token)
+        emitInternal("push.token.sync", tokenDataJson(token))
+    }
+
+    /**
+     * SPEC §10.1: emit `push.token.remove` with the stored token, then
+     * forget it. No stored token → no-op. While disabled the event is
+     * dropped but the token is still cleared (mirror of [setPushToken]).
+     */
+    fun removePushToken() = submit("removePushToken") {
+        val token = pushTokenStore.token
+        if (token == null) {
+            SdkLog.debug("removePushToken ignored: no token stored")
+            return@submit
+        }
+        emitInternal("push.token.remove", tokenDataJson(token))
+        pushTokenStore.clear()
     }
 
     /** SPEC §12 opt-out switch; persisted. */
@@ -232,6 +271,54 @@ internal class FlowbizCore(
         val screenName = lastScreenName ?: return "{}"
         val page = JSONObject().put("title", screenName).put("url", "app://$screenName")
         return CanonicalJson.render(JSONObject().put("page", page))
+    }
+
+    // MARK: internal raw events (SPEC §10.1)
+
+    private fun tokenDataJson(token: String): String =
+        CanonicalJson.render(JSONObject().put("token", token).put("platform", PLATFORM))
+
+    /**
+     * Sends an internal raw event (a wire name outside the public [Event]
+     * catalog with a pre-rendered `data` string) through the same pipeline
+     * as [track]: enabled gate, session touch, dedup, envelope, durable
+     * queue + flush. Scheduler-confined (called from submitted tasks only).
+     */
+    private fun emitInternal(wireName: String, dataJson: String) {
+        if (!enabledState.isEnabled) {
+            SdkLog.debug("$wireName dropped: SDK disabled")
+            return
+        }
+        sessionManager.touch()
+        val session = sessionManager.currentSession()
+        try {
+            if (dedupStore.shouldSuppress(wireName, dataJson)) {
+                SdkLog.debug("event suppressed: duplicate $wireName within dedup window")
+                return
+            }
+            val now = clock.wallMillis()
+            val entry = EnvelopeBuilder.buildRaw(
+                wireName = wireName,
+                dataJson = dataJson,
+                hash = UUID.randomUUID().toString(),
+                createdAtMillis = now,
+                sentAtMillis = now,
+                timezone = formatTimezoneOffset(deviceContext.timezoneOffsetMinutes(now)),
+                userId = identityStore.userId,
+                anonymousId = identityStore.anonymousId,
+                sessionId = session.sessionId,
+                visitCount = session.visitCount,
+                language = deviceContext.language,
+                screen = deviceContext.screen,
+                appId = config.appId,
+                platform = PLATFORM,
+                sdkVersion = SdkVersion.CURRENT,
+            )
+            queue.append(CanonicalJson.render(entry))
+            flushController.requestFlush(FlushController.FlushReason.EVENT_TRACKED)
+        } catch (t: Throwable) {
+            SdkLog.debug("$wireName dropped: ${t.javaClass.simpleName}")
+        }
     }
 
     // MARK: plumbing

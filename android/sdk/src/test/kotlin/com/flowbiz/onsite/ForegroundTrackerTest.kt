@@ -77,6 +77,25 @@ class ForegroundTrackerTest {
     }
 
     @Test
+    fun rotationWithSecondActivityStartedFiresNoEdges() {
+        val edges = Edges()
+        val tracker = edges.tracker()
+        tracker.activityStarted() // A
+        tracker.activityStarted() // B (second started activity, e.g. multi-window)
+        // A rotates while B stays started: the config-change stop must not
+        // fire an edge (the count never reaches 0 here anyway).
+        tracker.activityStopped(isChangingConfigurations = true)
+        tracker.activityStarted() // A's replacement
+        assertEquals(1, edges.foreground)
+        assertEquals(0, edges.background)
+        // Both stop for real -> exactly one background edge, at zero.
+        tracker.activityStopped(isChangingConfigurations = false)
+        assertEquals(0, edges.background)
+        tracker.activityStopped(isChangingConfigurations = false)
+        assertEquals(1, edges.background)
+    }
+
+    @Test
     fun backgroundThenForegroundFiresBothEdges() {
         val edges = Edges()
         val tracker = edges.tracker()

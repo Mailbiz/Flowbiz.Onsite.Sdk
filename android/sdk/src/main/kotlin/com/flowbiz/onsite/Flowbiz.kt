@@ -3,6 +3,7 @@ package com.flowbiz.onsite
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import java.util.concurrent.Executors
@@ -121,6 +122,62 @@ object Flowbiz {
     /** Forces a queue flush (SPEC §2). Fire-and-forget. */
     @JvmStatic
     fun flush() = withCore("flush") { it.flush() }
+
+    /**
+     * SPEC §10.1 token relay: persists the token and emits
+     * `push.token.sync` through the normal pipeline. Requires [initialize];
+     * a null/blank token is a no-op with a debug warning.
+     */
+    @JvmStatic
+    fun setPushToken(token: String?) {
+        if (token.isNullOrBlank()) {
+            SdkLog.debug("Flowbiz.setPushToken ignored: null/blank token")
+            return
+        }
+        withCore("setPushToken") { it.setPushToken(token) }
+    }
+
+    /**
+     * SPEC §10.1: emits `push.token.remove` with the stored token and
+     * forgets it. No stored token → no-op. Requires [initialize].
+     */
+    @JvmStatic
+    fun removePushToken() = withCore("removePushToken") { it.removePushToken() }
+
+    /**
+     * SPEC §10.3: parses a push payload carrying the `"flowbiz"` marker key
+     * (a JSON-encoded string, SPEC §10.2). Returns null when the payload is
+     * not ours (marker absent or undecodable).
+     *
+     * Pure, synchronous, never throws; callable before [initialize]
+     * (SPEC §3) and from any thread — typically the app's
+     * `FirebaseMessagingService.onMessageReceived` (`message.data`) or the
+     * launch intent extras on notification tap.
+     */
+    @JvmStatic
+    fun handlePush(payload: Map<String, String>?): FlowbizPush? = try {
+        // The value read is checkcast-guarded: a Java caller can smuggle a
+        // non-String value through the erased map — that lands here as a
+        // ClassCastException and degrades to null (not ours).
+        payload?.get(PushPayloadParser.MARKER_KEY)?.let(PushPayloadParser::parse)
+    } catch (t: Throwable) {
+        null
+    }
+
+    /**
+     * SPEC §11: decodes the `mb_recovery` query parameter of an incoming
+     * deep link into a [RecoveryPayload]. Returns null when the parameter
+     * is absent or undecodable.
+     *
+     * Pure, synchronous, never throws; callable before [initialize]
+     * (SPEC §3). The SDK does not adopt the decoded user as its identity.
+     */
+    @JvmStatic
+    fun handleLink(url: Uri?): RecoveryPayload? = try {
+        url?.let { RecoveryLinkParser.parse(it.toString()) }
+    } catch (t: Throwable) {
+        null
+    }
 
     private inline fun withCore(name: String, action: (FlowbizCore) -> Unit) {
         try {

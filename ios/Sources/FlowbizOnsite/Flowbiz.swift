@@ -82,18 +82,21 @@ public enum Flowbiz {
             SdkLog.debug("initialize ignored: already initialized (first config wins)")
             return
         }
-        if config.debug {
-            SdkLog.sink = { message in
-                os_log(.debug, log: OSLog(subsystem: "com.flowbiz.onsite", category: "FlowbizOnsite"), "%{public}s", message)
-            }
-        }
         guard let sanitized = ConfigSanitizer.sanitize(config) else { return }
         let serialQueue = DispatchQueue(label: "com.flowbiz.onsite")
         // The core is constructed inside the install lock: a concurrent
         // initialize that loses the race must return before building a
-        // core at all (its init starts reachability monitoring).
+        // core at all (its init starts reachability monitoring). The debug
+        // log sink is installed inside the same closure — only the *winning*
+        // initialize may set it (a losing concurrent call must leave no
+        // trace), and before the core construction so init-time logs land.
         guard let core = state.installIfAbsent({
-            FlowbizCore(
+            if sanitized.debug {
+                SdkLog.sink = { message in
+                    os_log(.debug, log: OSLog(subsystem: "com.flowbiz.onsite", category: "FlowbizOnsite"), "%{public}s", message)
+                }
+            }
+            return FlowbizCore(
                 config: sanitized,
                 store: UserDefaultsStore(appId: sanitized.appId),
                 queueFactory: { EventQueue(fileURL: queueFileURL(appId: sanitized.appId)) },
@@ -130,6 +133,54 @@ public enum Flowbiz {
     /// Forces a queue flush (SPEC §2). Fire-and-forget.
     public static func flush() {
         withCore("flush") { $0.flush() }
+    }
+
+    /// SPEC §10.1 token relay: persists the token and emits
+    /// `push.token.sync` through the normal pipeline. Requires
+    /// `initialize`; a blank token is a no-op with a debug warning.
+    public static func setPushToken(_ token: String) {
+        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            SdkLog.debug("Flowbiz.setPushToken ignored: blank token")
+            return
+        }
+        withCore("setPushToken") { $0.setPushToken(token) }
+    }
+
+    /// SPEC §10.1: emits `push.token.remove` with the stored token and
+    /// forgets it. No stored token → no-op. Requires `initialize`.
+    public static func removePushToken() {
+        withCore("removePushToken") { $0.removePushToken() }
+    }
+
+    /// SPEC §10.3: parses a push payload carrying the `"flowbiz"` marker
+    /// key — per contract a JSON-encoded string (SPEC §10.2); a nested
+    /// dictionary (possible in APNs userInfo) is tolerated leniently.
+    /// Returns nil when the payload is not ours (marker absent or
+    /// undecodable).
+    ///
+    /// Pure, synchronous, never throws; callable before `initialize`
+    /// (SPEC §3) and from any thread — typically from the
+    /// `UNUserNotificationCenter` delegate (`userInfo`) both on foreground
+    /// receipt and notification tap.
+    public static func handlePush(_ payload: [AnyHashable: Any]?) -> FlowbizPush? {
+        guard let marker = payload?[PushPayloadParser.markerKey] else { return nil }
+        if let string = marker as? String {
+            return PushPayloadParser.parse(string)
+        }
+        if let object = marker as? [String: Any] {
+            return PushPayloadParser.parse(object: object)
+        }
+        return nil
+    }
+
+    /// SPEC §11: decodes the `mb_recovery` query parameter of an incoming
+    /// deep link (Universal Link entry point) into a `RecoveryPayload`.
+    /// Returns nil when the parameter is absent or undecodable.
+    ///
+    /// Pure, synchronous, never throws; callable before `initialize`
+    /// (SPEC §3). The SDK does not adopt the decoded user as its identity.
+    public static func handleLink(_ url: URL?) -> RecoveryPayload? {
+        RecoveryLinkParser.parse(url?.absoluteString)
     }
 
     private static func withCore(_ name: String, _ action: (FlowbizCore) -> Void) {

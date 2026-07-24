@@ -147,15 +147,52 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// SPEC §6 logout: clear user, rotate session, clear stored push token.
+    /// SPEC §6/§10.1 logout: emit `push.token.remove` (if a token is
+    /// stored), then clear user identity, rotate the session and clear the
+    /// token.
+    ///
+    /// **Order matters (decision, flagged)**: the removal event is emitted
+    /// *before* the identity is cleared so it carries the outgoing
+    /// `user_id` — the backend needs to know *whose* token to disassociate.
+    /// While disabled the event is dropped (SPEC §12) but the local state
+    /// is still cleared so identity never outlives a logout.
     func logout() {
         submit { core in
+            if let token = core.pushTokenStore.token {
+                core.emitInternal(wireName: "push.token.remove", dataJSON: Self.tokenDataJSON(token))
+            }
             core.identityStore.clearUser()
             core.sessionManager.rotate()
-            // Slice 5: emit `push.token.remove` with the stored token through
-            // the normal pipeline BEFORE clearing it here (SPEC §10.1).
             core.pushTokenStore.clear()
             SdkLog.debug("logout: user cleared, session rotated, push token cleared")
+        }
+    }
+
+    /// SPEC §10.1 token relay: persist the token, emit `push.token.sync`
+    /// through the normal pipeline (queued, deduped, session-touched).
+    ///
+    /// While disabled the event is dropped (SPEC §12) but the token is
+    /// **still persisted** (decision, flagged): a later enable + logout must
+    /// be able to emit a coherent removal for the token that is actually
+    /// registered with APNs/FCM.
+    func setPushToken(_ token: String) {
+        submit { core in
+            core.pushTokenStore.set(token)
+            core.emitInternal(wireName: "push.token.sync", dataJSON: Self.tokenDataJSON(token))
+        }
+    }
+
+    /// SPEC §10.1: emit `push.token.remove` with the stored token, then
+    /// forget it. No stored token → no-op. While disabled the event is
+    /// dropped but the token is still cleared (mirror of `setPushToken`).
+    func removePushToken() {
+        submit { core in
+            guard let token = core.pushTokenStore.token else {
+                SdkLog.debug("removePushToken ignored: no token stored")
+                return
+            }
+            core.emitInternal(wireName: "push.token.remove", dataJSON: Self.tokenDataJSON(token))
+            core.pushTokenStore.clear()
         }
     }
 
@@ -250,6 +287,57 @@ final class FlowbizCore: @unchecked Sendable {
         guard let screenName = lastScreenName else { return "{}" }
         let page: [String: Any] = ["title": screenName, "url": "app://\(screenName)"]
         return (try? CanonicalJSON.render(["page": page])) ?? "{}"
+    }
+
+    // MARK: - Internal raw events (SPEC §10.1)
+
+    /// `{"platform":"ios","token":"..."}` rendered canonically (sorted keys
+    /// — byte-identical to the Kotlin SDK's rendering, dedup-stable).
+    private static func tokenDataJSON(_ token: String) -> String {
+        // CanonicalJSON only throws for non-finite numbers; unreachable for
+        // two strings — the fallback is pure defensiveness.
+        (try? CanonicalJSON.render(["token": token, "platform": platform])) ?? "{}"
+    }
+
+    /// Sends an internal raw event (a wire name outside the public `Event`
+    /// catalog with a pre-rendered `data` string) through the same pipeline
+    /// as `track`: enabled gate, session touch, dedup, envelope, durable
+    /// queue + flush. Scheduler-confined (called from submitted tasks only).
+    private func emitInternal(wireName: String, dataJSON: String) {
+        guard enabledState.isEnabled else {
+            SdkLog.debug("\(wireName) dropped: SDK disabled")
+            return
+        }
+        sessionManager.touch()
+        let session = sessionManager.currentSession()
+        do {
+            if dedupStore.shouldSuppress(wireName: wireName, dataJSON: dataJSON) {
+                SdkLog.debug("event suppressed: duplicate \(wireName) within dedup window")
+                return
+            }
+            let now = clock.wallMillis()
+            let entry = EnvelopeBuilder.buildRaw(
+                wireName: wireName,
+                dataJSON: dataJSON,
+                hash: UUID().uuidString.lowercased(),
+                createdAtMillis: now,
+                sentAtMillis: now,
+                timezone: Self.formatTimezoneOffset(minutes: deviceContext.timezoneOffsetMinutes(now)),
+                userId: identityStore.userId,
+                anonymousId: identityStore.anonymousId,
+                sessionId: session.sessionId,
+                visitCount: session.visitCount,
+                language: deviceContext.language,
+                screen: deviceContext.screen(),
+                appId: config.appId,
+                platform: Self.platform,
+                sdkVersion: SDKVersion.current
+            )
+            queue.append(try CanonicalJSON.render(entry))
+            flushController.requestFlush(.eventTracked)
+        } catch {
+            SdkLog.debug("\(wireName) dropped: serialization failed")
+        }
     }
 
     // MARK: - Plumbing

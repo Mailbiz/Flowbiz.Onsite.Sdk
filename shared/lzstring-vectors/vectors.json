@@ -1,0 +1,144 @@
+[
+  {
+    "name": "recovery_hash_basic",
+    "compressed": "N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMSAC6iYV2RiiU5HMV62eALLq1AXyA",
+    "expected_decompressed": "{\"t\":\"77777\",\"u\":\"user-123\",\"c\":\"cart-abc-001\",\"its\":[[\"2\",\"P100\",\"SKU-100-P\"],[\"1\",\"P200\",\"SKU-200-M\"]]}"
+  },
+  {
+    "name": "recovery_hash_with_recovery_properties",
+    "compressed": "N4IgLiBcIOx3IA0ICuVUFoCcAzATAMZIhHQECGATmBnBgB4CeAXsQJZgDOUA2jyAGZiABQBKAeQAiGAIzEAygGkAqrIwBBAFrKAMsWAAdEgHtKRyEfXMUAGwAEAWSpsAdgAtjRxEbDkAtuTunlBGwl5GnACmNjaRZiEgNsYAVuSyRgC+IAC6iPxyyGJSGHgKKiUYAGoAoqKS1fpGBKbmRpVxACaR4eD+gR6tIADiQ5k52RlAA",
+    "expected_decompressed": "{\"t\":\"77777\",\"u\":\"u-9f2c\",\"c\":\"cart-77-xyz\",\"its\":[[\"3\",\"PROD-1\",\"SKU-1-AZUL\",\"{\\\"cor\\\":\\\"Azul Marinho\\\",\\\"tamanho\\\":\\\"P\\\",\\\"seller\\\":\\\"loja-1\\\"}\"],[\"1\",\"PROD-2\",\"SKU-2-VERDE\",\"{\\\"cor\\\":\\\"Verde\\\",\\\"tamanho\\\":\\\"GG\\\"}\"]]}"
+  },
+  {
+    "name": "recovery_hash_unicode_product_data",
+    "compressed": "N4IgLiBcIIwEwGYAsBWEAaEBXKIC2AhgE4CWBAAgKYAeleADgDYD2AdAMbN6sBGRGIdrnbFSAOwAWzALQEA5wGOZMASTABnKAG0tIOAIDCAQQCyASQDKAUQAqR6UYDjRgLMCLAaQCq0gIMBJlwBlgC2BYAAdEDEuSijIKIMCPBJ1SjACAAIjOQIAW8zAXg3AJb2o9CiAE0p1dlJFZniom2SCSWZMvABLipJ2wBQCTMUAV6iAXxAAXQnRoA",
+    "expected_decompressed": "{\"t\":\"12345\",\"u\":\"maria@exemplo.com.br\",\"c\":\"carrinho-ação-1\",\"its\":[[\"2\",\"CAMISETA-AÇAÍ\",\"SKU-ÁÉÍÓÚ\",\"{\\\"nome\\\":\\\"Camiseta Açaí 🛒\\\",\\\"descrição\\\":\\\"Tamanho médio — çãõ\\\"}\"]]}"
+  },
+  {
+    "name": "recovery_hash_long_cart_25_items",
+    "compressed": "N4IgLiBcIJx3IA0ICuVUGcCmAnAtADYD2AdgOZ4DGAhjhMpejXYaRQEwCsSIAlmBigBtISACMPAAoAlAPIARPGIAMqngGUA0gFUlq5XgBqAQWnKewADogADkQzXIyxNcpEcj68YBeKAtZcQLAwwIgBHFCxHFQBfEABdRFF2KTlFFWUJZC1dDLEjUyyQK1t7aMC3DyhrQ1wAWywCAAsiAOtg0IioqDExOMTRAGZUhT1lFOydMfYC6Qni6zsHKHYK908QSRwsULagkPDI6PZ+pJAAFhH01WHJ3JvZ82QSpcdBtarIL19-JHaDrrRQanUTcZAyUYZS53MbnWZFF5lKDnD4bWo4BrNVp-fadI49c4g8RXMZgkA5UmzeaI5aQTio6qbba7HEdQ7dSBiThE+YQ67KABsGimGQFjwsiyRkAFDK+IB8fj2bMBPQFRNumzSYwA7ML7sptfCJaVadrZTV6o0WkqAfjOdqidDNZDVAAOPVjV1U42vKCu81MnbYwLKu1iV1Esl8sYwD0ZGDi56S2kwAMK34h20csQwIlFaMqFRxzIGEzSBHJ6LOVzrRnozHW1lZxzsZQ8kmFooUzvepMm6JiANbIM2vEc9h9BJnDUFzLzbtzxMLfs9VY1z7fRVNsctk5T0RO2diDUL49Gvu+znvddoy1Y0fslvA-cgKNawtO09wsvUysEofMsG-w7ishIvvm76ZGSp6cEuNLRPSN6MumD4qpAXDtuCkFiEKMKFmKZYViunIykhcr1laQG4o+Kxqi+M7YbqeGZIaP4+lKYhmmR1jDiymYgehDovoe2Husx4ZwX+nL+tx8o-KhdrsBGL5vi6ObFjm57LpeOYBhR97bjR6G5uBHbjE85IiuZvbaVKrYASOhloYMbYvrykETsWE6ScRE5pvJTl2oMk4DCADEuuw85WZFWnwSsa4gJUt4YpRCkcoMe6hSJEUntFgw2XF6HXoltZyrxVGhulz6hap1zsJ+0XfqYFmFfV-lbvxRmDGB8TxDEQA",
+    "expected_decompressed": "{\"t\":\"99999\",\"u\":\"user-long-cart\",\"c\":\"cart-long-25\",\"its\":[[\"1\",\"PROD-1000\",\"SKU-1000-VAR0\",\"{\\\"pos\\\":0,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":10}\"],[\"2\",\"PROD-1001\",\"SKU-1001-VAR1\",\"{\\\"pos\\\":1,\\\"cor\\\":\\\"Vermelho\\\",\\\"estoque\\\":11}\"],[\"3\",\"PROD-1002\",\"SKU-1002-VAR2\",\"{\\\"pos\\\":2,\\\"cor\\\":\\\"Preto\\\",\\\"estoque\\\":12}\"],[\"4\",\"PROD-1003\",\"SKU-1003-VAR0\",\"{\\\"pos\\\":3,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":13}\"],[\"5\",\"PROD-1004\",\"SKU-1004-VAR1\",\"{\\\"pos\\\":4,\\\"cor\\\":\\\"Vermelho\\\",\\\"estoque\\\":14}\"],[\"1\",\"PROD-1005\",\"SKU-1005-VAR2\",\"{\\\"pos\\\":5,\\\"cor\\\":\\\"Preto\\\",\\\"estoque\\\":15}\"],[\"2\",\"PROD-1006\",\"SKU-1006-VAR0\",\"{\\\"pos\\\":6,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":16}\"],[\"3\",\"PROD-1007\",\"SKU-1007-VAR1\",\"{\\\"pos\\\":7,\\\"cor\\\":\\\"Vermelho\\\",\\\"estoque\\\":17}\"],[\"4\",\"PROD-1008\",\"SKU-1008-VAR2\",\"{\\\"pos\\\":8,\\\"cor\\\":\\\"Preto\\\",\\\"estoque\\\":18}\"],[\"5\",\"PROD-1009\",\"SKU-1009-VAR0\",\"{\\\"pos\\\":9,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":19}\"],[\"1\",\"PROD-1010\",\"SKU-1010-VAR1\",\"{\\\"pos\\\":10,\\\"cor\\\":\\\"Vermelho\\\",\\\"estoque\\\":20}\"],[\"2\",\"PROD-1011\",\"SKU-1011-VAR2\",\"{\\\"pos\\\":11,\\\"cor\\\":\\\"Preto\\\",\\\"estoque\\\":21}\"],[\"3\",\"PROD-1012\",\"SKU-1012-VAR0\",\"{\\\"pos\\\":12,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":22}\"],[\"4\",\"PROD-1013\",\"SKU-1013-VAR1\",\"{\\\"pos\\\":13,\\\"cor\\\":\\\"Vermelho\\\",\\\"estoque\\\":23}\"],[\"5\",\"PROD-1014\",\"SKU-1014-VAR2\",\"{\\\"pos\\\":14,\\\"cor\\\":\\\"Preto\\\",\\\"estoque\\\":24}\"],[\"1\",\"PROD-1015\",\"SKU-1015-VAR0\",\"{\\\"pos\\\":15,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":25}\"],[\"2\",\"PROD-1016\",\"SKU-1016-VAR1\",\"{\\\"pos\\\":16,\\\"cor\\\":\\\"Vermelho\\\",\\\"estoque\\\":26}\"],[\"3\",\"PROD-1017\",\"SKU-1017-VAR2\",\"{\\\"pos\\\":17,\\\"cor\\\":\\\"Preto\\\",\\\"estoque\\\":27}\"],[\"4\",\"PROD-1018\",\"SKU-1018-VAR0\",\"{\\\"pos\\\":18,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":28}\"],[\"5\",\"PROD-1019\",\"SKU-1019-VAR1\",\"{\\\"pos\\\":19,\\\"cor\\\":\\\"Vermelho\\\",\\\"estoque\\\":29}\"],[\"1\",\"PROD-1020\",\"SKU-1020-VAR2\",\"{\\\"pos\\\":20,\\\"cor\\\":\\\"Preto\\\",\\\"estoque\\\":30}\"],[\"2\",\"PROD-1021\",\"SKU-1021-VAR0\",\"{\\\"pos\\\":21,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":31}\"],[\"3\",\"PROD-1022\",\"SKU-1022-VAR1\",\"{\\\"pos\\\":22,\\\"cor\\\":\\\"Vermelho\\\",\\\"estoque\\\":32}\"],[\"4\",\"PROD-1023\",\"SKU-1023-VAR2\",\"{\\\"pos\\\":23,\\\"cor\\\":\\\"Preto\\\",\\\"estoque\\\":33}\"],[\"5\",\"PROD-1024\",\"SKU-1024-VAR0\",\"{\\\"pos\\\":24,\\\"cor\\\":\\\"Azul\\\",\\\"estoque\\\":34}\"]]}"
+  },
+  {
+    "name": "recovery_hash_quantity_edge_cases",
+    "compressed": "N4IgLiBcIKx3IA0ICuUQFMAmBzDBaFAZwwCckQBjdSgQ1LH2zwoEswioBtLkABgoAFfAC0AogCUA8hQDKAaQCqokAF1EvWgCNqyYQDkAgvrlL8J9bwAsajSABMQ-FPmnlLisAB2AezAACACsiHy81VQBfIA",
+    "expected_decompressed": "{\"t\":\"55555\",\"u\":\"edge-user\",\"c\":\"cart-edge\",\"its\":[[\"0\",\"P-ZERO\",\"SKU-Z\"],[\"abc\",\"P-NAN\",\"SKU-N\"],[\"4\"],[\"2\",\"P-OK\",\"SKU-OK\",\"{not json\"]]}"
+  },
+  {
+    "name": "plain_hello_world",
+    "compressed": "BYUwNmD2AEDukCcwBMg",
+    "expected_decompressed": "hello world"
+  },
+  {
+    "name": "plain_single_char",
+    "compressed": "IZA",
+    "expected_decompressed": "a"
+  },
+  {
+    "name": "plain_unicode_accents",
+    "compressed": "IYc4xw9gBAxsBmBLqA7YB7gbgUyoFAIoBlSKABWAFcAbaAA4GcoBGADgAsg",
+    "expected_decompressed": "ação café naïve — São Paulo às 18h"
+  },
+  {
+    "name": "plain_emoji",
+    "compressed": "rwbiW9w8G4kfsAQMYIYDMCXUAmcoFs4DsAWAx1MIJY7Ygv-uCwBMIN07UgOARwDOADs4LgEQA",
+    "expected_decompressed": "🛒🎉 café da manhã 👩🏽‍💻 “aspas”"
+  },
+  {
+    "name": "plain_json_special_chars",
+    "compressed": "I4Vw9gLgpgzgBAIjgIwIYGMDWMA2qYAWcAOnAHZQDuOAlhXAFBwSrJwCQcu+RA9HAB5eMdACcaABwgA+IA",
+    "expected_decompressed": "quotes \" backslash \\ newline \n tab \t slash / </script>"
+  },
+  {
+    "name": "plain_long_repetitive",
+    "compressed": "IYIwxqHpPXUNo+TUvczase33BOR+xhJ5Zlp1FNVtD9TdLjrzbnH37vXfPfkMEiBY4eNETpU2ZPkyFcxSuVqlG1ZvVbdO-dsN6jB42dMWTV89cs37dx7ecOXT1x-de3Pz7+9+gQZAA",
+    "expected_decompressed": "abcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabc"
+  },
+  {
+    "name": "plain_empty_string_compresses",
+    "compressed": "Q",
+    "expected_decompressed": ""
+  },
+  {
+    "name": "plain_all_ascii",
+    "compressed": "AQQgRAxAJApAZAcgBQEoBUBqANAWgHQD0ADAIwBMAzACwCsAbAOwAcAnAFwDcAPALwB8AfgACAQQBCAYQAiAUQBiAcQASASQBSAaQAyAWQByAeQAKARQBKAZQAqAVQBqAdQAaATQBaAbQA6AXQB6APoABgCGAEYAxgAmAKYAZgDmABYAlgBWANYANgC2AHYA9gAOAI4ATgDOAC4ArgBuAO4AHgCeAF4A3gA+AL4AfkA",
+    "expected_decompressed": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+  },
+  {
+    "name": "space_restored_to_plus_quirk",
+    "compressed": "A4GwrgzhCm0NYFoCMBOBAPTXs 0A",
+    "expected_decompressed": "plusseek-19-xxxxxxxxxxxxxxxxxxx",
+    "note": "compressed form had '+' replaced by ' ' — decompressFromEncodedURIComponent restores it"
+  },
+  {
+    "name": "plus_intact",
+    "compressed": "A4GwrgzhCm0NYFoCMBOBAPTXs+0A",
+    "expected_decompressed": "plusseek-19-xxxxxxxxxxxxxxxxxxx"
+  },
+  {
+    "name": "garbage_symbols",
+    "compressed": "!!!@@@###%%%",
+    "expected_decompressed": ""
+  },
+  {
+    "name": "garbage_empty_input",
+    "compressed": "",
+    "expect_null": true
+  },
+  {
+    "name": "garbage_short_alphabet",
+    "compressed": "A",
+    "expected_decompressed": ""
+  },
+  {
+    "name": "garbage_alphabet_noise",
+    "compressed": "QWERTYuiop1234",
+    "expected_decompressed": ""
+  },
+  {
+    "name": "garbage_truncated_valid",
+    "compressed": "N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHk",
+    "expected_decompressed": ""
+  },
+  {
+    "name": "garbage_non_alphabet_unicode",
+    "compressed": "çãé🛒",
+    "expected_decompressed": ""
+  },
+  {
+    "name": "garbage_null_path_1",
+    "compressed": "h7twshJDOS$urXQG632",
+    "expect_null": true,
+    "note": "exercises the decoder invalid-dictionary-index return-null path"
+  },
+  {
+    "name": "garbage_null_path_2",
+    "compressed": "t30O2b7J3SBfBK8PVnvm0",
+    "expect_null": true
+  },
+  {
+    "name": "invalid_hash_missing_u",
+    "compressed": "N4IgLiBcIOx3IA0IDGVUEMBOYC0BGJEASzAGcoBtSkQ5ABTpAGVCBdNgXyA",
+    "expected_decompressed": "{\"t\":\"77777\",\"c\":\"cart-1\",\"its\":[[\"1\",\"P1\",\"S1\"]]}"
+  },
+  {
+    "name": "invalid_hash_empty_c",
+    "compressed": "N4IgLiBcIOx3IA0ICuVUEYkgMbuwJZgDOUA2mSFsgArUgDKWAuswL5A",
+    "expected_decompressed": "{\"t\":\"77777\",\"u\":\"u1\",\"c\":\"\",\"its\":[[\"1\",\"P1\",\"S1\"]]}"
+  },
+  {
+    "name": "invalid_hash_empty_its",
+    "compressed": "N4IgLiBcIOx3IA0ICuVUEYkgMbpwIYBOYAtFsgJZgDOUA2gLoC+QA",
+    "expected_decompressed": "{\"t\":\"77777\",\"u\":\"u1\",\"c\":\"cart-1\",\"its\":[]}"
+  },
+  {
+    "name": "invalid_hash_its_not_array",
+    "compressed": "N4IgLiBcIOx3IA0ICuVUEYkgMbpwIYBOYAtFsgJZgDO6AdgPYAOApiAL5A",
+    "expected_decompressed": "{\"t\":\"77777\",\"u\":\"u1\",\"c\":\"cart-1\",\"its\":\"nope\"}"
+  },
+  {
+    "name": "invalid_hash_not_json",
+    "compressed": "C4CwlgzgBJUHYHthQFYQXKBDZWA2eQA",
+    "expected_decompressed": "this is not json at all"
+  }
+]

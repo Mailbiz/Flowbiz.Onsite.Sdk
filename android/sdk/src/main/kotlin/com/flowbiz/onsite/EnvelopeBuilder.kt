@@ -116,6 +116,47 @@ internal object EnvelopeBuilder {
         sdkVersion = sdkVersion,
     )
 
+    /**
+     * Builds an entry for an *internal* raw event — a wire name outside the
+     * public [Event] catalog with a pre-rendered `data` JSON string
+     * (SPEC §10.1 `push.token.sync` / `push.token.remove`). Same envelope
+     * shape as [build]; no `context.url`.
+     */
+    fun buildRaw(
+        wireName: String,
+        dataJson: String,
+        hash: String,
+        createdAtMillis: Long,
+        sentAtMillis: Long,
+        timezone: String,
+        userId: String?,
+        anonymousId: String,
+        sessionId: String,
+        visitCount: Int,
+        language: String,
+        screen: String,
+        appId: String,
+        platform: String,
+        sdkVersion: String,
+    ): JSONObject = buildEntry(
+        wireName = wireName,
+        dataJson = dataJson,
+        contextUrl = null,
+        hash = hash,
+        createdAtMillis = createdAtMillis,
+        sentAtMillis = sentAtMillis,
+        timezone = timezone,
+        userId = userId,
+        anonymousId = anonymousId,
+        sessionId = sessionId,
+        visitCount = visitCount,
+        language = language,
+        screen = screen,
+        appId = appId,
+        platform = platform,
+        sdkVersion = sdkVersion,
+    )
+
     private fun buildEntry(
         wireName: String,
         dataJson: String,

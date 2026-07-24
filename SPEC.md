@@ -73,6 +73,7 @@ Session timeout (30 min), dedup window (20 min), queue cap (1000), and connectio
 **The public API never throws and never crashes the host app.** This is the SDK's first invariant:
 
 - All internal exceptions are caught at the API boundary; failures degrade to a dropped event, never a crash.
+- The guarantee is scoped to the SDK's **entry points** (`Flowbiz.*`): constructing config/model value types (e.g. `FlowbizConfig`, `CartItem`) with null arguments from Java may still throw the platform's own `NullPointerException` at the *host's* call site — that is dev-time fail-fast in host code, outside the SDK boundary.
 - Double `initialize()` is a no-op (first config wins); a warning is logged in `debug`.
 - Any call before `initialize()` is a no-op with a `debug` warning — nothing is thrown, nothing is queued.
 - Corrupt or unparseable persisted state (queue file, preferences) is discarded and recreated silently.

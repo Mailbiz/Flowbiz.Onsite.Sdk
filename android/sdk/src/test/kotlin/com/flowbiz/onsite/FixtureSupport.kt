@@ -11,16 +11,18 @@ import java.io.File
  */
 object FixtureSupport {
 
-    /** Walks up from the working directory until `shared/fixtures` is found. */
-    fun fixturesDir(): File {
+    /** Walks up from the working directory until `shared/<name>` is found. */
+    fun sharedDir(name: String): File {
         var dir: File? = File(System.getProperty("user.dir")!!).absoluteFile
         while (dir != null) {
-            val candidate = File(dir, "shared/fixtures")
+            val candidate = File(dir, "shared/$name")
             if (candidate.isDirectory) return candidate
             dir = dir.parentFile
         }
-        error("shared/fixtures not found above ${System.getProperty("user.dir")!!}")
+        error("shared/$name not found above ${System.getProperty("user.dir")!!}")
     }
+
+    fun fixturesDir(): File = sharedDir("fixtures")
 
     fun fixtureFiles(): List<File> =
         fixturesDir().listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
