@@ -39,10 +39,11 @@ internal class FlushController(
     private val scheduler: TaskScheduler,
     private val clock: Clock,
     private val batchSize: Int = MAX_BATCH_SIZE,
+    private val isActive: () -> Boolean = { true },
 ) {
 
     /** SPEC §9 retry triggers; carried for debug logging only. */
-    enum class FlushReason { EVENT_TRACKED, APP_FOREGROUND, NETWORK_RESTORED, EXPLICIT, RETRY }
+    enum class FlushReason { EVENT_TRACKED, APP_FOREGROUND, NETWORK_RESTORED, EXPLICIT }
 
     private enum class Outcome { CONTINUE, STOP_AND_RETRY }
 
@@ -72,6 +73,13 @@ internal class FlushController(
 
     /** Runs on the serial scheduler thread only. */
     private fun drain() {
+        // SPEC §12 gate: while the SDK is disabled no network happens — this
+        // also covers a backoff retry scheduled *before* the disable (it
+        // fires, hits the gate, and schedules nothing further).
+        if (!isActive()) {
+            SdkLog.debug("drain skipped: SDK disabled")
+            return
+        }
         synchronized(lock) {
             if (draining) {
                 // Re-entrant request (e.g. a trigger firing mid-drain with an

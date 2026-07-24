@@ -54,6 +54,15 @@ internal class EventQueue(
     /** Lines present in the file but no longer pending (consumed/dropped/garbage). */
     private var staleLines = 0
 
+    /**
+     * Set when an append failed or may have written a torn tail line.
+     * While dirty, plain file appends are unsafe — a partially-written tail
+     * without its newline would merge with the next appended entry into one
+     * garbage line — so the next write goes through a full [compact]
+     * (rewrite from [pending]) instead; a successful compaction clears it.
+     */
+    private var fileDirty = false
+
     init {
         try {
             // A leftover tmp means a compaction crashed between write and
@@ -111,13 +120,20 @@ internal class EventQueue(
             SdkLog.debug("queue at capacity $capacity, dropped oldest event")
         }
         pending.addLast(entry)
-        try {
-            file.parentFile?.mkdirs()
-            FileOutputStream(file, true).use { stream ->
-                stream.write((entry + "\n").toByteArray(Charsets.UTF_8))
+        if (fileDirty) {
+            // A previous append tore the tail — rewrite instead of appending.
+            compact()
+        } else {
+            try {
+                file.parentFile?.mkdirs()
+                FileOutputStream(file, true).use { stream ->
+                    stream.write((entry + "\n").toByteArray(Charsets.UTF_8))
+                }
+            } catch (t: Throwable) {
+                SdkLog.debug("queue append I/O failed: ${t.javaClass.simpleName}")
+                fileDirty = true
+                compact() // heal immediately when possible
             }
-        } catch (t: Throwable) {
-            SdkLog.debug("queue append I/O failed: ${t.javaClass.simpleName}")
         }
         compactIfNeeded()
     }
@@ -151,6 +167,7 @@ internal class EventQueue(
             }
             Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
             staleLines = 0
+            fileDirty = false
         } catch (t: Throwable) {
             // Original file untouched on failure; stale lines are retried at
             // the next trigger and at worst resend after a restart.

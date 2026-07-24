@@ -53,6 +53,13 @@ final class EventQueue {
     /// Lines present in the file but no longer pending (consumed/dropped/garbage).
     private var staleLines = 0
 
+    /// Set when an append failed or may have written a torn tail line.
+    /// While dirty, plain file appends are unsafe — a partially-written tail
+    /// without its newline would merge with the next appended entry into one
+    /// garbage line — so the next write goes through a full `compact()`
+    /// (rewrite from `pending`) instead; a successful compaction clears it.
+    private var fileDirty = false
+
     init(fileURL: URL, capacity: Int = EventQueue.defaultCapacity) {
         self.fileURL = fileURL
         self.tmpURL = URL(fileURLWithPath: fileURL.path + ".tmp")
@@ -84,7 +91,13 @@ final class EventQueue {
             SdkLog.debug("queue at capacity \(capacity), dropped oldest event")
         }
         pending.append(entry)
-        appendToFile(entry)
+        if fileDirty {
+            // A previous append tore the tail — rewrite instead of appending.
+            compact()
+        } else if !appendToFile(entry) {
+            fileDirty = true
+            compact() // heal immediately when possible
+        }
         compactIfNeeded()
     }
 
@@ -131,17 +144,23 @@ final class EventQueue {
         if staleLines > 0 { compact() }
     }
 
-    private func appendToFile(_ entry: String) {
+    /// Returns false on any failure — including a *partial* write, which
+    /// leaves a torn tail line the caller must mark dirty.
+    private func appendToFile(_ entry: String) -> Bool {
         ensureDirectory()
         // OutputStream (append mode) creates the file when missing and
         // reports failure via return codes — no uncatchable ObjC exceptions
         // (unlike legacy FileHandle writes; SPEC §3 never-crash).
         guard let stream = OutputStream(url: fileURL, append: true) else {
             SdkLog.debug("queue append open failed")
-            return
+            return false
         }
         stream.open()
         defer { stream.close() }
+        guard stream.streamStatus == .open else {
+            SdkLog.debug("queue append open failed")
+            return false
+        }
         let bytes = Array((entry + "\n").utf8)
         var written = 0
         while written < bytes.count {
@@ -151,10 +170,11 @@ final class EventQueue {
             }
             if count <= 0 {
                 SdkLog.debug("queue append write failed")
-                return
+                return false
             }
             written += count
         }
+        return true
     }
 
     private func compactIfNeeded() {
@@ -176,6 +196,7 @@ final class EventQueue {
                 try manager.moveItem(at: tmpURL, to: fileURL)
             }
             staleLines = 0
+            fileDirty = false
         } catch {
             // Original file untouched on failure; stale lines are retried at
             // the next trigger and at worst resend after a restart.

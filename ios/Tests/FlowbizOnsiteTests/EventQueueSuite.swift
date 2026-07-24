@@ -151,5 +151,42 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: file.path))
         #expect(EventQueue(fileURL: file).peek(10) == [entry(1)])
     }
+
+    @Test func failedAppendForcesRewriteSoATornTailCannotMergeWithTheNextAppend() throws {
+        let queue = EventQueue(fileURL: file)
+        queue.append(entry(1))
+        let manager = FileManager.default
+        let directory = file.deletingLastPathComponent()
+        // Sabotage: read-only file blocks appends; read-only directory
+        // blocks the healing compaction (tmp file creation).
+        try manager.setAttributes([.posixPermissions: 0o444], ofItemAtPath: file.path)
+        try manager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+        queue.append(entry(2)) // append fails → dirty; compaction fails too
+        queue.append(entry(3)) // still dirty → rewrite attempt, fails again
+        #expect(queue.size == 3) // in-memory queue is intact regardless
+        #expect(try fileText() == entry(1) + "\n") // no torn/merged writes
+
+        // Filesystem healed: the next write must REWRITE the whole pending
+        // set (a plain append after a potentially-torn tail could merge two
+        // entries into one garbage line).
+        try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+        try manager.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.path)
+        queue.append(entry(4))
+        #expect(EventQueue(fileURL: file).peek(10) == (1...4).map { entry($0) })
+    }
+
+    // MARK: Production location (Slice 3 warm-up; macOS-runnable)
+
+    @Test func defaultQueueDirectoryIsExcludedFromBackup() throws {
+        let appId = "backup-test-\(UUID().uuidString)"
+        let url = try #require(EventQueue.defaultFileURL(appId: appId))
+        let directory = url.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        #expect(url.lastPathComponent == "queue.jsonl")
+        #expect(directory.lastPathComponent == appId)
+        let values = try directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
+        #expect(values.isExcludedFromBackup == true)
+    }
 }
 #endif

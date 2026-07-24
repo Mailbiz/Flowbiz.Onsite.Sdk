@@ -30,8 +30,11 @@ protocol HttpSender {
 /// header.
 ///
 /// Timeouts: `URLSession` has no separate connect timeout, so SPEC §9's 5 s
-/// connect timeout is subsumed by a 10 s request timeout (documented
-/// deviation; Android sets 5 s connect / 10 s read explicitly).
+/// connect timeout is subsumed by a 10 s `timeoutIntervalForRequest`
+/// (documented deviation; Android sets 5 s connect / 10 s read explicitly).
+/// Note that `timeoutIntervalForRequest` is an **idle** timeout — it resets
+/// whenever data arrives, so it bounds stalls, not total request duration;
+/// the 30 s semaphore safety net below is the hard whole-request cap.
 ///
 /// Redirects are **refused** via the task delegate so a 3xx response is
 /// observed as-is. Classification (SPEC §9), see `classify(status:)`:
@@ -50,7 +53,10 @@ protocol HttpSender {
 /// validation proper happens in Slice 4.
 final class URLSessionHttpSender: NSObject, HttpSender, URLSessionTaskDelegate, @unchecked Sendable {
 
-    /// Whole-request timeout (subsumes SPEC §9's 5 s connect timeout).
+    /// Idle (inter-data) timeout — `timeoutIntervalForRequest` resets on
+    /// every arriving byte; it is not a whole-request cap (that role falls
+    /// to the 30 s semaphore safety net in `send`). Subsumes SPEC §9's 5 s
+    /// connect timeout.
     static let requestTimeoutSeconds: TimeInterval = 10
 
     private final class ResultBox: @unchecked Sendable {

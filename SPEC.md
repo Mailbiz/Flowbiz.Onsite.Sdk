@@ -31,7 +31,7 @@ Branding is **Flowbiz**: entry point `Flowbiz`, Android package `com.flowbiz.ons
 
 ```kotlin
 // Android — all entry points @JvmStatic (Java host apps supported)
-Flowbiz.initialize(context, FlowbizConfig(appId = "77777", /* optional: */ collectorUrl, debug, heartbeatInterval))
+Flowbiz.initialize(context, FlowbizConfig(appId = "77777", /* optional: */ collectorUrl, debug, heartbeatIntervalSeconds))
 Flowbiz.track(event)                    // typed event, see §5
 Flowbiz.logout()                        // clears user identity, rotates session, auto-sends push token removal
 Flowbiz.setEnabled(enabled: Boolean)    // opt-out switch, see §12; persisted; default true
@@ -64,7 +64,7 @@ No callback/handler registration anywhere. The receiving side is **return-style 
 | `appId` | yes | — | tenant ID, same value as web `app_id` |
 | `collectorUrl` | no | `https://collector.mailbiz.one` | full base URL; must be HTTPS (ATS / Android cleartext policy) |
 | `debug` | no | `false` | verbose logging; never prints PII (see §12) |
-| `heartbeatInterval` | no | 60 s | `page.ping` cadence, matches web `pagePingDelay`; clamped to ≥ 15 s |
+| `heartbeatIntervalSeconds` (Android) / `heartbeatInterval: TimeInterval` (iOS) | no | 60 s | `page.ping` cadence, matches web `pagePingDelay`. Units are explicit per platform idiom: seconds as a `Long` on Android, `TimeInterval` on iOS. Clamped to the 15 s floor and a defensive 24 h ceiling |
 
 Session timeout (30 min), dedup window (20 min), queue cap (1000), and connection timeout (5 s) are **internal constants**, not config knobs.
 
@@ -167,7 +167,7 @@ Side effect: `AccountLogin`/`AccountSync` also store `user_id`/`email` locally s
 
 ## 7. Dedup
 
-Per event type, the last sent payload is persisted with a timestamp. An identical payload for the same event type within **20 minutes** is suppressed (matching current web behavior). After 20 minutes, identical payloads send again.
+Per event type, the last sent payload is persisted with a timestamp. An identical payload for the same event type within **20 minutes** is suppressed; a suppressed duplicate renews the window (renew-on-duplicate), so a continuously repeated identical payload stays suppressed until it pauses for 20 minutes. This deliberately diverges from web: the web tracker (`storage.ts`) keeps its dedup entries under a single **25-minute** storage TTL that is renewed by *any* event, while mobile uses a fixed per-event-type 20-minute window with renew-on-duplicate — a deliberate simplification, not a port.
 
 - **Comparison basis**: the serialized `data` payload string only. Envelope fields (`hash`, `timings`, `identity`, `context`) are excluded — they always differ.
 - **Exempt from dedup**: `page.ping` (it is identical by design every beat; see §8).
@@ -176,7 +176,7 @@ Per event type, the last sent payload is persisted with a timestamp. An identica
 
 ## 8. Heartbeat
 
-While the app is foregrounded, the SDK emits `page.ping` every `heartbeatInterval` (default 60 s) to keep the session alive server-side, matching web `enableActivityTracking`. Stops in background; resumes on foreground.
+While the app is foregrounded, the SDK emits `page.ping` every `heartbeatInterval` (default 60 s) to keep the session alive server-side, matching web `enableActivityTracking`. Stops in background; resumes on foreground. The ping's `data` payload carries `{"page":{"title":"<last named screen>","url":"app://<last named screen>"}}` once a named `pageView` has occurred in the process, and `{}` before.
 
 `page.ping` is **fire-and-forget**: sent directly when online, dropped on failure, **never persisted to the queue** and exempt from dedup. A flaky network session must not fill the durable queue with heartbeats and evict real events.
 

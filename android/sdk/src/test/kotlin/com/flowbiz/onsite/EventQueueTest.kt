@@ -171,4 +171,29 @@ class EventQueueTest {
         assertTrue(file.exists())
         assertEquals(listOf(entry(1)), EventQueue(file).peek(10))
     }
+
+    @Test
+    fun failedAppendForcesRewriteSoATornTailCannotMergeWithTheNextAppend() {
+        val q = queue()
+        q.append(entry(1))
+        val dir = file.parentFile!!
+        try {
+            // Sabotage: read-only file blocks appends; read-only directory
+            // blocks the healing compaction (tmp file creation).
+            assertTrue(file.setWritable(false))
+            assertTrue(dir.setWritable(false))
+            q.append(entry(2)) // append fails → dirty; compaction fails too
+            q.append(entry(3)) // still dirty → rewrite attempt, fails again
+            assertEquals(3, q.size) // in-memory queue is intact regardless
+            assertEquals(listOf(entry(1)), file.readLines()) // no torn/merged writes
+        } finally {
+            dir.setWritable(true)
+            file.setWritable(true)
+        }
+        // Filesystem healed: the next write must REWRITE the whole pending
+        // set (a plain append after a potentially-torn tail could merge two
+        // entries into one garbage line).
+        q.append(entry(4))
+        assertEquals((1..4).map { entry(it) }, EventQueue(file).peek(10))
+    }
 }

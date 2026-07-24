@@ -76,9 +76,10 @@ internal object EnvelopeBuilder {
 
     /**
      * Builds a SPEC §8 `page.ping` heartbeat entry. Not part of the [Event]
-     * catalog (the heartbeat is automatic, never tracked by the host app);
-     * payload is an empty object — the ping is pure session-keepalive
-     * signal, all meaning lives in the envelope. Same shape rules as
+     * catalog (the heartbeat is automatic, never tracked by the host app).
+     * [dataJson] defaults to an empty object; the facade passes the
+     * last-tracked screen as `{"page":{"title":...,"url":"app://..."}}`
+     * (web semantics: pings describe the current page). Same shape rules as
      * [build]; no `context.url`.
      */
     fun buildPing(
@@ -95,9 +96,10 @@ internal object EnvelopeBuilder {
         appId: String,
         platform: String,
         sdkVersion: String,
+        dataJson: String = "{}",
     ): JSONObject = buildEntry(
         wireName = "page.ping",
-        dataJson = "{}",
+        dataJson = dataJson,
         contextUrl = null,
         hash = hash,
         createdAtMillis = createdAtMillis,

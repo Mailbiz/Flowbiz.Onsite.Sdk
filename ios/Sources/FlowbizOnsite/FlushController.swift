@@ -52,6 +52,7 @@ final class FlushController: @unchecked Sendable {
     private let scheduler: any TaskScheduler
     private let clock: any Clock
     private let batchSize: Int
+    private let isActive: @Sendable () -> Bool
 
     private let lock = NSLock()
     private var draining = false
@@ -64,13 +65,15 @@ final class FlushController: @unchecked Sendable {
         sender: any HttpSender,
         scheduler: any TaskScheduler,
         clock: any Clock,
-        batchSize: Int = FlushController.maxBatchSize
+        batchSize: Int = FlushController.maxBatchSize,
+        isActive: @escaping @Sendable () -> Bool = { true }
     ) {
         self.queue = queue
         self.sender = sender
         self.scheduler = scheduler
         self.clock = clock
         self.batchSize = batchSize
+        self.isActive = isActive
     }
 
     /// Requests an immediate flush. Resets the backoff and cancels any
@@ -87,6 +90,13 @@ final class FlushController: @unchecked Sendable {
 
     /// Runs on the serial scheduler queue only.
     private func drain() {
+        // SPEC §12 gate: while the SDK is disabled no network happens — this
+        // also covers a backoff retry scheduled *before* the disable (it
+        // fires, hits the gate, and schedules nothing further).
+        guard isActive() else {
+            SdkLog.debug("drain skipped: SDK disabled")
+            return
+        }
         lock.lock()
         if draining {
             // Re-entrant request (e.g. a trigger firing mid-drain with an
