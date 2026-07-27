@@ -6,9 +6,11 @@ import FlowbizOnsite
 /// notifications, real clock/network). Plain SwiftUI, zero third-party
 /// dependencies; the goal is clarity of the SDK call sites, not UX.
 ///
-/// The collectorUrl is left at its default. Offline (or with the placeholder
-/// appId rejected upstream) the POSTs fail harmlessly — which is the point:
-/// it demonstrates the SPEC §9 durable queue + exponential backoff. Watch
+/// The collectorUrl is selected per build configuration: Debug builds point
+/// at staging (collector.stg.mbzlabs.me), Release builds at production —
+/// the host-app side of the environment-switch pattern (the SDK itself only
+/// exposes a neutral collectorUrl override). Failed POSTs are harmless
+/// either way; they demonstrate the SPEC §9 durable queue + backoff. Watch
 /// the os_log category `FlowbizOnsite` (debug=true) to see the pipeline.
 @main
 struct FlowbizDemoApp: App {
@@ -17,8 +19,17 @@ struct FlowbizDemoApp: App {
 
     init() {
         // SPEC §2: initialize once at launch; debug=true, placeholder appId,
-        // default collectorUrl.
-        Flowbiz.initialize(FlowbizConfig(appId: "77777", debug: true))
+        // collector selected by build configuration.
+        #if DEBUG
+        let collectorUrl = "https://collector.stg.mbzlabs.me"
+        #else
+        let collectorUrl = "https://collector.mailbiz.one"
+        #endif
+        Flowbiz.initialize(FlowbizConfig(
+            appId: "77777",
+            collectorUrl: collectorUrl,
+            debug: true
+        ))
     }
 
     var body: some Scene {
