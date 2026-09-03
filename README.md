@@ -42,20 +42,20 @@ Both SDKs version in lockstep; one `vX.Y.Z` tag releases both.
 
 ```kotlin
 // Android — all entry points @JvmStatic (Java host apps supported)
-Flowbiz.initialize(context, FlowbizConfig(appId = "77777", /* optional: */ collectorUrl, debug, heartbeatIntervalSeconds))
+Flowbiz.initialize(context, FlowbizConfig(appId = "77777", baseUri = "https://store.com", /* optional: */ collectorUrl, debug, heartbeatIntervalSeconds, recoveryUrl))
 Flowbiz.track(event)                    // typed event, see SPEC §5
 Flowbiz.logout()                        // clears user identity, rotates session, auto-sends push token removal
 Flowbiz.setEnabled(enabled: Boolean)    // opt-out switch, see SPEC §12; persisted; default true
 Flowbiz.setPushToken(token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(payload: Map<String, String>): FlowbizPush?   // null = not ours
-Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no mb_recovery param
+Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch)
 Flowbiz.flush()                         // force queue flush (optional nicety, fire-and-forget)
 ```
 
 ```swift
 // iOS — identical semantics
-Flowbiz.initialize(FlowbizConfig(appId: "77777"))
+Flowbiz.initialize(FlowbizConfig(appId: "77777", baseUri: "https://store.com"))
 Flowbiz.track(_ event: Event)
 Flowbiz.logout()
 Flowbiz.setEnabled(_ enabled: Bool)
@@ -74,12 +74,13 @@ branches on the returned value.
 
 ```kotlin
 // Application.onCreate
-Flowbiz.initialize(this, FlowbizConfig(appId = "77777"))
+Flowbiz.initialize(this, FlowbizConfig(appId = "77777", baseUri = "https://store.com", recoveryUrl = "https://store.com/carrinho"))
 
 // Track typed events (SPEC §5 catalog: PageView, AccountLogin, AccountSync,
 // ProductView, CartSync, AddToCart, CartItemUpdate, CartSetPostalCode,
 // CartSetCoupon, CheckoutStep, OrderComplete, OrderCancel)
-Flowbiz.track(Event.PageView(screenName = "home"))
+// URL-shaped fields (page path, product/variant/item url and image_url) may be paths — the SDK prepends baseUri
+Flowbiz.track(Event.PageView(path = "/", title = "Home"))
 Flowbiz.track(Event.AccountLogin(User(userId = "u-1", email = "user@example.com")))
 
 // Sign-out: clears identity, rotates session, auto-sends push token removal
@@ -108,10 +109,11 @@ if (recovery != null) {
 
 ```swift
 // application(_:didFinishLaunchingWithOptions:)
-Flowbiz.initialize(FlowbizConfig(appId: "77777"))
+Flowbiz.initialize(FlowbizConfig(appId: "77777", baseUri: "https://store.com", recoveryUrl: "https://store.com/carrinho"))
 
 // Track typed events (same catalog as Android)
-Flowbiz.track(.pageView(screenName: "home"))
+// URL-shaped fields (page path, product/variant/item url and image_url) may be paths — the SDK prepends baseUri
+Flowbiz.track(.pageView(path: "/", title: "Home"))
 Flowbiz.track(.accountLogin(user: User(userId: "u-1", email: "user@example.com")))
 
 // Sign-out
@@ -138,7 +140,12 @@ Recovery links must point at a domain your app claims via **App Links**
 (Android, `assetlinks.json` + auto-verified intent filter) / **Universal
 Links** (iOS, `apple-app-site-association` + Associated Domains
 entitlement). If the app isn't installed, the same URL falls back to the
-existing web recovery flow (SPEC §11).
+existing web recovery flow (SPEC §11). Set `recoveryUrl` to an https URL on
+that claimed domain (typically the cart page); the backend appends
+`?utm_source=…&_mb_cr_=…` to it, the OS opens your app if installed, the
+mobile browser otherwise, and desktop users get the normal web recovery
+flow. The claim files: `https://<domain>/.well-known/apple-app-site-association`
+and `https://<domain>/.well-known/assetlinks.json`.
 
 ### Consent / opt-out
 
@@ -155,14 +162,14 @@ Each platform ships a minimal fake store (SPEC §14) that exercises **every
 public API** — product list/detail, cart, 3-step checkout, login, a
 settings/debug panel (opt-out, push-token relay, flush, simulated SPEC §10.2
 push payload) and deep-link cart recovery (real intent/URL plus an in-app
-"simulate recovery link" button using the shared LZ-string vectors). Every
+"simulate recovery link" button using the shared recovery-link vectors). Every
 SDK call site is commented with the SPEC section it demonstrates. Run them
 offline on purpose: failing collector POSTs demonstrate the SPEC §9 durable
 queue + backoff.
 
 - **Android**: `cd android && ./gradlew :demo:installDebug` (or open in
   Android Studio and run the `demo` configuration). Deep link:
-  `adb shell am start -a android.intent.action.VIEW -d "flowbizdemo://recover?mb_recovery=<hash>"`.
+  `adb shell am start -a android.intent.action.VIEW -d "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"`.
 - **iOS**: `ios/Demo/` is a source set + XcodeGen spec (no checked-in
   `.xcodeproj`): `brew install xcodegen && cd ios/Demo && xcodegen generate && open FlowbizDemo.xcodeproj`.
   Manual-Xcode instructions in [ios/Demo/README.md](ios/Demo/README.md).
