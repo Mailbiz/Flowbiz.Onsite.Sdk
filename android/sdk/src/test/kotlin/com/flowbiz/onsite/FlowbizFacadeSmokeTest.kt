@@ -55,7 +55,7 @@ class FlowbizFacadeSmokeTest {
         SdkLog.sink = { warnings += it }
         try {
             Flowbiz.track(null)
-            Flowbiz.initialize(null, FlowbizConfig(appId = "77777"))
+            Flowbiz.initialize(null, FlowbizConfig(appId = "77777", baseUri = "https://store.com"))
             Flowbiz.initialize(null, null)
             Flowbiz.setPushToken(null)
             Flowbiz.setPushToken("   ")

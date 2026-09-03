@@ -41,7 +41,7 @@ internal class FakeDeviceContext(
  */
 internal class CoreHarness(
     queueDir: File,
-    val config: FlowbizConfig = FlowbizConfig(appId = "77777"),
+    val config: FlowbizConfig = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
     val store: FakeKeyValueStore = FakeKeyValueStore(),
     val clock: FakeClock = FakeClock(),
     val sender: FakeHttpSender = FakeHttpSender(),

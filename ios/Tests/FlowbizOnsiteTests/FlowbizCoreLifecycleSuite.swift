@@ -23,7 +23,7 @@ import Testing
     }
 
     @Test func heartbeatIntervalComesFromConfig() {
-        let h = CoreHarness(config: FlowbizConfig(appId: "77777", heartbeatInterval: 15))
+        let h = CoreHarness(config: FlowbizConfig(appId: "77777", baseUri: "https://store.com", heartbeatInterval: 15))
         h.core.onForeground()
         #expect(h.scheduler.activeRepeating()?.delayMillis == 15_000)
     }

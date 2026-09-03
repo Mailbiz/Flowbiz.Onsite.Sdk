@@ -42,7 +42,7 @@ class FlowbizCoreLifecycleTest {
     fun heartbeatIntervalComesFromConfig() {
         val h = CoreHarness(
             temp.newFolder(),
-            config = FlowbizConfig(appId = "77777", heartbeatIntervalSeconds = 15),
+            config = FlowbizConfig(appId = "77777", baseUri = "https://store.com", heartbeatIntervalSeconds = 15),
         )
         h.core.onForeground()
         assertEquals(15_000L, h.scheduler.activeRepeating()!!.delayMillis)

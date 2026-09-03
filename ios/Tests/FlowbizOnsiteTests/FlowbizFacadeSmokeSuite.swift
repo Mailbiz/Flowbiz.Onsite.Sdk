@@ -31,7 +31,7 @@ import Testing
     }
 
     @Test func initializeWithBlankAppIdIsACompleteNoOp() {
-        Flowbiz.initialize(FlowbizConfig(appId: "   "))
+        Flowbiz.initialize(FlowbizConfig(appId: "   ", baseUri: "https://store.com"))
         // Still uninitialized: subsequent calls stay no-ops.
         Flowbiz.track(.pageView(screenName: "after-blank-init"))
         Flowbiz.flush()
