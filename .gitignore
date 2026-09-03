@@ -34,3 +34,5 @@ ios/Demo/Sources/Info.plist
 
 # git worktrees (superpowers)
 .worktrees/
+# superpowers SDD scratch
+.superpowers/
