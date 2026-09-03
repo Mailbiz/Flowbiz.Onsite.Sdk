@@ -36,7 +36,7 @@ import Testing
         #expect(context["screen"] as? String == "1170x2532")
         #expect(context["vendor"] as? String == "flowbiz-ios-sdk")
         #expect(context["onsite_version"] as? String == SDKVersion.current)
-        #expect(context["url"] as? String == "app://home")
+        #expect(context["url"] as? String == "https://store.com/home")
 
         let timings = object(entry, "timings")
         let expectedIso = EnvelopeBuilder.isoMillis(h.clock.wall)
@@ -44,7 +44,7 @@ import Testing
         #expect(timings["sent_at"] as? String == expectedIso)
         #expect(timings["timezone"] as? String == "-03:00")
 
-        #expect(entry["data"] as? String == (try EventSerializer.dataJSONString(.pageView(path: "home"))))
+        #expect(entry["data"] as? String == (try EventSerializer.dataJSONString(.pageView(path: "home"), baseUri: "https://store.com")))
     }
 
     @Test func trackedEnvelopeDataMatchesSharedFixture() throws {
@@ -65,10 +65,48 @@ import Testing
         #expect(entry["data"] as? String == expected["data_canonical"] as? String)
     }
 
-    @Test func pageViewWithoutScreenNameHasNoContextUrl() throws {
+    @Test func contextUrlAbsentBeforeAnyPageViewThenPresentOnEveryEvent() throws {
         let h = CoreHarness()
-        h.core.track(.pageView(path: nil))
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "X"))
         #expect(object(try h.lastEntry(), "context")["url"] == nil)
+
+        h.core.track(.pageView(path: "/checkout", title: "Checkout"))
+        #expect(object(try h.lastEntry(), "context")["url"] as? String == "https://store.com/checkout")
+
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "Y"))
+        #expect(object(try h.lastEntry(), "context")["url"] as? String == "https://store.com/checkout")
+
+        // An empty pageView does not clear the remembered page.
+        h.core.track(.pageView())
+        #expect(object(try h.lastEntry(), "context")["url"] as? String == "https://store.com/checkout")
+    }
+
+    @Test func everyEventCarriesBaseUriAndRecoveryUrlFromConfig() throws {
+        let h = CoreHarness(config: FlowbizConfig(
+            appId: "77777", baseUri: "https://store.com", recoveryUrl: "https://store.com/carrinho"
+        ))
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "X"))
+        let context = object(try h.lastEntry(), "context")
+        #expect(context["baseuri"] as? String == "https://store.com")
+        #expect(context["recoveryUrl"] as? String == "https://store.com/carrinho")
+    }
+
+    @Test func recoveryUrlAbsentWhenNotConfigured() throws {
+        let h = CoreHarness()
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "X"))
+        let context = object(try h.lastEntry(), "context")
+        #expect(context["baseuri"] as? String == "https://store.com")
+        #expect(context["recoveryUrl"] == nil)
+    }
+
+    @Test func productUrlsAreResolvedAgainstConfigBaseUri() throws {
+        let h = CoreHarness()
+        h.core.track(.productView(product: Product(
+            productId: "P1", url: "/p1", variants: [ProductVariant(sku: "S1", price: 1, imageUrl: "//cdn.store.com/p1.jpg")]
+        )))
+        let data = try #require(try h.lastEntry()["data"] as? String)
+        #expect(data.contains(#""url":"https://store.com/p1""#))
+        #expect(data.contains(#""image_url":"https://cdn.store.com/p1.jpg""#))
     }
 
     @Test func trackedEventIsQueuedThenDrainedBySuccessfulFlush() throws {

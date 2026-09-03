@@ -20,8 +20,10 @@ class FlowbizCoreTest {
     @get:Rule
     val temp = TemporaryFolder()
 
-    private fun harness(configure: (TemporaryFolder) -> CoreHarness = { CoreHarness(it.newFolder()) }): CoreHarness =
-        configure(temp)
+    private fun harness(
+        config: FlowbizConfig = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
+        configure: (TemporaryFolder) -> CoreHarness = { CoreHarness(it.newFolder(), config = config) },
+    ): CoreHarness = configure(temp)
 
     private val user = User(userId = "98412", email = "maria.oliveira@gmail.com")
 
@@ -52,7 +54,7 @@ class FlowbizCoreTest {
         assertEquals("1080x2400", context.getString("screen"))
         assertEquals("flowbiz-android-sdk", context.getString("vendor"))
         assertEquals(SdkVersion.CURRENT, context.getString("onsite_version"))
-        assertEquals("app://home", context.getString("url"))
+        assertEquals("https://store.com/home", context.getString("url"))
 
         val timings = entry.getJSONObject("timings")
         val expectedIso = EnvelopeBuilder.isoMillis(h.clock.wall)
@@ -60,7 +62,7 @@ class FlowbizCoreTest {
         assertEquals(expectedIso, timings.getString("sent_at"))
         assertEquals("-03:00", timings.getString("timezone"))
 
-        assertEquals(EventSerializer.dataJson(Event.PageView("home")), entry.getString("data"))
+        assertEquals(EventSerializer.dataJson(Event.PageView("home"), "https://store.com"), entry.getString("data"))
     }
 
     @Test
@@ -78,10 +80,46 @@ class FlowbizCoreTest {
     }
 
     @Test
-    fun pageViewWithoutScreenNameHasNoContextUrl() {
+    fun contextUrlAbsentBeforeAnyPageViewThenPresentOnEveryEvent() {
         val h = harness()
-        h.core.track(Event.PageView())
+        h.core.track(Event.CartSetCoupon(cartId = "c-1", coupon = "X"))
         assertFalse(h.lastEntry().getJSONObject("context").has("url"))
+
+        h.core.track(Event.PageView(path = "/checkout", title = "Checkout"))
+        assertEquals("https://store.com/checkout", h.lastEntry().getJSONObject("context").getString("url"))
+
+        h.core.track(Event.CartSetCoupon(cartId = "c-1", coupon = "Y"))
+        assertEquals("https://store.com/checkout", h.lastEntry().getJSONObject("context").getString("url"))
+
+        h.core.track(Event.PageView())
+        assertEquals("https://store.com/checkout", h.lastEntry().getJSONObject("context").getString("url"))
+    }
+
+    @Test
+    fun everyEventCarriesBaseUriAndRecoveryUrlFromConfig() {
+        val h = harness(config = FlowbizConfig(appId = "77777", baseUri = "https://store.com", recoveryUrl = "https://store.com/carrinho"))
+        h.core.track(Event.CartSetCoupon(cartId = "c-1", coupon = "X"))
+        val context = h.lastEntry().getJSONObject("context")
+        assertEquals("https://store.com", context.getString("baseuri"))
+        assertEquals("https://store.com/carrinho", context.getString("recoveryUrl"))
+    }
+
+    @Test
+    fun recoveryUrlAbsentWhenNotConfigured() {
+        val h = harness()
+        h.core.track(Event.CartSetCoupon(cartId = "c-1", coupon = "X"))
+        val context = h.lastEntry().getJSONObject("context")
+        assertEquals("https://store.com", context.getString("baseuri"))
+        assertFalse(context.has("recoveryUrl"))
+    }
+
+    @Test
+    fun productUrlsAreResolvedAgainstConfigBaseUri() {
+        val h = harness()
+        h.core.track(Event.ProductView(Product(productId = "P1", url = "/p1", variants = listOf(ProductVariant(sku = "S1", price = 1.0, imageUrl = "//cdn.store.com/p1.jpg")))))
+        val data = h.lastEntry().getString("data")
+        assertTrue(data.contains(""""url":"https://store.com/p1""""))
+        assertTrue(data.contains(""""image_url":"https://cdn.store.com/p1.jpg""""))
     }
 
     @Test

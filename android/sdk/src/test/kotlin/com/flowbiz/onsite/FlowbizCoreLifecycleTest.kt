@@ -87,10 +87,10 @@ class FlowbizCoreLifecycleTest {
     fun pingCarriesLastTrackedScreenAsPageData() {
         val h = harness()
         h.core.onForeground()
-        h.core.track(Event.PageView("checkout"))
+        h.core.track(Event.PageView(path = "/checkout", title = "checkout"))
         h.scheduler.tickRepeating()
         assertEquals(
-            """{"page":{"title":"checkout","url":"app://checkout"}}""",
+            """{"page":{"title":"checkout","url":"https://store.com/checkout"}}""",
             pingEntries(h).last().getString("data"),
         )
 
@@ -98,9 +98,25 @@ class FlowbizCoreLifecycleTest {
         h.core.track(Event.PageView())
         h.scheduler.tickRepeating()
         assertEquals(
-            """{"page":{"title":"checkout","url":"app://checkout"}}""",
+            """{"page":{"title":"checkout","url":"https://store.com/checkout"}}""",
             pingEntries(h).last().getString("data"),
         )
+    }
+
+    @Test
+    fun pingAndRawEventsCarryContextFields() {
+        val h = CoreHarness(
+            temp.newFolder(),
+            config = FlowbizConfig(appId = "77777", baseUri = "https://store.com", recoveryUrl = "https://store.com/carrinho"),
+        )
+        h.core.onForeground()
+        h.core.track(Event.PageView(path = "/home"))
+        h.scheduler.tickRepeating()
+        val ping = pingEntries(h).last()
+        val context = ping.getJSONObject("context")
+        assertEquals("https://store.com/home", context.getString("url"))
+        assertEquals("https://store.com", context.getString("baseuri"))
+        assertEquals("https://store.com/carrinho", context.getString("recoveryUrl"))
     }
 
     @Test

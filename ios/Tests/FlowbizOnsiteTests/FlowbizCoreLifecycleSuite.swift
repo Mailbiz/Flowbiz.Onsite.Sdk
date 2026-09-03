@@ -63,20 +63,34 @@ import Testing
     @Test func pingCarriesLastTrackedScreenAsPageData() throws {
         let h = CoreHarness()
         h.core.onForeground()
-        h.core.track(.pageView(path: "checkout"))
+        h.core.track(.pageView(path: "/checkout", title: "checkout"))
         h.scheduler.tickRepeating()
         #expect(
             try pingEntries(h).last?["data"] as? String
-                == #"{"page":{"title":"checkout","url":"app://checkout"}}"#
+                == #"{"page":{"title":"checkout","url":"https://store.com/checkout"}}"#
         )
 
         // An anonymous pageView does not clear the last named screen.
-        h.core.track(.pageView(path: nil))
+        h.core.track(.pageView())
         h.scheduler.tickRepeating()
         #expect(
             try pingEntries(h).last?["data"] as? String
-                == #"{"page":{"title":"checkout","url":"app://checkout"}}"#
+                == #"{"page":{"title":"checkout","url":"https://store.com/checkout"}}"#
         )
+    }
+
+    @Test func pingAndRawEventsCarryContextFields() throws {
+        let h = CoreHarness(config: FlowbizConfig(
+            appId: "77777", baseUri: "https://store.com", recoveryUrl: "https://store.com/carrinho"
+        ))
+        h.core.onForeground()
+        h.core.track(.pageView(path: "/home"))
+        h.scheduler.tickRepeating()
+        let ping = try #require(try pingEntries(h).last)
+        let context = object(ping, "context")
+        #expect(context["url"] as? String == "https://store.com/home")
+        #expect(context["baseuri"] as? String == "https://store.com")
+        #expect(context["recoveryUrl"] as? String == "https://store.com/carrinho")
     }
 
     @Test func pingFailureIsDroppedNeverQueued() throws {

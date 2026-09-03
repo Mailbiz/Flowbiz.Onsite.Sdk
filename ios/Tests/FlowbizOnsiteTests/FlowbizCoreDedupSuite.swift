@@ -91,7 +91,7 @@ import Testing
         let h = CoreHarness()
         h.core.track(.pageView(path: "home"))
         let stored = try #require(h.store[DedupStore.digestKeyPrefix + "page.view"] as? String)
-        let dataJSON = try EventSerializer.dataJSONString(.pageView(path: "home"))
+        let dataJSON = try EventSerializer.dataJSONString(.pageView(path: "home"), baseUri: "https://store.com")
         #expect(stored == DedupStore.sha256Hex(dataJSON))
         #expect(!stored.contains("home")) // digest, not the raw payload
         #expect(stored.count == 64)

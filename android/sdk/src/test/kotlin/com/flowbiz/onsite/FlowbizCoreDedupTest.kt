@@ -111,7 +111,7 @@ class FlowbizCoreDedupTest {
         val h = harness()
         h.core.track(Event.PageView("home"))
         val stored = h.store.values[DedupStore.DIGEST_KEY_PREFIX + "page.view"] as String
-        val dataJson = EventSerializer.dataJson(Event.PageView("home"))
+        val dataJson = EventSerializer.dataJson(Event.PageView("home"), "https://store.com")
         assertEquals(DedupStore.sha256Hex(dataJson), stored)
         assertFalse(stored.contains("home")) // digest, not the raw payload
         assertEquals(64, stored.length)
