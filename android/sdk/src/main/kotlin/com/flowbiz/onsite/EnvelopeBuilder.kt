@@ -213,7 +213,7 @@ internal object EnvelopeBuilder {
             .put("screen", screen)
             .put("vendor", vendor)
             .put("onsite_version", sdkVersion)
-        if (contextUrl != null) {
+        if (!contextUrl.isNullOrEmpty()) {
             context.put("url", contextUrl)
         }
         if (!baseUri.isNullOrEmpty()) context.put("baseuri", baseUri)

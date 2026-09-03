@@ -117,6 +117,38 @@ class FlowbizCoreLifecycleTest {
         assertEquals("https://store.com/home", context.getString("url"))
         assertEquals("https://store.com", context.getString("baseuri"))
         assertEquals("https://store.com/carrinho", context.getString("recoveryUrl"))
+
+        // I2: raw (non-ping) events — e.g. the `push.token.sync` relay —
+        // go through `emitInternal`, a separate path from both `track`'s
+        // envelope build and the ping build above; pin that it carries the
+        // same context fields rather than only ever exercising ping/track.
+        h.core.setPushToken("tok")
+        val sync = h.sentEntries().last { it.getString("event") == "push.token.sync" }
+        val syncContext = sync.getJSONObject("context")
+        assertEquals("https://store.com/home", syncContext.getString("url"))
+        assertEquals("https://store.com", syncContext.getString("baseuri"))
+        assertEquals("https://store.com/carrinho", syncContext.getString("recoveryUrl"))
+    }
+
+    /**
+     * I2: a title-only [Event.PageView] (no path) resolves no URL
+     * (`UrlResolver` on a null path is null), so it must not leak a
+     * stale/placeholder URL into `context.url` — and the ping's `page` data
+     * carries the title alone, no `url` key.
+     */
+    @Test
+    fun titleOnlyPageViewOmitsContextUrlButKeepsPingTitle() {
+        val h = harness()
+        h.core.onForeground()
+        h.core.track(Event.PageView(path = null, title = "Só título"))
+
+        val tracked = h.lastEntry()
+        assertFalse(tracked.getJSONObject("context").has("url"))
+
+        h.scheduler.tickRepeating()
+        val ping = pingEntries(h).last()
+        assertFalse(ping.getJSONObject("context").has("url"))
+        assertEquals("""{"page":{"title":"Só título"}}""", ping.getString("data"))
     }
 
     @Test

@@ -134,4 +134,28 @@ class FlowbizConfigTest {
     fun recoveryUrlDefaultsToNull() {
         assertNull(FlowbizConfig("77777", "https://store.com").recoveryUrl)
     }
+
+    /**
+     * I1 (iOS-side regression, mirrored here): `Flowbiz.initialize` installs
+     * the debug `SdkLog.sink` *before* calling `ConfigSanitizer.sanitize`
+     * (see `Flowbiz.initialize` — `if (config.debug) { SdkLog.sink = ... }`
+     * precedes `ConfigSanitizer.sanitize(config)`), so its warnings are
+     * never dropped on the first `initialize` call. That full path needs a
+     * real `Context` (`FlowbizFacadeSmokeTest`'s doc comment: not
+     * reachable on a plain JVM, and this project deliberately does not use
+     * Robolectric); this pins the piece that plain-JVM tests *can* reach —
+     * that `ConfigSanitizer.sanitize` does log through an installed sink —
+     * so a regression in the sanitizer's warning text is still caught.
+     */
+    @Test
+    fun invalidBaseUriWarningReachesAnInstalledSink() {
+        val captured = mutableListOf<String>()
+        SdkLog.sink = { captured += it }
+        try {
+            ConfigSanitizer.sanitize(FlowbizConfig(appId = "77777", baseUri = "not a url"))
+            assertTrue(captured.any { it.contains("invalid baseUri") })
+        } finally {
+            SdkLog.sink = null
+        }
+    }
 }

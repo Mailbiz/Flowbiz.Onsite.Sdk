@@ -138,5 +138,31 @@
       "products": [ { "productId": "P100", "sku": "SKU-100-P", "quantity": 2, "recoveryProperties": null } ]
     }
   },
-  { "name": "legacy_mb_recovery_param_not_recognized", "url": "https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMSAC6iYV2RiiU5HMV62eALLq1AXyA", "appId": "77777", "expected": null }
+  { "name": "legacy_mb_recovery_param_not_recognized", "url": "https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMSAC6iYV2RiiU5HMV62eALLq1AXyA", "appId": "77777", "expected": null },
+  {
+    "name": "quantity_out_of_int_range",
+    "hash_json": "{\"t\":\"77777\",\"u\":\"u1\",\"c\":\"c1\",\"its\":[[1e+30,\"p\",\"s\"]]}",
+    "url": "https://store.com/c?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidTEiLCJjIjoiYzEiLCJpdHMiOltbMWUrMzAsInAiLCJzIl1dfQ==",
+    "appId": "77777",
+    "expected": {
+      "cartId": "c1", "userId": "u1",
+      "products": [ { "productId": "p", "sku": "s", "quantity": 2147483647, "recoveryProperties": null } ]
+    }
+  },
+  {
+    "name": "quantity_negative_out_of_int_range",
+    "hash_json": "{\"t\":\"77777\",\"u\":\"u1\",\"c\":\"c1\",\"its\":[[-1e30,\"p\",\"s\"]]}",
+    "url": "https://store.com/c?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidTEiLCJjIjoiYzEiLCJpdHMiOltbLTFlMzAsInAiLCJzIl1dfQ==",
+    "appId": "77777",
+    "expected": {
+      "cartId": "c1", "userId": "u1",
+      "products": [ { "productId": "p", "sku": "s", "quantity": -2147483648, "recoveryProperties": null } ]
+    }
+  },
+  {
+    "name": "query_inside_fragment_is_ignored",
+    "url": "https://s.com/#/cart?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_source=flowbiz",
+    "appId": "77777",
+    "expected": null
+  }
 ]

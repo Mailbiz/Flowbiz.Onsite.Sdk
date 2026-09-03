@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           swift test 2>&1 | tee swift-test.log
-      # Green-wash guard: the full suite is ~191 Swift Testing tests. If the
+      # Green-wash guard: the full suite is ~204 Swift Testing tests. If the
       # toolchain ever compiles the `canImport(Testing)` suites away again,
       # `swift test` still exits 0 — so assert the executed-test count from
       # the "Test run with N tests passed" summary line stays above a floor.

@@ -120,6 +120,19 @@ import Testing
         #expect((envelope["context"] as? [String: Any])?["baseuri"] == nil)
     }
 
+    /// M4: `context.url` uses the same non-empty guard as `baseuri` /
+    /// `recoveryUrl` — an empty (not nil) `contextUrl` must be omitted too.
+    @Test func emptyContextUrlIsOmitted() throws {
+        let envelope = try EnvelopeBuilder.build(
+            event: .cartSetCoupon(cartId: "c-1", coupon: "X"),
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+            contextUrl: ""
+        )
+        #expect((envelope["context"] as? [String: Any])?["url"] == nil)
+    }
+
     @Test func buildUsesBaseUriToResolveDataUrls() throws {
         let envelope = try EnvelopeBuilder.build(
             event: .pageView(path: "/checkout", title: "Checkout"),

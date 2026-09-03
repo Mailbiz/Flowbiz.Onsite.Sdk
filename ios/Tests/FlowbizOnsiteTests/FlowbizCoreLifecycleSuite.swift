@@ -91,6 +91,36 @@ import Testing
         #expect(context["url"] as? String == "https://store.com/home")
         #expect(context["baseuri"] as? String == "https://store.com")
         #expect(context["recoveryUrl"] as? String == "https://store.com/carrinho")
+
+        // I2: raw (non-ping) events — e.g. the `push.token.sync` relay —
+        // go through `emitInternal`, a separate path from both `track`'s
+        // envelope build and the ping build above; pin that it carries the
+        // same context fields rather than only ever exercising ping/track.
+        h.core.setPushToken("tok")
+        let entries = try h.sentEntries()
+        let sync = try #require(entries.last { $0["event"] as? String == "push.token.sync" })
+        let syncContext = object(sync, "context")
+        #expect(syncContext["url"] as? String == "https://store.com/home")
+        #expect(syncContext["baseuri"] as? String == "https://store.com")
+        #expect(syncContext["recoveryUrl"] as? String == "https://store.com/carrinho")
+    }
+
+    /// I2: a title-only `pageView` (no path) resolves no URL (`UrlResolver`
+    /// on a nil path is nil), so it must not leak a stale/placeholder URL
+    /// into `context.url` — and the ping's `page` data carries the title
+    /// alone, no `url` key.
+    @Test func titleOnlyPageViewOmitsContextUrlButKeepsPingTitle() throws {
+        let h = CoreHarness()
+        h.core.onForeground()
+        h.core.track(.pageView(path: nil, title: "Só título"))
+
+        let tracked = try h.lastEntry()
+        #expect(object(tracked, "context")["url"] == nil)
+
+        h.scheduler.tickRepeating()
+        let ping = try #require(try pingEntries(h).last)
+        #expect(object(ping, "context")["url"] == nil)
+        #expect(ping["data"] as? String == #"{"page":{"title":"Só título"}}"#)
     }
 
     @Test func pingFailureIsDroppedNeverQueued() throws {

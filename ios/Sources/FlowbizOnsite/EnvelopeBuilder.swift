@@ -242,7 +242,7 @@ enum EnvelopeBuilder {
             "vendor": vendor,
             "onsite_version": sdkVersion,
         ]
-        if let contextUrl {
+        if let contextUrl, !contextUrl.isEmpty {
             context["url"] = contextUrl
         }
         if let baseUri, !baseUri.isEmpty { context["baseuri"] = baseUri }

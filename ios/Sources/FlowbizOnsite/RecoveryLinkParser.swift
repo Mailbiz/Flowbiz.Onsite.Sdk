@@ -23,21 +23,38 @@ enum RecoveryLinkParser {
         let pairs = queryPairs(url)
         guard let raw = pairs.first(where: { $0.key == param && !$0.value.isEmpty })?.value else { return nil }
         guard let utm = pairs.first(where: { $0.key == utmParam })?.value, isValidUtm(utm) else { return nil }
-        var candidates = [raw]
-        if let decoded = percentDecode(raw), decoded != raw { candidates.append(decoded) }
-        for candidate in candidates.map({ $0.replacingOccurrences(of: " ", with: "+") }) + candidates {
+        // Order `[rawFix, raw, decodedFix, decoded]`, deduplicated
+        // preserving order (M1) — literally the same sequence as Kotlin's
+        // `LinkedHashSet`, so decode + mapHash + the tenant-mismatch debug
+        // line each run at most once per distinct candidate.
+        var candidates: [String] = []
+        var seen = Set<String>()
+        func add(_ candidate: String) {
+            if seen.insert(candidate).inserted { candidates.append(candidate) }
+        }
+        add(raw.replacingOccurrences(of: " ", with: "+"))
+        add(raw)
+        if let decoded = percentDecode(raw) {
+            add(decoded.replacingOccurrences(of: " ", with: "+"))
+            add(decoded)
+        }
+        for candidate in candidates {
             guard let json = decodeBase64(candidate), let payload = mapHash(json, expectedAppId: expectedAppId) else { continue }
             return payload
         }
         return nil
     }
 
-    /// Query pairs in order (fragment ignored). Keys are percent-decoded;
-    /// values are left raw (callers decide how to decode them).
+    /// Query pairs in order. Fragment cut first (M2 — spec §7 step 1: a
+    /// `?` inside the fragment, e.g. `#/cart?_mb_cr_=…`, is not a query),
+    /// then the query is found within what remains. Keys are
+    /// percent-decoded; values are left raw (callers decide how to decode
+    /// them).
     private static func queryPairs(_ url: String) -> [(key: String, value: String)] {
-        guard let queryStart = url.firstIndex(of: "?") else { return [] }
-        var query = url[url.index(after: queryStart)...]
-        if let fragmentStart = query.firstIndex(of: "#") { query = query[..<fragmentStart] }
+        var beforeFragment = Substring(url)
+        if let fragmentStart = url.firstIndex(of: "#") { beforeFragment = url[..<fragmentStart] }
+        guard let queryStart = beforeFragment.firstIndex(of: "?") else { return [] }
+        let query = beforeFragment[beforeFragment.index(after: queryStart)...]
         return query.split(separator: "&", omittingEmptySubsequences: true).map { pair in
             if let eq = pair.firstIndex(of: "=") {
                 let key = String(pair[..<eq])
@@ -135,7 +152,17 @@ enum RecoveryLinkParser {
         switch value {
         case let number as NSNumber where !JSONValue.isBoolean(number):
             let double = number.doubleValue
-            parsed = double.isNaN ? nil : Int(double.rounded(.towardZero))
+            if double.isNaN {
+                parsed = nil
+            } else {
+                // `Int(double)` traps when the value is outside Int's range
+                // (e.g. a decoded hash quantity of 1e30); clamp to Int32's
+                // range first, matching `parseIntLeading` and Kotlin's
+                // saturating `toDouble().toInt()` (SPEC §3: never traps).
+                let truncated = double.rounded(.towardZero)
+                let clamped = min(max(truncated, Double(Int32.min)), Double(Int32.max))
+                parsed = Int(clamped)
+            }
         case let string as String:
             parsed = parseIntLeading(string)
         default:

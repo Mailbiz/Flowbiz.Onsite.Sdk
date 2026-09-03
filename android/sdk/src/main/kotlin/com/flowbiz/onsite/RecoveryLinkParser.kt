@@ -48,13 +48,18 @@ internal object RecoveryLinkParser {
         }
     }
 
-    /** Query pairs in order (fragment ignored). Keys percent-decoded, values raw. */
+    /**
+     * Query pairs in order. Fragment cut first (M2 — spec §7 step 1: a `?`
+     * inside the fragment, e.g. `#/cart?_mb_cr_=…`, is not a query), then
+     * the query is found within what remains. Keys percent-decoded, values
+     * raw.
+     */
     private fun queryPairs(url: String): List<Pair<String, String>> {
-        val queryStart = url.indexOf('?')
+        val fragmentStart = url.indexOf('#')
+        val beforeFragment = if (fragmentStart >= 0) url.substring(0, fragmentStart) else url
+        val queryStart = beforeFragment.indexOf('?')
         if (queryStart < 0) return emptyList()
-        var query = url.substring(queryStart + 1)
-        val fragmentStart = query.indexOf('#')
-        if (fragmentStart >= 0) query = query.substring(0, fragmentStart)
+        val query = beforeFragment.substring(queryStart + 1)
         return query.split('&').filter { it.isNotEmpty() }.map { pair ->
             val eq = pair.indexOf('=')
             val key = if (eq >= 0) pair.substring(0, eq) else pair
@@ -169,7 +174,13 @@ internal object RecoveryLinkParser {
      */
     private fun webQuantity(value: Any?): Int {
         val parsed: Int? = when (value) {
-            is Number -> value.toDouble().takeIf { !it.isNaN() }?.toInt()
+            // `Double.toLong()`/`.toInt()` already saturate out-of-range and
+            // infinite values since Kotlin 1.3 (never throws); the explicit
+            // `coerceIn` makes that saturation to Int32's range visible in
+            // the code path, matching iOS's `parseIntLeading`/`webQuantity`
+            // exactly (SPEC §3: never traps).
+            is Number -> value.toDouble().takeIf { !it.isNaN() }
+                ?.let { it.toLong().coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt() }
             is String -> parseIntLeading(value)
             else -> null
         }

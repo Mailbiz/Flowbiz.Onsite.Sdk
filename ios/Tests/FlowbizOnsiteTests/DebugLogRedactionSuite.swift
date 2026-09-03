@@ -91,5 +91,30 @@ final class LogCapture: @unchecked Sendable {
         }
         #expect(handlerWarnings.isEmpty, "pure handlers logged warnings: \(handlerWarnings)")
     }
+
+    /// I1 regression: `ConfigSanitizer` warnings must reach the debug sink
+    /// on the very first `initialize` call, not just on later ones. Starts
+    /// with `SdkLog.sink == nil` — the real first-call state — and
+    /// substitutes what `Flowbiz.initialize` installs *as* the debug sink
+    /// (`Flowbiz.debugSink`) rather than pre-installing `SdkLog.sink`
+    /// itself: pre-installing it would make the warning reach the capture
+    /// regardless of ordering (it doesn't get displaced), masking the bug
+    /// this pins. This is the one real `Flowbiz.initialize` call in the
+    /// test suite (the facade's singleton is "first config wins forever",
+    /// see `FlowbizFacadeSmokeSuite`), so it must run before any other test
+    /// initializes the facade with a non-blank appId.
+    @Test func initializeLogsConfigSanitizerWarningsToSink() {
+        #expect(SdkLog.sink == nil, "precondition: no other test may have installed a sink yet")
+        let capture = LogCapture()
+        let originalDebugSink = Flowbiz.debugSink
+        Flowbiz.debugSink = { capture.append($0) }
+        defer {
+            Flowbiz.debugSink = originalDebugSink
+            SdkLog.sink = nil
+        }
+        Flowbiz.initialize(FlowbizConfig(appId: "77777", baseUri: "not a url", debug: true))
+        let messages = capture.messages
+        #expect(messages.contains { $0.contains("invalid baseUri") }, "messages: \(messages)")
+    }
 }
 #endif

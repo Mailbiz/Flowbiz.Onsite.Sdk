@@ -52,6 +52,88 @@ import Testing
         #expect(RecoveryLinkParser.parse(link)?.products.first?.productId == "P>>1")
     }
 
+    /// I3: seeded fuzz over the *decoded* hash JSON (not just URL bytes) —
+    /// `its` and item slots take every adversarial shape SPEC §3 must
+    /// survive (wrong types, huge/negative numbers, deep nesting, giant
+    /// strings). The only assertion is that `parse` returns (nil or a
+    /// payload) instead of throwing/trapping.
+    @Test func adversarialDecodedHashesNeverThrow() {
+        var generator = SplitMix64(seed: 20260902)
+        for _ in 0..<300 {
+            let hash = Self.randomHash(&generator)
+            guard let data = try? JSONSerialization.data(withJSONObject: hash) else { continue }
+            let b64 = data.base64EncodedString()
+            let url = "https://store.com/c?utm_source=flowbiz&_mb_cr_=\(b64)"
+            _ = RecoveryLinkParser.parse(url, expectedAppId: "77777") // must not crash
+        }
+    }
+
+    /// One adversarial `{t, u, c, its}` hash. `t`/`u`/`c` may be non-string
+    /// (number/bool/null/empty); `its` may be a non-array, and its items
+    /// may be non-arrays or arrays whose slots are wildly-typed values.
+    private static func randomHash(_ gen: inout SplitMix64) -> [String: Any] {
+        ["t": randomField(&gen), "u": randomField(&gen), "c": randomField(&gen), "its": randomIts(&gen)]
+    }
+
+    private static func randomField(_ gen: inout SplitMix64) -> Any {
+        switch gen.next() % 5 {
+        case 0: return "field-\(gen.next() % 1000)"
+        case 1: return gen.next() % 100_000
+        case 2: return gen.next() % 2 == 0
+        case 3: return NSNull()
+        default: return ""
+        }
+    }
+
+    /// `its`: usually an array of items, occasionally a non-array (object,
+    /// string, number, null) to exercise the "`its` is not an array" path.
+    private static func randomIts(_ gen: inout SplitMix64) -> Any {
+        switch gen.next() % 6 {
+        case 0: return NSNull()
+        case 1: return "not an array"
+        case 2: return gen.next() % 1000
+        case 3: return ["k": "v"]
+        case 4: return []
+        default:
+            var items = [Any]()
+            let count = Int(gen.next() % 4) + 1
+            for _ in 0..<count { items.append(randomItem(&gen)) }
+            return items
+        }
+    }
+
+    /// One `its` element: usually an array of adversarial slot values,
+    /// sometimes a non-array item (garbage — SPEC §3: `guard let item = ...
+    /// as? [Any] else { continue }` must skip it, never trap).
+    private static func randomItem(_ gen: inout SplitMix64) -> Any {
+        if gen.next() % 4 == 0 { return randomSlot(&gen) }
+        var item = [Any]()
+        let slotCount = Int(gen.next() % 5)
+        for _ in 0..<slotCount { item.append(randomSlot(&gen)) }
+        return item
+    }
+
+    /// One `its[i]` slot value (quantity, product id, sku or recovery
+    /// properties position): a huge/negative/out-of-Int32-range number, a
+    /// bool, null, a nested object, a deeply nested array (depth 20), an
+    /// empty string, or a ~10 kB string.
+    private static func randomSlot(_ gen: inout SplitMix64) -> Any {
+        switch gen.next() % 9 {
+        case 0: return 1e30
+        case 1: return -1e30
+        case 2: return 1e308
+        case 3: return gen.next() % 2 == 0
+        case 4: return NSNull()
+        case 5: return ["nested": "object"]
+        case 6:
+            var value: Any = ["leaf"]
+            for _ in 0..<20 { value = [value] }
+            return value
+        case 7: return ""
+        default: return String(repeating: "x", count: 10_000)
+        }
+    }
+
     @Test func nilAndGarbageNeverThrow() {
         #expect(Flowbiz.handleLink(nil) == nil)
         #expect(RecoveryLinkParser.parse("") == nil)

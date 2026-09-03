@@ -126,6 +126,12 @@ class EnvelopeBuilderTest {
         assertFalse(buildWithContext(baseUri = "").getJSONObject("context").has("baseuri"))
     }
 
+    /** M4: `context.url` uses the same non-empty guard as `baseuri` / `recoveryUrl`. */
+    @Test
+    fun emptyContextUrlIsOmitted() {
+        assertFalse(buildWithContext(contextUrl = "").getJSONObject("context").has("url"))
+    }
+
     @Test
     fun buildUsesBaseUriToResolveDataUrls() {
         val envelope = buildWithContext(event = Event.PageView(path = "/checkout", title = "Checkout"), baseUri = "https://store.com")
