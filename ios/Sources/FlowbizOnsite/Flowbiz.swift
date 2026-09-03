@@ -173,14 +173,15 @@ public enum Flowbiz {
         return nil
     }
 
-    /// SPEC §11: decodes the `mb_recovery` query parameter of an incoming
+    /// SPEC §11: decodes the `_mb_cr_` query parameter of an incoming
     /// deep link (Universal Link entry point) into a `RecoveryPayload`.
-    /// Returns nil when the parameter is absent or undecodable.
+    /// Returns null = no decodable `_mb_cr_` param, missing/invalid
+    /// `utm_source`, or (once initialized) a tenant mismatch.
     ///
     /// Pure, synchronous, never throws; callable before `initialize`
     /// (SPEC §3). The SDK does not adopt the decoded user as its identity.
     public static func handleLink(_ url: URL?) -> RecoveryPayload? {
-        RecoveryLinkParser.parse(url?.absoluteString)
+        RecoveryLinkParser.parse(url?.absoluteString, expectedAppId: state.currentCore?.config.appId)
     }
 
     private static func withCore(_ name: String, _ action: (FlowbizCore) -> Void) {

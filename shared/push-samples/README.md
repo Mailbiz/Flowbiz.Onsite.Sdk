@@ -17,8 +17,7 @@ Push payload samples: raw push payload → expected `handlePush` result
   (iOS tolerates it leniently).
 - `expected_recovery` — for the cart-recovery sample: the
   `RecoveryPayload` produced by running the push's `deep_link` through the
-  `handleLink` decoder. The `mb_recovery` value in that deep link was
-  compressed with the real lz-string 1.4.4 library (see
-  `../lzstring-vectors/README.md`).
+  `handleLink` decoder. The `_mb_cr_` value in that deep link is plain
+  base64 (see `../recovery-links/README.md`).
 
 Consumed by `PushParserTest` (Android) and `PushParserSuite` (iOS).

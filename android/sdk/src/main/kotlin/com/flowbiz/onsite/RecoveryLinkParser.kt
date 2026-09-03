@@ -5,80 +5,87 @@ import org.json.JSONObject
 
 /**
  * Pure decoder behind [Flowbiz.handleLink] (SPEC §11): URL string →
- * `mb_recovery` query value → LZ-string decompress → hash JSON
+ * `_mb_cr_` query value (+ `utm_source` guard) → base64 → hash JSON
  * `{t, u, c, its: [[qty, product_id, sku, recovery_properties?]]}` →
- * [RecoveryPayload].
+ * [RecoveryPayload]. Mirrors the web tag's `getRecoveryDataFromQuery`.
  *
  * Operates on the raw URL *string* (the facade adapts `android.net.Uri` via
  * `toString()`), for two reasons: `Uri` does not exist in JVM unit tests,
- * and `Uri.getQueryParameter` decodes `+` to a space — hostile to a value
- * whose alphabet includes `+`.
+ * and `Uri.getQueryParameter` decodes `+` to a space before callers see it.
  *
- * ## Percent-encoding tolerance
- * The compressed value's alphabet (`A-Za-z0-9+-$`) is URL-safe by design,
- * so the web puts the hash in links *unencoded* — but intermediate link
- * handling may percent-encode (`+` → `%2B`, `$` → `%24`) or turn `+` into a
- * space. The parser tries the raw value first (the decompressor itself
- * restores `" "` → `"+"`, reference behavior), then a percent-decoded
- * variant (decoding `%XX` only — never `+` → space). First candidate that
- * decodes to a valid payload wins.
+ * Encoding tolerance: the value is tried raw, percent-decoded (`%XX` only),
+ * and with `' '` restored to `'+'`; missing base64 padding is added;
+ * URL-safe `-`/`_` are accepted. First candidate that decodes to a valid
+ * payload wins.
  *
- * ## Hash → payload mapping (web `buildCartRecoveryPayload` parity)
- * - `t`, `u`, `c` must be present and non-empty, `its` a non-empty array —
- *   else the whole payload is null (web `getRecoveryDataFromQuery`
- *   validation). `t` (tenant) is *not* compared against the SDK config:
- *   `handleLink` is pure and callable before `initialize` (SPEC §3).
- * - per item: `product_id`/`sku` from index 1/2 (missing → `""`), quantity
- *   `parseInt(it[0]) || 1`, `recovery_properties` from index 3 (JSON-object
- *   string; garbage → null). Non-array `its` elements are skipped (the JS
- *   would string-index them into garbage — not emulated).
- *
- * Pure, synchronous, never throws.
+ * Tenant check: when `expectedAppId` is given (SDK initialized), `t` must
+ * equal it, like web `appId === hash.t`. Before initialize the decoder is
+ * pure and skips the check (SPEC §3). Never throws.
  */
 internal object RecoveryLinkParser {
 
-    private const val PARAM = "mb_recovery"
+    private const val PARAM = "_mb_cr_"
+    private const val UTM_PARAM = "utm_source"
 
-    fun parse(url: String?): RecoveryPayload? {
+    fun parse(url: String?, expectedAppId: String? = null): RecoveryPayload? {
         if (url == null) return null
         return try {
-            val raw = queryParameter(url) ?: return null
+            val pairs = queryPairs(url)
+            val raw = pairs.firstOrNull { it.first == PARAM && it.second.isNotEmpty() }?.second ?: return null
+            val utm = pairs.firstOrNull { it.first == UTM_PARAM }?.second ?: return null
+            if (!isValidUtm(utm)) return null
             val candidates = LinkedHashSet<String>()
+            candidates.add(raw.replace(' ', '+'))
             candidates.add(raw)
-            percentDecode(raw)?.let { candidates.add(it) }
+            percentDecode(raw)?.let { candidates.add(it.replace(' ', '+')); candidates.add(it) }
             for (candidate in candidates) {
-                val json = LZString.decompressFromEncodedURIComponent(candidate) ?: continue
-                mapHash(json)?.let { return it }
+                val json = decodeBase64(candidate) ?: continue
+                mapHash(json, expectedAppId)?.let { return it }
             }
             null
         } catch (t: Throwable) {
-            // SPEC §3 never-throw: any surprise degrades to "not a recovery link".
             null
         }
     }
 
-    /** Raw (undecoded) value of the first `mb_recovery` pair in the query string. */
-    private fun queryParameter(url: String): String? {
+    /** Query pairs in order (fragment ignored). Keys percent-decoded, values raw. */
+    private fun queryPairs(url: String): List<Pair<String, String>> {
         val queryStart = url.indexOf('?')
-        if (queryStart < 0) return null
+        if (queryStart < 0) return emptyList()
         var query = url.substring(queryStart + 1)
         val fragmentStart = query.indexOf('#')
         if (fragmentStart >= 0) query = query.substring(0, fragmentStart)
-        for (pair in query.split('&')) {
+        return query.split('&').filter { it.isNotEmpty() }.map { pair ->
             val eq = pair.indexOf('=')
             val key = if (eq >= 0) pair.substring(0, eq) else pair
-            if (key == PARAM || percentDecode(key) == PARAM) {
-                val value = if (eq >= 0) pair.substring(eq + 1) else ""
-                if (value.isNotEmpty()) return value
-            }
+            val value = if (eq >= 0) pair.substring(eq + 1) else ""
+            (percentDecode(key) ?: key) to value
         }
-        return null
+    }
+
+    /** Web `isValidUtm`: contains "mailbiz" or "flowbiz", case-insensitive. */
+    private fun isValidUtm(raw: String): Boolean {
+        val value = (percentDecode(raw) ?: raw).lowercase()
+        return value.contains("mailbiz") || value.contains("flowbiz")
+    }
+
+    /** Standard or URL-safe base64, padding optional → UTF-8 string. */
+    private fun decodeBase64(value: String): String? = try {
+        var normalized = value.replace('-', '+').replace('_', '/')
+        val remainder = normalized.length % 4
+        if (remainder == 1) {
+            null
+        } else {
+            if (remainder > 0) normalized += "=".repeat(4 - remainder)
+            String(java.util.Base64.getDecoder().decode(normalized), Charsets.UTF_8)
+        }
+    } catch (_: Throwable) {
+        null
     }
 
     /**
-     * `%XX` decoding over UTF-8 bytes. Deliberately does NOT decode `+` to a
-     * space (the LZ alphabet contains `+`). Returns null for malformed
-     * escapes — the raw candidate then stands on its own.
+     * `%XX` decoding over UTF-8 bytes. Returns null for malformed escapes —
+     * the raw candidate then stands on its own.
      */
     private fun percentDecode(value: String): String? {
         if ('%' !in value) return value
@@ -109,13 +116,16 @@ internal object RecoveryLinkParser {
 
     // MARK: hash → payload
 
-    private fun mapHash(json: String): RecoveryPayload? = try {
+    private fun mapHash(json: String, expectedAppId: String?): RecoveryPayload? = try {
         val hash = JSONObject(json)
         val cartId = nonEmptyString(hash.opt("c"))
         val userId = nonEmptyString(hash.opt("u"))
         val tenant = nonEmptyString(hash.opt("t"))
         val its = hash.optJSONArray("its")
         if (cartId == null || userId == null || tenant == null || its == null || its.length() == 0) {
+            null
+        } else if (expectedAppId != null && tenant != expectedAppId) {
+            SdkLog.debug("recovery link ignored: tenant mismatch")
             null
         } else {
             val products = ArrayList<RecoveryProduct>(its.length())

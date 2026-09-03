@@ -2,7 +2,7 @@ package com.flowbiz.onsite
 
 /**
  * Result of [Flowbiz.handleLink] (SPEC §11): the decoded cart-recovery
- * payload carried by an `mb_recovery` deep link. The app restores the cart
+ * payload carried by an `_mb_cr_` deep link. The app restores the cart
  * however it wants — the SDK only returns data (it does not adopt
  * [userId] as its identity; SPEC §11).
  *

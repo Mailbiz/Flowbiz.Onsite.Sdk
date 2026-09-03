@@ -22,10 +22,10 @@ public struct FlowbizPush: Sendable {
     /// works even when `URL(string:)` and the raw string disagree.
     let deepLinkString: String?
 
-    /// Convenience for cart-recovery pushes (SPEC §10.2: the `mb_recovery`
+    /// Convenience for cart-recovery pushes (SPEC §10.2: the `_mb_cr_`
     /// link rides in `deep_link`): the deep link run through the
     /// `Flowbiz.handleLink` decoder. Nil when there is no deep link or it
-    /// carries no decodable `mb_recovery` value. Pure, like `handleLink`.
+    /// carries no decodable `_mb_cr_` value. Pure, like `handleLink`.
     public var recoveryPayload: RecoveryPayload? {
         RecoveryLinkParser.parse(deepLinkString)
     }
