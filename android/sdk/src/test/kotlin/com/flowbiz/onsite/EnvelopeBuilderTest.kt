@@ -88,20 +88,47 @@ class EnvelopeBuilderTest {
         assertTrue(identity.has("anonymous_id"))
     }
 
+    private fun buildWithContext(
+        event: Event = Event.CartSetCoupon(cartId = "c-1", coupon = "X"),
+        contextUrl: String? = null,
+        baseUri: String? = null,
+        recoveryUrl: String? = null,
+    ): JSONObject = EnvelopeBuilder.build(
+        event = event, hash = "h", createdAtMillis = createdAtMillis, sentAtMillis = sentAtMillis,
+        timezone = "-03:00", userId = null, anonymousId = "a", sessionId = "s", visitCount = 1,
+        language = "pt-BR", screen = "1080x2400", appId = "77777", platform = "android", sdkVersion = "1.0.0",
+        contextUrl = contextUrl, baseUri = baseUri, recoveryUrl = recoveryUrl,
+    )
+
     @Test
-    fun contextUrlOnlyForPageViewWithScreenNameAndNeverTitle() {
-        val withScreen = build(event = Event.PageView("checkout")).getJSONObject("context")
-        assertEquals("app://checkout", withScreen.getString("url"))
-        // Context carries only SPEC §4 fields — no `title`, even for a
-        // pageView with a screen name (it ships as `page.title` inside data).
-        assertFalse(withScreen.has("title"))
+    fun contextCarriesUrlBaseUriAndRecoveryUrlWhenGiven() {
+        val context = buildWithContext(
+            contextUrl = "https://store.com/checkout",
+            baseUri = "https://store.com",
+            recoveryUrl = "https://store.com/carrinho",
+        ).getJSONObject("context")
+        assertEquals("https://store.com/checkout", context.getString("url"))
+        assertEquals("https://store.com", context.getString("baseuri"))
+        assertEquals("https://store.com/carrinho", context.getString("recoveryUrl"))
+        assertFalse(context.has("title"))
+    }
 
-        val withoutScreen = build(event = Event.PageView()).getJSONObject("context")
-        assertFalse(withoutScreen.has("url"))
-        assertFalse(withoutScreen.has("title"))
+    @Test
+    fun contextOmitsUrlBaseUriAndRecoveryUrlByDefault() {
+        val context = build(event = Event.PageView("/checkout")).getJSONObject("context")
+        assertFalse(context.has("url"))
+        assertFalse(context.has("baseuri"))
+        assertFalse(context.has("recoveryUrl"))
+    }
 
-        val nonPageView = build().getJSONObject("context")
-        assertFalse(nonPageView.has("url"))
-        assertFalse(nonPageView.has("title"))
+    @Test
+    fun emptyBaseUriIsOmitted() {
+        assertFalse(buildWithContext(baseUri = "").getJSONObject("context").has("baseuri"))
+    }
+
+    @Test
+    fun buildUsesBaseUriToResolveDataUrls() {
+        val envelope = buildWithContext(event = Event.PageView(path = "/checkout", title = "Checkout"), baseUri = "https://store.com")
+        assertEquals("""{"page":{"title":"Checkout","url":"https://store.com/checkout"}}""", envelope.getString("data"))
     }
 }
