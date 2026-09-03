@@ -40,7 +40,7 @@ struct LoginView: View {
         .navigationTitle("Login")
         .onAppear {
             // SPEC §5 `page.view`: tracked on every screen change.
-            Flowbiz.track(.pageView(screenName: "login"))
+            Flowbiz.track(.pageView(path: "/login", title: "Login"))
         }
     }
 }

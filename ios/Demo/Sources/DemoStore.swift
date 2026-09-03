@@ -56,7 +56,7 @@ final class DemoStore: ObservableObject {
             category: "Roupas > Camisas",
             price: 189.9,
             priceFrom: 249.9,
-            url: "https://www.belamodastore.com.br/camisa-linho-azul-marinho",
+            url: "/camisa-linho-azul-marinho",
             imageUrl: "https://cdn.belamodastore.com.br/produtos/cam-778-az-p.jpg",
             properties: ["cor": "Azul Marinho", "tamanho": "P"]
         ),
@@ -68,7 +68,7 @@ final class DemoStore: ObservableObject {
             category: "Roupas > Meias",
             price: 29.9,
             priceFrom: 39.9,
-            url: "https://www.belamodastore.com.br/meia-cano-alto-branca",
+            url: "/meia-cano-alto-branca",
             imageUrl: "https://cdn.belamodastore.com.br/produtos/mei-330-u.jpg",
             properties: ["cor": "Branca", "tamanho": "Único"]
         ),
@@ -80,7 +80,7 @@ final class DemoStore: ObservableObject {
             category: "Roupas > Camisetas",
             price: 119.9,
             priceFrom: 149.9,
-            url: "https://www.belamodastore.com.br/camiseta-estampada-acai",
+            url: "/camiseta-estampada-acai",
             imageUrl: "https://cdn.belamodastore.com.br/produtos/p100-p.jpg",
             properties: ["cor": "Azul", "tamanho": "P"]
         ),
@@ -92,7 +92,7 @@ final class DemoStore: ObservableObject {
             category: "Calçados > Tênis",
             price: 349.9,
             priceFrom: 429.9,
-            url: "https://www.belamodastore.com.br/tenis-urbano-couro-branco",
+            url: "/tenis-urbano-couro-branco",
             imageUrl: "https://cdn.belamodastore.com.br/produtos/p200-m.jpg",
             properties: ["cor": "Branco", "tamanho": "M"]
         ),
@@ -110,15 +110,15 @@ final class DemoStore: ObservableObject {
 
     static let fakePushToken = "fake-apns-token-0123456789abcdef"
 
-    /// `recovery_hash_basic` from shared/lzstring-vectors/vectors.json —
+    /// "basic" vector from shared/recovery-links/vectors.json —
     /// decodes to cart-abc-001 / user-123 / P100 + P200.
     static let recoveryHash =
-        "N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMSAC6iYV2RiiU5HMV62eALLq1AXyA"
+        "eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19"
 
     /// SPEC §10.2 marker value from shared/push-samples/samples.json
-    /// ("cart_recovery_with_real_mb_recovery_deep_link").
+    /// ("cart_recovery_with_real_mb_cr_deep_link").
     static let simulatedPushMarker =
-        #"{"v":1,"type":"cart_recovery","title":"Sua sacola te espera!","body":"Finalize sua compra...","deep_link":"https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMeWAAdSgHscmyJoCCALxQAbTYk1gaAWxoA7ABZa9msZoC+IALqJhXZDEiKWQ5RWC2PABZH28PIA","data":{"campaign_id":"cr-42"}}"#
+        #"{"v":1,"type":"cart_recovery","title":"Sua sacola te espera!","body":"Finalize sua compra...","deep_link":"https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCIsIntcImNvclwiOlwiQXp1bFwiLFwidGFtYW5ob1wiOlwiUFwifSJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19","data":{"campaign_id":"cr-42"}}"#
 
     // MARK: - Cart mutations
 

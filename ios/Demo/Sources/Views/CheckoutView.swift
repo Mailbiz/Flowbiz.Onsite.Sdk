@@ -45,7 +45,7 @@ struct CheckoutView: View {
         .navigationTitle("Checkout")
         .onAppear {
             // SPEC §5 `page.view`: tracked on every screen change.
-            Flowbiz.track(.pageView(screenName: "checkout"))
+            Flowbiz.track(.pageView(path: "/checkout", title: "Checkout"))
             trackStep()
         }
     }

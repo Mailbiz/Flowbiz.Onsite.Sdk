@@ -72,7 +72,7 @@ struct CartView: View {
             couponText = store.coupon ?? ""
             cepText = store.postalCode ?? ""
             // SPEC §5 `page.view`: tracked on every screen change.
-            Flowbiz.track(.pageView(screenName: "cart"))
+            Flowbiz.track(.pageView(path: "/carrinho", title: "Carrinho"))
         }
     }
 }

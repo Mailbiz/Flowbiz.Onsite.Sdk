@@ -24,8 +24,10 @@ class DemoApplication : Application() {
             this,
             FlowbizConfig(
                 appId = "77777",
+                baseUri = "https://www.belamodastore.com.br",            // spec §3
                 collectorUrl = BuildConfig.COLLECTOR_URL,
                 debug = true,
+                recoveryUrl = "https://www.belamodastore.com.br/carrinho", // spec §3
             ),
         )
     }

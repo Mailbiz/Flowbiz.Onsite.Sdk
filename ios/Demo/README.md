@@ -44,10 +44,10 @@ root (`path: ../..`) is wired by `project.yml`.
 ## Trying recovery & push
 
 - **Recovery deep link without any infra**: Settings ▸ "Simular link de
-  recuperação" uses the `recovery_hash_basic` vector from
-  `shared/lzstring-vectors/vectors.json`.
+  recuperação" uses the `basic` vector from
+  `shared/recovery-links/vectors.json`.
 - **Recovery via the OS**: with the app installed in a simulator,
-  `xcrun simctl openurl booted "flowbizdemo://recover?mb_recovery=<hash>"`.
+  `xcrun simctl openurl booted "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"`.
 - **Push without APNs**: Settings ▸ "Simular push" feeds the canned
   SPEC §10.2 payload from `shared/push-samples/samples.json` into
   `Flowbiz.handlePush` and renders the parsed `FlowbizPush`, including its

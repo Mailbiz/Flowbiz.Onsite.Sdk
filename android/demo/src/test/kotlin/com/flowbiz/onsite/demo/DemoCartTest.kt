@@ -49,7 +49,7 @@ class DemoCartTest {
 
     @Test
     fun recoveryRestoreMapsCatalogProducts() {
-        // Mirrors the decoded shared/lzstring-vectors "recovery_hash_basic".
+        // Mirrors the decoded shared/recovery-links/vectors.json "basic".
         DemoCart.restore(
             RecoveryPayload(
                 cartId = "cart-abc-001",

@@ -23,7 +23,7 @@
                  self-contained (a real integration uses verified App Links so
                  the same URL falls back to web recovery). Try it with:
                  adb shell am start -a android.intent.action.VIEW \
-                   -d "flowbizdemo://recover?mb_recovery=<hash>"
+                   -d "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"
                  — or use the in-app "simulate recovery link" button. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

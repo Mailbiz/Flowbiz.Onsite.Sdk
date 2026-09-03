@@ -68,13 +68,13 @@ struct SettingsView: View {
         .navigationTitle("Ajustes / Debug")
         .onAppear {
             // SPEC §5 `page.view`: tracked on every screen change.
-            Flowbiz.track(.pageView(screenName: "settings"))
+            Flowbiz.track(.pageView(path: "/ajustes", title: "Ajustes"))
         }
     }
 
     private func simulatePush() {
         // Canned SPEC §10.2 payload — mirrors shared/push-samples/samples.json
-        // ("cart_recovery_with_real_mb_recovery_deep_link"): the "flowbiz"
+        // ("cart_recovery_with_real_mb_cr_deep_link"): the "flowbiz"
         // marker carrying a JSON-encoded string, exactly what the
         // UNUserNotificationCenter delegate's userInfo would hand over.
         let payload: [AnyHashable: Any] = ["flowbiz": DemoStore.simulatedPushMarker]
@@ -84,7 +84,7 @@ struct SettingsView: View {
             lastPushRecovery = nil
             return
         }
-        // SPEC §10.2: a cart-recovery push carries mb_recovery in deep_link,
+        // SPEC §10.2: a cart-recovery push carries _mb_cr_ in deep_link,
         // decoded by the same §11 parser via recoveryPayload.
         let recovery = push.recoveryPayload
         var summary = "FlowbizPush: v=\(push.version) type=\(push.type)\n"
@@ -102,9 +102,9 @@ struct SettingsView: View {
     }
 
     private func simulateRecoveryLink() {
-        // Hash from shared/lzstring-vectors/vectors.json ("recovery_hash_basic"):
+        // Hash from shared/recovery-links/vectors.json ("basic"):
         // decodes to cart-abc-001 / user-123 / P100 + P200 — no push/link infra needed.
-        guard let url = URL(string: "flowbizdemo://recover?mb_recovery=\(DemoStore.recoveryHash)") else { return }
+        guard let url = URL(string: "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=\(DemoStore.recoveryHash)") else { return }
         // SPEC §11: exactly the call the onOpenURL deep-link path uses.
         store.recovery = DemoStore.RecoveryResult(source: url.absoluteString, payload: Flowbiz.handleLink(url))
     }

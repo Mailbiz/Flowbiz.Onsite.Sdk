@@ -30,7 +30,7 @@ targets:
         # SPEC §11 deep-link entry point. A custom scheme keeps the demo
         # self-contained (a real integration uses Universal Links, which
         # require an entitlement + apple-app-site-association). Try it with:
-        #   xcrun simctl openurl booted "flowbizdemo://recover?mb_recovery=<hash>"
+        #   xcrun simctl openurl booted "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"
         # — or use the in-app "simulate recovery link" button.
         CFBundleURLTypes:
           - CFBundleURLName: com.flowbiz.onsite.demo

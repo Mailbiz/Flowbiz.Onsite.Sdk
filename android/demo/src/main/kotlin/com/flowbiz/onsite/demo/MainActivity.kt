@@ -33,35 +33,43 @@ class MainActivity : Activity() {
     // ---- Screen model -----------------------------------------------------
 
     private sealed interface Screen {
-        val screenName: String
+        val path: String
+        val title: String
     }
 
     private object ProductListScreen : Screen {
-        override val screenName = "product-list"
+        override val path = "/"
+        override val title = "Produtos"
     }
 
     private class ProductDetailScreen(val product: DemoProduct) : Screen {
-        override val screenName = "product-detail"
+        override val path = product.url
+        override val title = product.name
     }
 
     private object CartScreen : Screen {
-        override val screenName = "cart"
+        override val path = "/carrinho"
+        override val title = "Carrinho"
     }
 
     private class CheckoutScreen(val step: Int) : Screen {
-        override val screenName = "checkout"
+        override val path = "/checkout"
+        override val title = "Checkout"
     }
 
     private object LoginScreen : Screen {
-        override val screenName = "login"
+        override val path = "/login"
+        override val title = "Login"
     }
 
     private object SettingsScreen : Screen {
-        override val screenName = "settings"
+        override val path = "/ajustes"
+        override val title = "Ajustes"
     }
 
     private class RecoveryScreen(val source: String, val payload: RecoveryPayload?) : Screen {
-        override val screenName = "recovery"
+        override val path = "/carrinho/recuperar"
+        override val title = "Recuperação"
     }
 
     private val backStack = ArrayDeque<Screen>()
@@ -85,7 +93,7 @@ class MainActivity : Activity() {
     /** SPEC §11 receiving side: forward any incoming link, branch on the return value. */
     private fun handleDeepLink(intent: Intent?): Boolean {
         val uri = intent?.data ?: return false
-        // SPEC §11: pure decoder — null means "no decodable mb_recovery param".
+        // SPEC §11: pure decoder — null means "no decodable _mb_cr_ param".
         val payload = Flowbiz.handleLink(uri)
         show(RecoveryScreen(uri.toString(), payload))
         return true
@@ -97,7 +105,7 @@ class MainActivity : Activity() {
         if (push) current?.let(backStack::addLast)
         current = screen
         // SPEC §5 `page.view`: tracked on every screen change (SPEC §14).
-        Flowbiz.track(Event.PageView(screenName = screen.screenName))
+        Flowbiz.track(Event.PageView(path = screen.path, title = screen.title))
         render(screen)
     }
 
@@ -111,7 +119,7 @@ class MainActivity : Activity() {
         }
         current = previous
         // SPEC §5 `page.view`: back navigation is a screen change too.
-        Flowbiz.track(Event.PageView(screenName = previous.screenName))
+        Flowbiz.track(Event.PageView(path = previous.path, title = previous.title))
         render(previous)
     }
 
@@ -311,7 +319,7 @@ class MainActivity : Activity() {
         label("Link recebido:\n${screen.source}")
         val payload = screen.payload
         if (payload == null) {
-            label("Flowbiz.handleLink devolveu null — o link não carrega um mb_recovery decodificável (SPEC §11).", bold = true)
+            label("Flowbiz.handleLink devolveu null — o link não carrega um _mb_cr_ decodificável (SPEC §11).", bold = true)
         } else {
             label("RecoveryPayload (SPEC §11):", bold = true)
             label("cartId: ${payload.cartId}\nuserId: ${payload.userId}")
@@ -333,7 +341,7 @@ class MainActivity : Activity() {
 
     private fun simulatePush() {
         // Canned SPEC §10.2 payload — mirrors shared/push-samples/samples.json
-        // ("cart_recovery_with_real_mb_recovery_deep_link"): flat map with the
+        // ("cart_recovery_with_real_mb_cr_deep_link"): flat map with the
         // "flowbiz" marker carrying a JSON-encoded string, exactly what
         // FirebaseMessagingService.onMessageReceived would hand over.
         val payload = mapOf("flowbiz" to SIMULATED_PUSH_MARKER)
@@ -343,7 +351,7 @@ class MainActivity : Activity() {
             dialog("handlePush", "null — payload não é do Flowbiz")
             return
         }
-        // SPEC §10.2: a cart-recovery push carries mb_recovery in deep_link,
+        // SPEC §10.2: a cart-recovery push carries _mb_cr_ in deep_link,
         // decoded by the same §11 parser via recoveryPayload.
         val recovery = push.recoveryPayload
         val message = buildString {
@@ -366,7 +374,7 @@ class MainActivity : Activity() {
     }
 
     private fun simulateRecoveryLink() {
-        // Hash from shared/lzstring-vectors/vectors.json ("recovery_hash_basic"):
+        // Hash from shared/recovery-links/vectors.json ("basic"):
         // decodes to cart-abc-001 / user-123 / P100 + P200 — no adb needed.
         val uri = Uri.parse(DEMO_LINK_PREFIX + RECOVERY_HASH)
         // SPEC §11: exactly the call the OS deep-link path (onNewIntent) uses.
@@ -436,14 +444,14 @@ class MainActivity : Activity() {
         const val FAKE_PUSH_TOKEN = "fake-fcm-token-0123456789abcdef"
 
         /** Custom demo scheme (see AndroidManifest intent filter). */
-        const val DEMO_LINK_PREFIX = "flowbizdemo://recover?mb_recovery="
+        const val DEMO_LINK_PREFIX = "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_="
 
-        /** `recovery_hash_basic` from shared/lzstring-vectors/vectors.json. */
+        /** "basic" vector from shared/recovery-links/vectors.json. */
         const val RECOVERY_HASH =
-            "N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMSAC6iYV2RiiU5HMV62eALLq1AXyA"
+            "eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19"
 
         /** SPEC §10.2 marker value from shared/push-samples/samples.json. */
         const val SIMULATED_PUSH_MARKER =
-            """{"v":1,"type":"cart_recovery","title":"Sua sacola te espera!","body":"Finalize sua compra...","deep_link":"https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMeWAAdSgHscmyJoCCALxQAbTYk1gaAWxoA7ABZa9msZoC+IALqJhXZDEiKWQ5RWC2PABZH28PIA","data":{"campaign_id":"cr-42"}}"""
+            """{"v":1,"type":"cart_recovery","title":"Sua sacola te espera!","body":"Finalize sua compra...","deep_link":"https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCIsIntcImNvclwiOlwiQXp1bFwiLFwidGFtYW5ob1wiOlwiUFwifSJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19","data":{"campaign_id":"cr-42"}}"""
     }
 }

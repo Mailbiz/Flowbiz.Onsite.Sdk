@@ -34,7 +34,7 @@ struct RecoveryView: View {
                     }
                 } else {
                     Section {
-                        Text("Flowbiz.handleLink devolveu nil — o link não carrega um mb_recovery decodificável (SPEC §11).")
+                        Text("Flowbiz.handleLink devolveu nil — o link não carrega um _mb_cr_ decodificável (SPEC §11).")
                     }
                 }
             }
@@ -44,7 +44,7 @@ struct RecoveryView: View {
             }
             .onAppear {
                 // SPEC §5 `page.view`: tracked on every screen change.
-                Flowbiz.track(.pageView(screenName: "recovery"))
+                Flowbiz.track(.pageView(path: "/carrinho/recuperar", title: "Recuperação"))
             }
         }
     }
