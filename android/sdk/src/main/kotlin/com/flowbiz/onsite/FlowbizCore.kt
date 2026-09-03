@@ -98,8 +98,8 @@ internal class FlowbizCore(
             // 4. Serialize; non-finite numbers throw → drop (SPEC §3).
             val wireName = EventSerializer.wireName(event)
             val dataJson = EventSerializer.dataJson(event)
-            if (event is Event.PageView && event.screenName != null) {
-                lastScreenName = event.screenName
+            if (event is Event.PageView && event.path != null) {
+                lastScreenName = event.path
             }
             // 5. Dedup (SPEC §7): identical payload within 20 min → suppress.
             if (dedupStore.shouldSuppress(wireName, dataJson)) {

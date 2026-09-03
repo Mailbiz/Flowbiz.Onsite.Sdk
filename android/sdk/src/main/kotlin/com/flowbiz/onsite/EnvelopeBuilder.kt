@@ -58,7 +58,7 @@ internal object EnvelopeBuilder {
     ): JSONObject = buildEntry(
         wireName = EventSerializer.wireName(event),
         dataJson = EventSerializer.dataJson(event),
-        contextUrl = (event as? Event.PageView)?.screenName?.let { "app://$it" },
+        contextUrl = (event as? Event.PageView)?.path?.let { "app://$it" },
         hash = hash,
         createdAtMillis = createdAtMillis,
         sentAtMillis = sentAtMillis,

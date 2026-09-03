@@ -1,0 +1,11 @@
+{
+  "name": "page_view_path_and_title",
+  "event": "pageView",
+  "baseUri": "https://www.belamodastore.com.br",
+  "input": { "path": "/checkout", "title": "Checkout" },
+  "expected": {
+    "wire_event": "page.view",
+    "data": { "page": { "title": "Checkout", "url": "https://www.belamodastore.com.br/checkout" } },
+    "data_canonical": "{\"page\":{\"title\":\"Checkout\",\"url\":\"https://www.belamodastore.com.br/checkout\"}}"
+  }
+}

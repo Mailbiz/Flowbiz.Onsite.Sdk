@@ -86,13 +86,13 @@ import Testing
     }
 
     @Test func contextUrlOnlyForPageViewWithScreenNameAndNeverTitle() throws {
-        let withScreen = try #require(try build(event: .pageView(screenName: "checkout"))["context"] as? [String: Any])
+        let withScreen = try #require(try build(event: .pageView(path: "checkout"))["context"] as? [String: Any])
         #expect(withScreen["url"] as? String == "app://checkout")
         // Context carries only SPEC §4 fields — no `title`, even for a
         // pageView with a screen name (it ships as `page.title` inside data).
         #expect(withScreen["title"] == nil)
 
-        let withoutScreen = try #require(try build(event: .pageView(screenName: nil))["context"] as? [String: Any])
+        let withoutScreen = try #require(try build(event: .pageView(path: nil))["context"] as? [String: Any])
         #expect(withoutScreen["url"] == nil)
         #expect(withoutScreen["title"] == nil)
 

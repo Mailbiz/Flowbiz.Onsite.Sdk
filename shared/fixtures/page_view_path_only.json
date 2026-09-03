@@ -1,0 +1,11 @@
+{
+  "name": "page_view_path_only",
+  "event": "pageView",
+  "baseUri": "https://www.belamodastore.com.br",
+  "input": { "path": "/produto/camisa-linho?ref=home" },
+  "expected": {
+    "wire_event": "page.view",
+    "data": { "page": { "url": "https://www.belamodastore.com.br/produto/camisa-linho?ref=home" } },
+    "data_canonical": "{\"page\":{\"url\":\"https://www.belamodastore.com.br/produto/camisa-linho?ref=home\"}}"
+  }
+}

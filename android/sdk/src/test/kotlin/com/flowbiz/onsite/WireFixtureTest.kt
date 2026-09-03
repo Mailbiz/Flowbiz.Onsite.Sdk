@@ -30,6 +30,7 @@ class WireFixtureTest {
                     fixture.optJSONObject("input") ?: JSONObject(),
                 )
                 val expected = fixture.getJSONObject("expected")
+                val baseUri = if (fixture.has("baseUri")) fixture.getString("baseUri") else null
 
                 val wireName = EventSerializer.wireName(event)
                 if (wireName != expected.getString("wire_event")) {
@@ -38,7 +39,7 @@ class WireFixtureTest {
 
                 // Serialize to the wire string, then parse it back — the wire
                 // string is what actually ships.
-                val wireString = EventSerializer.dataJson(event)
+                val wireString = EventSerializer.dataJson(event, baseUri)
                 FixtureSupport.diff(expected.getJSONObject("data"), JSONObject(wireString), "data")?.let {
                     failures += "${file.name}: $it"
                 }

@@ -1,0 +1,35 @@
+{
+  "name": "cart_add_relative_urls",
+  "event": "addToCart",
+  "baseUri": "https://www.belamodastore.com.br",
+  "input": {
+    "products": [
+      {
+        "productId": "MEI-330", "sku": "MEI-330-U", "quantity": 2, "price": 29.9,
+        "url": "/meia-cano-alto-branca",
+        "imageUrl": "https://cdn.belamodastore.com.br/produtos/mei-330-u.jpg"
+      },
+      {
+        "productId": "P100", "sku": "P100-P", "quantity": 1, "price": 119.9,
+        "url": "https://outlet.belamodastore.com.br/p100"
+      }
+    ]
+  },
+  "expected": {
+    "wire_event": "cart.add",
+    "data": {
+      "products": [
+        {
+          "product_id": "MEI-330", "sku": "MEI-330-U", "quantity": 2, "price": 29.9,
+          "url": "https://www.belamodastore.com.br/meia-cano-alto-branca",
+          "image_url": "https://cdn.belamodastore.com.br/produtos/mei-330-u.jpg"
+        },
+        {
+          "product_id": "P100", "sku": "P100-P", "quantity": 1, "price": 119.9,
+          "url": "https://outlet.belamodastore.com.br/p100"
+        }
+      ]
+    },
+    "data_canonical": "{\"products\":[{\"image_url\":\"https://cdn.belamodastore.com.br/produtos/mei-330-u.jpg\",\"price\":29.9,\"product_id\":\"MEI-330\",\"quantity\":2,\"sku\":\"MEI-330-U\",\"url\":\"https://www.belamodastore.com.br/meia-cano-alto-branca\"},{\"price\":119.9,\"product_id\":\"P100\",\"quantity\":1,\"sku\":\"P100-P\",\"url\":\"https://outlet.belamodastore.com.br/p100\"}]}"
+  }
+}

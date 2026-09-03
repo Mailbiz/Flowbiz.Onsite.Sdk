@@ -63,7 +63,7 @@ import Testing
     @Test func pingCarriesLastTrackedScreenAsPageData() throws {
         let h = CoreHarness()
         h.core.onForeground()
-        h.core.track(.pageView(screenName: "checkout"))
+        h.core.track(.pageView(path: "checkout"))
         h.scheduler.tickRepeating()
         #expect(
             try pingEntries(h).last?["data"] as? String
@@ -71,7 +71,7 @@ import Testing
         )
 
         // An anonymous pageView does not clear the last named screen.
-        h.core.track(.pageView(screenName: nil))
+        h.core.track(.pageView(path: nil))
         h.scheduler.tickRepeating()
         #expect(
             try pingEntries(h).last?["data"] as? String
@@ -92,7 +92,7 @@ import Testing
         // SPEC §6: page.ping counts as activity — a foregrounded idle app
         // keeps its session.
         let h = CoreHarness()
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         let sessionBefore = object(try h.lastEntry(), "identity")["session_id"] as? String
         h.core.onForeground()
         for _ in 0..<3 {
@@ -100,14 +100,14 @@ import Testing
             h.scheduler.tickRepeating()
         }
         h.clock.advance(25 * minuteMs) // 25 < 30 since last ping
-        h.core.track(.pageView(screenName: "later"))
+        h.core.track(.pageView(path: "later"))
         #expect(object(try h.lastEntry(), "identity")["session_id"] as? String == sessionBefore)
     }
 
     @Test func foregroundRequestsFlushOfBacklog() {
         let h = CoreHarness()
         h.sender.results = [.retriableError]
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         #expect(h.queue.size == 1)
         h.core.onForeground()
         #expect(h.queue.size == 0)
@@ -120,7 +120,7 @@ import Testing
         h.core.onForeground()
         // Build a retriable backlog first (a retry is now scheduled).
         h.sender.defaultResult = .retriableError
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         #expect(h.queue.size == 1)
         let sendsBefore = h.sender.bodies.count
 
@@ -128,7 +128,7 @@ import Testing
         #expect(h.store[StorageKeys.enabled] as? Bool == false) // persisted
         #expect(h.scheduler.activeRepeating() == nil) // heartbeat stopped
 
-        h.core.track(.pageView(screenName: "dropped")) // dropped, not queued
+        h.core.track(.pageView(path: "dropped")) // dropped, not queued
         #expect(h.queue.size == 1)
 
         h.core.flush() // ignored while disabled
@@ -139,7 +139,7 @@ import Testing
     @Test func reachabilityWhileDisabledDoesNotTouchNetwork() {
         let h = CoreHarness()
         h.sender.results = [.retriableError]
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         let sendsBefore = h.sender.bodies.count
         h.core.setEnabled(false)
         h.reachability.callback?()
@@ -150,7 +150,7 @@ import Testing
         let h = CoreHarness()
         h.core.onForeground()
         h.sender.defaultResult = .retriableError
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         h.core.setEnabled(false)
         #expect(h.queue.size == 1)
 
@@ -182,7 +182,7 @@ import Testing
         first.core.setEnabled(false)
 
         let second = CoreHarness(store: store)
-        second.core.track(.pageView(screenName: "home"))
+        second.core.track(.pageView(path: "home"))
         #expect(second.sender.bodies.isEmpty)
     }
 }

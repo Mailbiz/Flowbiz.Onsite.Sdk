@@ -82,7 +82,7 @@ enum EnvelopeBuilder {
         sdkVersion: String
     ) throws -> [String: Any] {
         var contextUrl: String?
-        if case .pageView(let screenName) = event, let screenName {
+        if case .pageView(let screenName, _) = event, let screenName {
             contextUrl = "app://\(screenName)"
         }
         return buildEntry(

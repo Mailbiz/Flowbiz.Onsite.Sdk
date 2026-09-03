@@ -112,7 +112,7 @@ final class FlowbizCore: @unchecked Sendable {
                 // 4. Serialize; non-finite numbers throw → drop (SPEC §3).
                 let wireName = EventSerializer.wireName(event)
                 let dataJSON = try EventSerializer.dataJSONString(event)
-                if case .pageView(let screenName) = event, let screenName {
+                if case .pageView(let screenName, _) = event, let screenName {
                     core.lastScreenName = screenName
                 }
                 // 5. Dedup (SPEC §7): identical payload within 20 min → suppress.
