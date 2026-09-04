@@ -1,165 +1,163 @@
 package com.flowbiz.onsite
 
 import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import kotlin.random.Random
+import java.util.Base64
 
 /**
- * `handleLink` decoding (SPEC §11) through the pure string-level parser
- * ([RecoveryLinkParser] — `android.net.Uri` does not exist on a plain JVM;
- * the facade adapter is `Uri.toString()` only). Compressed inputs come from
- * `shared/lzstring-vectors/vectors.json`, generated with the real lz-string
- * library — links built here are byte-identical to web-generated ones.
+ * `handleLink` decoding (SPEC §11): the `_mb_cr_` + `utm_source` link the
+ * backend emits, pinned by `shared/recovery-links/vectors.json`.
  */
 class RecoveryLinkParserTest {
 
-    private val vectors: Map<String, String> by lazy {
-        val array = JSONArray(File(FixtureSupport.sharedDir("lzstring-vectors"), "vectors.json").readText())
-        (0 until array.length()).associate {
-            val vector = array.getJSONObject(it)
-            vector.getString("name") to vector.getString("compressed")
+    private val vectors: List<JSONObject> by lazy {
+        val array = JSONArray(File(FixtureSupport.sharedDir("recovery-links"), "vectors.json").readText())
+        (0 until array.length()).map { array.getJSONObject(it) }
+    }
+
+    @Test
+    fun allSharedVectorsDecodeAsExpected() {
+        assertTrue(vectors.size >= 20)
+        for (vector in vectors) {
+            val name = vector.getString("name")
+            val appId = if (vector.isNull("appId")) null else vector.getString("appId")
+            val actual = RecoveryLinkParser.parse(vector.getString("url"), appId)
+            if (vector.isNull("expected")) {
+                assertNull("$name: expected null", actual)
+            } else {
+                assertNotNull("$name: expected a payload", actual)
+                assertEquals(name, payload(vector.getJSONObject("expected")), actual)
+            }
         }
-    }
-
-    private fun link(compressed: String) = "https://store.com/recover?utm_source=flowbiz&mb_recovery=$compressed"
-
-    // MARK: end-to-end against real web-generated compressed hashes
-
-    @Test
-    fun decodesRealCompressedBasicHash() {
-        val payload = RecoveryLinkParser.parse(link(vectors.getValue("recovery_hash_basic")))
-        assertNotNull(payload)
-        assertEquals("cart-abc-001", payload!!.cartId)
-        assertEquals("user-123", payload.userId)
-        assertEquals(2, payload.products.size)
-        assertEquals(RecoveryProduct("P100", "SKU-100-P", 2, null), payload.products[0])
-        assertEquals(RecoveryProduct("P200", "SKU-200-M", 1, null), payload.products[1])
-    }
-
-    @Test
-    fun decodesRecoveryPropertiesFromJsonStringElement() {
-        val payload = RecoveryLinkParser.parse(link(vectors.getValue("recovery_hash_with_recovery_properties")))
-        assertNotNull(payload)
-        assertEquals("cart-77-xyz", payload!!.cartId)
-        assertEquals("u-9f2c", payload.userId)
-        assertEquals(
-            mapOf("cor" to "Azul Marinho", "tamanho" to "P", "seller" to "loja-1"),
-            payload.products[0].recoveryProperties,
-        )
-        assertEquals(3, payload.products[0].quantity)
-        assertEquals(mapOf("cor" to "Verde", "tamanho" to "GG"), payload.products[1].recoveryProperties)
-    }
-
-    @Test
-    fun decodesUnicodeProductData() {
-        val payload = RecoveryLinkParser.parse(link(vectors.getValue("recovery_hash_unicode_product_data")))
-        assertNotNull(payload)
-        assertEquals("maria@exemplo.com.br", payload!!.userId)
-        assertEquals("CAMISETA-AÇAÍ", payload.products[0].productId)
-        assertEquals("Camiseta Açaí 🛒", payload.products[0].recoveryProperties!!["nome"])
-        assertEquals("Tamanho médio — çãõ", payload.products[0].recoveryProperties!!["descrição"])
-    }
-
-    @Test
-    fun decodesLongCart() {
-        val payload = RecoveryLinkParser.parse(link(vectors.getValue("recovery_hash_long_cart_25_items")))
-        assertNotNull(payload)
-        assertEquals(25, payload!!.products.size)
-        assertEquals("PROD-1000", payload.products[0].productId)
-        assertEquals("PROD-1024", payload.products[24].productId)
-        assertEquals(10, payload.products[0].recoveryProperties!!["estoque"])
-    }
-
-    /** Web `parseInt(it[0]) || 1` semantics: "0" → 1, "abc" → 1, missing fields → "". */
-    @Test
-    fun quantityAndFieldFallbacksMatchWebSemantics() {
-        val payload = RecoveryLinkParser.parse(link(vectors.getValue("recovery_hash_quantity_edge_cases")))
-        assertNotNull(payload)
-        val products = payload!!.products
-        assertEquals(4, products.size)
-        assertEquals(1, products[0].quantity) // "0" is falsy in JS -> 1
-        assertEquals(1, products[1].quantity) // "abc" -> NaN -> 1
-        assertEquals(4, products[2].quantity)
-        assertEquals("", products[2].productId) // missing -> ""
-        assertEquals("", products[2].sku)
-        assertEquals(2, products[3].quantity)
-        assertNull(products[3].recoveryProperties) // "{not json" -> null
-    }
-
-    // MARK: URL-encoding tolerance
-
-    @Test
-    fun percentEncodedValueDecodes() {
-        val compressed = vectors.getValue("recovery_hash_basic")
-        val encoded = compressed.replace("+", "%2B").replace("\$", "%24")
-        assertNotNull(RecoveryLinkParser.parse(link(encoded)))
-        assertEquals(
-            RecoveryLinkParser.parse(link(compressed)),
-            RecoveryLinkParser.parse(link(encoded)),
-        )
     }
 
     @Test
     fun plusTurnedIntoSpaceStillDecodes() {
-        // A naive URL decoder turns '+' into ' '; the decompressor restores it.
-        val mangled = vectors.getValue("recovery_hash_basic").replace('+', ' ')
-        assertEquals(
-            RecoveryLinkParser.parse(link(vectors.getValue("recovery_hash_basic"))),
-            RecoveryLinkParser.parse(link(mangled)),
-        )
+        val json = """{"t":"77777","u":"u","c":"c","its":[["1","P>>1","S"]]}"""   // '>' forces a '+' in base64
+        val b64 = Base64.getEncoder().encodeToString(json.toByteArray())
+        assertTrue(b64.contains("+"))
+        val link = "https://store.com/c?utm_source=flowbiz&_mb_cr_=" + b64.replace('+', ' ')
+        assertEquals("P>>1", RecoveryLinkParser.parse(link)!!.products.first().productId)
     }
 
     @Test
-    fun parameterIsFoundAmongOthersAndInFragmentFreePart() {
-        val compressed = vectors.getValue("recovery_hash_basic")
-        val url = "https://store.com/p?a=1&mb_recovery=$compressed&b=2#section"
-        assertNotNull(RecoveryLinkParser.parse(url))
-    }
-
-    // MARK: null paths
-
-    @Test
-    fun missingParameterIsNull() {
-        assertNull(RecoveryLinkParser.parse("https://store.com/recover"))
-        assertNull(RecoveryLinkParser.parse("https://store.com/recover?utm_source=flowbiz"))
-        assertNull(RecoveryLinkParser.parse("https://store.com/recover?mb_recovery="))
+    fun nullAndGarbageNeverThrow() {
         assertNull(RecoveryLinkParser.parse(null))
+        assertNull(RecoveryLinkParser.parse(""))
+        assertNull(RecoveryLinkParser.parse("?&&=&_mb_cr_&utm_source"))
     }
 
+    /**
+     * I3: seeded fuzz over the *decoded* hash JSON (not just URL bytes) —
+     * `its` and item slots take every adversarial shape SPEC §3 must
+     * survive (wrong types, huge/negative numbers, deep nesting, giant
+     * strings). The only assertion is that `parse` returns (null or a
+     * payload) instead of throwing.
+     */
     @Test
-    fun undecodableValueIsNull() {
-        assertNull(RecoveryLinkParser.parse(link("!!!not-compressed!!!")))
-    }
-
-    /** Web validation parity: t, u and c must be present and non-empty, its non-empty. */
-    @Test
-    fun invalidHashShapesAreNullWholePayload() {
-        for (name in listOf(
-            "invalid_hash_missing_u",
-            "invalid_hash_empty_c",
-            "invalid_hash_empty_its",
-            "invalid_hash_its_not_array",
-            "invalid_hash_not_json",
-        )) {
-            assertNull("vector '$name' must map to null", RecoveryLinkParser.parse(link(vectors.getValue(name))))
-        }
-    }
-
-    /** Never-throw fuzz over whole URLs. */
-    @Test
-    fun randomGarbageUrlsNeverThrow() {
-        val random = Random(42)
+    fun adversarialDecodedHashesNeverThrow() {
+        val generator = SplitMix64(20260902L)
         repeat(300) {
-            val garbage = buildString {
-                append("https://x.com/?mb_recovery=")
-                repeat(random.nextInt(0, 60)) { append(random.nextInt(0x20, 0x2FFF).toChar()) }
-            }
-            RecoveryLinkParser.parse(garbage) // must not throw
-            RecoveryLinkParser.parse(garbage.removePrefix("https://x.com/"))
+            val hash = randomHash(generator)
+            val b64 = Base64.getEncoder().encodeToString(hash.toString().toByteArray())
+            val url = "https://store.com/c?utm_source=flowbiz&_mb_cr_=$b64"
+            RecoveryLinkParser.parse(url, "77777") // must not throw
         }
+    }
+
+    /** One adversarial `{t, u, c, its}` hash — see [randomField]/[randomIts]. */
+    private fun randomHash(gen: SplitMix64): JSONObject =
+        JSONObject()
+            .put("t", randomField(gen))
+            .put("u", randomField(gen))
+            .put("c", randomField(gen))
+            .put("its", randomIts(gen))
+
+    private fun randomField(gen: SplitMix64): Any = when ((gen.next() % 5UL).toInt()) {
+        0 -> "field-${gen.next() % 1000UL}"
+        1 -> (gen.next() % 100_000UL).toInt()
+        2 -> (gen.next() % 2UL) == 0UL
+        3 -> JSONObject.NULL
+        else -> ""
+    }
+
+    /** `its`: usually an array of items, occasionally a non-array. */
+    private fun randomIts(gen: SplitMix64): Any = when ((gen.next() % 6UL).toInt()) {
+        0 -> JSONObject.NULL
+        1 -> "not an array"
+        2 -> (gen.next() % 1000UL).toInt()
+        3 -> JSONObject().put("k", "v")
+        4 -> JSONArray()
+        else -> {
+            val items = JSONArray()
+            val count = (gen.next() % 4UL).toInt() + 1
+            repeat(count) { items.put(randomItem(gen)) }
+            items
+        }
+    }
+
+    /** One `its` element: usually an array of adversarial slots, sometimes a non-array item. */
+    private fun randomItem(gen: SplitMix64): Any {
+        if ((gen.next() % 4UL) == 0UL) return randomSlot(gen)
+        val item = JSONArray()
+        val slotCount = (gen.next() % 5UL).toInt()
+        repeat(slotCount) { item.put(randomSlot(gen)) }
+        return item
+    }
+
+    /**
+     * One `its[i]` slot value: a huge/negative/out-of-Int32-range number, a
+     * bool, null, a nested object, a deeply nested array (depth 20), an
+     * empty string, or a ~10 kB string.
+     */
+    private fun randomSlot(gen: SplitMix64): Any = when ((gen.next() % 9UL).toInt()) {
+        0 -> 1e30
+        1 -> -1e30
+        2 -> 1e308
+        3 -> (gen.next() % 2UL) == 0UL
+        4 -> JSONObject.NULL
+        5 -> JSONObject().put("nested", "object")
+        6 -> {
+            var value: Any = JSONArray().put("leaf")
+            repeat(20) { value = JSONArray().put(value) }
+            value
+        }
+        7 -> ""
+        else -> "x".repeat(10_000)
+    }
+
+    private fun payload(json: JSONObject): RecoveryPayload {
+        val products = json.getJSONArray("products").let { arr ->
+            (0 until arr.length()).map { i ->
+                val item = arr.getJSONObject(i)
+                RecoveryProduct(
+                    productId = item.getString("productId"),
+                    sku = item.getString("sku"),
+                    quantity = item.getInt("quantity"),
+                    recoveryProperties = if (item.isNull("recoveryProperties")) null
+                        else JsonPlain.toPlainMap(item.getJSONObject("recoveryProperties")),
+                )
+            }
+        }
+        return RecoveryPayload(json.getString("cartId"), json.getString("userId"), products)
+    }
+}
+
+/** Tiny deterministic PRNG mirroring iOS's `SplitMix64` (`PushParserSuite.swift`). */
+private class SplitMix64(seed: Long) {
+    private var state = seed.toULong()
+
+    fun next(): ULong {
+        state += 0x9E3779B97F4A7C15UL
+        var z = state
+        z = (z xor (z shr 30)) * 0xBF58476D1CE4E5B9UL
+        z = (z xor (z shr 27)) * 0x94D049BB133111EBUL
+        return z xor (z shr 31)
     }
 }

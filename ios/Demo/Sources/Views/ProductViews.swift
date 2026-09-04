@@ -36,7 +36,7 @@ struct ProductListView: View {
             .navigationTitle("Bela Moda Store")
             .onAppear {
                 // SPEC §5 `page.view`: tracked on every screen change (SPEC §14).
-                Flowbiz.track(.pageView(screenName: "product-list"))
+                Flowbiz.track(.pageView(path: "/", title: "Produtos"))
             }
         }
         .navigationViewStyle(.stack)
@@ -72,7 +72,7 @@ struct ProductDetailView: View {
         .navigationTitle(product.name)
         .onAppear {
             // SPEC §5 `page.view`: tracked on every screen change.
-            Flowbiz.track(.pageView(screenName: "product-detail"))
+            Flowbiz.track(.pageView(path: product.url, title: product.name))
             // SPEC §5 `product.view`: tracked when the product screen opens.
             Flowbiz.track(.productView(product: store.sdkProduct(product)))
         }

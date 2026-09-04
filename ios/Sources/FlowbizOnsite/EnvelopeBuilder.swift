@@ -50,9 +50,8 @@ enum EnvelopeBuilder {
     /// Builds one entry of the envelope `data` array (SPEC §4).
     ///
     /// - `identity.user_id` is omitted when `userId` is nil.
-    /// - `context.url` is present only for a `.pageView` carrying a screen
-    ///   name (`app://<screenName>`); context carries only SPEC §4 fields —
-    ///   the screen name itself ships as `page.title` inside `data`.
+    /// - `context.url` / `context.baseuri` / `context.recoveryUrl` are
+    ///   passed in by the core, spec §4; omitted when nil or empty.
     /// - `data` is a JSON **string** (the payload serialized separately),
     ///   not a nested object.
     /// - Throws only for non-finite numbers in the payload (see
@@ -79,16 +78,17 @@ enum EnvelopeBuilder {
         screen: String,
         appId: String,
         platform: String,
-        sdkVersion: String
+        sdkVersion: String,
+        contextUrl: String? = nil,
+        baseUri: String? = nil,
+        recoveryUrl: String? = nil
     ) throws -> [String: Any] {
-        var contextUrl: String?
-        if case .pageView(let screenName) = event, let screenName {
-            contextUrl = "app://\(screenName)"
-        }
         return buildEntry(
             wireName: EventSerializer.wireName(event),
-            dataJSON: try EventSerializer.dataJSONString(event),
+            dataJSON: try EventSerializer.dataJSONString(event, baseUri: baseUri),
             contextUrl: contextUrl,
+            baseUri: baseUri,
+            recoveryUrl: recoveryUrl,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -108,9 +108,10 @@ enum EnvelopeBuilder {
     /// Builds a SPEC §8 `page.ping` heartbeat entry. Not part of the `Event`
     /// catalog (the heartbeat is automatic, never tracked by the host app).
     /// `dataJSON` defaults to an empty object; the facade passes the
-    /// last-tracked screen as `{"page":{"title":...,"url":"app://..."}}`
+    /// last-tracked page as `{"page":{"title":...,"url":...}}`
     /// (web semantics: pings describe the current page). Same shape rules
-    /// as `build`; no `context.url`.
+    /// as `build`, including `context.url` / `context.baseuri` /
+    /// `context.recoveryUrl` passed in by the caller.
     static func buildPing(
         hash: String,
         createdAtMillis: Int64,
@@ -125,12 +126,17 @@ enum EnvelopeBuilder {
         appId: String,
         platform: String,
         sdkVersion: String,
+        contextUrl: String? = nil,
+        baseUri: String? = nil,
+        recoveryUrl: String? = nil,
         dataJSON: String = "{}"
     ) -> [String: Any] {
         buildEntry(
             wireName: "page.ping",
             dataJSON: dataJSON,
-            contextUrl: nil,
+            contextUrl: contextUrl,
+            baseUri: baseUri,
+            recoveryUrl: recoveryUrl,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -150,7 +156,8 @@ enum EnvelopeBuilder {
     /// Builds an entry for an *internal* raw event — a wire name outside the
     /// public `Event` catalog with a pre-rendered `data` JSON string
     /// (SPEC §10.1 `push.token.sync` / `push.token.remove`). Same envelope
-    /// shape as `build`; no `context.url`.
+    /// shape as `build`, including `context.url` / `context.baseuri` /
+    /// `context.recoveryUrl` passed in by the caller.
     static func buildRaw(
         wireName: String,
         dataJSON: String,
@@ -166,12 +173,17 @@ enum EnvelopeBuilder {
         screen: String,
         appId: String,
         platform: String,
-        sdkVersion: String
+        sdkVersion: String,
+        contextUrl: String? = nil,
+        baseUri: String? = nil,
+        recoveryUrl: String? = nil
     ) -> [String: Any] {
         buildEntry(
             wireName: wireName,
             dataJSON: dataJSON,
-            contextUrl: nil,
+            contextUrl: contextUrl,
+            baseUri: baseUri,
+            recoveryUrl: recoveryUrl,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -192,6 +204,8 @@ enum EnvelopeBuilder {
         wireName: String,
         dataJSON: String,
         contextUrl: String?,
+        baseUri: String?,
+        recoveryUrl: String?,
         hash: String,
         createdAtMillis: Int64,
         sentAtMillis: Int64,
@@ -228,9 +242,11 @@ enum EnvelopeBuilder {
             "vendor": vendor,
             "onsite_version": sdkVersion,
         ]
-        if let contextUrl {
+        if let contextUrl, !contextUrl.isEmpty {
             context["url"] = contextUrl
         }
+        if let baseUri, !baseUri.isEmpty { context["baseuri"] = baseUri }
+        if let recoveryUrl, !recoveryUrl.isEmpty { context["recoveryUrl"] = recoveryUrl }
 
         return [
             "event": wireName,

@@ -43,7 +43,7 @@ final class CoreHarness: @unchecked Sendable {
     let core: FlowbizCore
 
     init(
-        config: FlowbizConfig = FlowbizConfig(appId: "77777"),
+        config: FlowbizConfig = FlowbizConfig(appId: "77777", baseUri: "https://store.com"),
         store: FakeKeyValueStore = FakeKeyValueStore(),
         clock: FakeClock = FakeClock()
     ) {

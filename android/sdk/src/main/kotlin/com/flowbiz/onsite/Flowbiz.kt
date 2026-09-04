@@ -165,16 +165,17 @@ object Flowbiz {
     }
 
     /**
-     * SPEC §11: decodes the `mb_recovery` query parameter of an incoming
-     * deep link into a [RecoveryPayload]. Returns null when the parameter
-     * is absent or undecodable.
+     * SPEC §11: decodes the `_mb_cr_` query parameter of an incoming deep
+     * link into a [RecoveryPayload]. Returns null = no decodable `_mb_cr_`
+     * param, missing/invalid `utm_source`, or (once initialized) a tenant
+     * mismatch.
      *
      * Pure, synchronous, never throws; callable before [initialize]
      * (SPEC §3). The SDK does not adopt the decoded user as its identity.
      */
     @JvmStatic
     fun handleLink(url: Uri?): RecoveryPayload? = try {
-        url?.let { RecoveryLinkParser.parse(it.toString()) }
+        url?.let { RecoveryLinkParser.parse(it.toString(), core?.config?.appId) }
     } catch (t: Throwable) {
         null
     }

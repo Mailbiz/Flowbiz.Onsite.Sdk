@@ -14,7 +14,7 @@ import Testing
 
     @Test func trackedEnvelopeCarriesIdentitySessionContextAndData() throws {
         let h = CoreHarness()
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
 
         let entry = try h.lastEntry()
         #expect(entry["event"] as? String == "page.view")
@@ -36,7 +36,7 @@ import Testing
         #expect(context["screen"] as? String == "1170x2532")
         #expect(context["vendor"] as? String == "flowbiz-ios-sdk")
         #expect(context["onsite_version"] as? String == SDKVersion.current)
-        #expect(context["url"] as? String == "app://home")
+        #expect(context["url"] as? String == "https://store.com/home")
 
         let timings = object(entry, "timings")
         let expectedIso = EnvelopeBuilder.isoMillis(h.clock.wall)
@@ -44,7 +44,7 @@ import Testing
         #expect(timings["sent_at"] as? String == expectedIso)
         #expect(timings["timezone"] as? String == "-03:00")
 
-        #expect(entry["data"] as? String == (try EventSerializer.dataJSONString(.pageView(screenName: "home"))))
+        #expect(entry["data"] as? String == (try EventSerializer.dataJSONString(.pageView(path: "home"), baseUri: "https://store.com")))
     }
 
     @Test func trackedEnvelopeDataMatchesSharedFixture() throws {
@@ -65,15 +65,53 @@ import Testing
         #expect(entry["data"] as? String == expected["data_canonical"] as? String)
     }
 
-    @Test func pageViewWithoutScreenNameHasNoContextUrl() throws {
+    @Test func contextUrlAbsentBeforeAnyPageViewThenPresentOnEveryEvent() throws {
         let h = CoreHarness()
-        h.core.track(.pageView(screenName: nil))
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "X"))
         #expect(object(try h.lastEntry(), "context")["url"] == nil)
+
+        h.core.track(.pageView(path: "/checkout", title: "Checkout"))
+        #expect(object(try h.lastEntry(), "context")["url"] as? String == "https://store.com/checkout")
+
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "Y"))
+        #expect(object(try h.lastEntry(), "context")["url"] as? String == "https://store.com/checkout")
+
+        // An empty pageView does not clear the remembered page.
+        h.core.track(.pageView())
+        #expect(object(try h.lastEntry(), "context")["url"] as? String == "https://store.com/checkout")
+    }
+
+    @Test func everyEventCarriesBaseUriAndRecoveryUrlFromConfig() throws {
+        let h = CoreHarness(config: FlowbizConfig(
+            appId: "77777", baseUri: "https://store.com", recoveryUrl: "https://store.com/carrinho"
+        ))
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "X"))
+        let context = object(try h.lastEntry(), "context")
+        #expect(context["baseuri"] as? String == "https://store.com")
+        #expect(context["recoveryUrl"] as? String == "https://store.com/carrinho")
+    }
+
+    @Test func recoveryUrlAbsentWhenNotConfigured() throws {
+        let h = CoreHarness()
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "X"))
+        let context = object(try h.lastEntry(), "context")
+        #expect(context["baseuri"] as? String == "https://store.com")
+        #expect(context["recoveryUrl"] == nil)
+    }
+
+    @Test func productUrlsAreResolvedAgainstConfigBaseUri() throws {
+        let h = CoreHarness()
+        h.core.track(.productView(product: Product(
+            productId: "P1", url: "/p1", variants: [ProductVariant(sku: "S1", price: 1, imageUrl: "//cdn.store.com/p1.jpg")]
+        )))
+        let data = try #require(try h.lastEntry()["data"] as? String)
+        #expect(data.contains(#""url":"https://store.com/p1""#))
+        #expect(data.contains(#""image_url":"https://cdn.store.com/p1.jpg""#))
     }
 
     @Test func trackedEventIsQueuedThenDrainedBySuccessfulFlush() throws {
         let h = CoreHarness()
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         #expect(h.queue.size == 0) // drained inline by the flush
         #expect(h.sender.bodies.count == 1)
     }
@@ -85,7 +123,7 @@ import Testing
         h.core.track(.accountLogin(user: user))
         #expect(object(try h.lastEntry(), "identity")["user_id"] as? String == "98412")
 
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         #expect(object(try h.lastEntry(), "identity")["user_id"] as? String == "98412")
         #expect(h.store[StorageKeys.userId] as? String == "98412")
         #expect(h.store[StorageKeys.email] as? String == "maria.oliveira@gmail.com")
@@ -105,7 +143,7 @@ import Testing
 
         h.core.logout()
         // Slice 5 will emit push.token.remove here; for now only state changes.
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         let after = object(try h.lastEntry(), "identity")
 
         #expect(after["user_id"] == nil)
@@ -122,13 +160,13 @@ import Testing
 
     @Test func everyTrackSlidesTheSessionWindow() throws {
         let h = CoreHarness()
-        h.core.track(.pageView(screenName: "a"))
+        h.core.track(.pageView(path: "a"))
         let first = object(try h.lastEntry(), "identity")
 
         // 20 min steps never expire a 30-min sliding window.
         for index in 0..<3 {
             h.clock.advance(20 * minuteMs)
-            h.core.track(.pageView(screenName: "screen-\(index)"))
+            h.core.track(.pageView(path: "screen-\(index)"))
         }
         let last = object(try h.lastEntry(), "identity")
         #expect(last["session_id"] as? String == first["session_id"] as? String)
@@ -137,11 +175,11 @@ import Testing
 
     @Test func trackAfterThirtyIdleMinutesRotatesSession() throws {
         let h = CoreHarness()
-        h.core.track(.pageView(screenName: "a"))
+        h.core.track(.pageView(path: "a"))
         let first = object(try h.lastEntry(), "identity")
 
         h.clock.advance(31 * minuteMs)
-        h.core.track(.pageView(screenName: "b"))
+        h.core.track(.pageView(path: "b"))
         let second = object(try h.lastEntry(), "identity")
 
         #expect(second["session_id"] as? String != first["session_id"] as? String)
@@ -161,7 +199,7 @@ import Testing
     func timezoneOffsetsRenderAsSignedHoursMinutes(minutes: Int, expected: String) throws {
         let h = CoreHarness()
         h.offset.value = minutes
-        h.core.track(.pageView(screenName: "screen-\(minutes)"))
+        h.core.track(.pageView(path: "screen-\(minutes)"))
         #expect(object(try h.lastEntry(), "timings")["timezone"] as? String == expected)
         #expect(FlowbizCore.formatTimezoneOffset(minutes: minutes) == expected)
     }
@@ -177,7 +215,7 @@ import Testing
         #expect(h.sender.bodies.isEmpty)
         #expect(h.queue.size == 0)
 
-        h.core.track(.pageView(screenName: "recovered"))
+        h.core.track(.pageView(path: "recovered"))
         #expect(h.sender.bodies.count == 1)
         #expect(try h.lastEntry()["event"] as? String == "page.view")
     }
@@ -187,7 +225,7 @@ import Testing
     @Test func explicitFlushDrainsARetriableBacklog() throws {
         let h = CoreHarness()
         h.sender.results = [.retriableError]
-        h.core.track(.pageView(screenName: "home")) // first attempt fails, stays queued
+        h.core.track(.pageView(path: "home")) // first attempt fails, stays queued
         #expect(h.queue.size == 1)
 
         h.core.flush() // default result .success
@@ -199,7 +237,7 @@ import Testing
         let h = CoreHarness()
         #expect(h.reachability.started)
         h.sender.results = [.retriableError]
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         #expect(h.queue.size == 1)
 
         h.reachability.callback?()

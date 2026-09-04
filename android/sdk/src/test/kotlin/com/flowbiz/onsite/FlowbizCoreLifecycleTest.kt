@@ -42,7 +42,7 @@ class FlowbizCoreLifecycleTest {
     fun heartbeatIntervalComesFromConfig() {
         val h = CoreHarness(
             temp.newFolder(),
-            config = FlowbizConfig(appId = "77777", heartbeatIntervalSeconds = 15),
+            config = FlowbizConfig(appId = "77777", baseUri = "https://store.com", heartbeatIntervalSeconds = 15),
         )
         h.core.onForeground()
         assertEquals(15_000L, h.scheduler.activeRepeating()!!.delayMillis)
@@ -87,10 +87,10 @@ class FlowbizCoreLifecycleTest {
     fun pingCarriesLastTrackedScreenAsPageData() {
         val h = harness()
         h.core.onForeground()
-        h.core.track(Event.PageView("checkout"))
+        h.core.track(Event.PageView(path = "/checkout", title = "checkout"))
         h.scheduler.tickRepeating()
         assertEquals(
-            """{"page":{"title":"checkout","url":"app://checkout"}}""",
+            """{"page":{"title":"checkout","url":"https://store.com/checkout"}}""",
             pingEntries(h).last().getString("data"),
         )
 
@@ -98,9 +98,57 @@ class FlowbizCoreLifecycleTest {
         h.core.track(Event.PageView())
         h.scheduler.tickRepeating()
         assertEquals(
-            """{"page":{"title":"checkout","url":"app://checkout"}}""",
+            """{"page":{"title":"checkout","url":"https://store.com/checkout"}}""",
             pingEntries(h).last().getString("data"),
         )
+    }
+
+    @Test
+    fun pingAndRawEventsCarryContextFields() {
+        val h = CoreHarness(
+            temp.newFolder(),
+            config = FlowbizConfig(appId = "77777", baseUri = "https://store.com", recoveryUrl = "https://store.com/carrinho"),
+        )
+        h.core.onForeground()
+        h.core.track(Event.PageView(path = "/home"))
+        h.scheduler.tickRepeating()
+        val ping = pingEntries(h).last()
+        val context = ping.getJSONObject("context")
+        assertEquals("https://store.com/home", context.getString("url"))
+        assertEquals("https://store.com", context.getString("baseuri"))
+        assertEquals("https://store.com/carrinho", context.getString("recoveryUrl"))
+
+        // I2: raw (non-ping) events — e.g. the `push.token.sync` relay —
+        // go through `emitInternal`, a separate path from both `track`'s
+        // envelope build and the ping build above; pin that it carries the
+        // same context fields rather than only ever exercising ping/track.
+        h.core.setPushToken("tok")
+        val sync = h.sentEntries().last { it.getString("event") == "push.token.sync" }
+        val syncContext = sync.getJSONObject("context")
+        assertEquals("https://store.com/home", syncContext.getString("url"))
+        assertEquals("https://store.com", syncContext.getString("baseuri"))
+        assertEquals("https://store.com/carrinho", syncContext.getString("recoveryUrl"))
+    }
+
+    /**
+     * I2: a title-only [Event.PageView] (no path) resolves no URL
+     * (`UrlResolver` on a null path is null), so it must not leak a
+     * stale/placeholder URL into `context.url` — and the ping's `page` data
+     * carries the title alone, no `url` key.
+     */
+    @Test
+    fun titleOnlyPageViewOmitsContextUrlButKeepsPingTitle() {
+        val h = harness()
+        h.core.onForeground()
+        h.core.track(Event.PageView(path = null, title = "Só título"))
+
+        val tracked = h.lastEntry()
+        assertFalse(tracked.getJSONObject("context").has("url"))
+
+        h.scheduler.tickRepeating()
+        val ping = pingEntries(h).last()
+        assertFalse(ping.getJSONObject("context").has("url"))
+        assertEquals("""{"page":{"title":"Só título"}}""", ping.getString("data"))
     }
 
     @Test

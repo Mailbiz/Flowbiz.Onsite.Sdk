@@ -29,7 +29,7 @@ object FixtureSupport {
 
     /** Maps a fixture (`event` name + camelCase `input`) onto the typed constructors. */
     fun buildEvent(eventName: String, input: JSONObject): Event = when (eventName) {
-        "pageView" -> Event.PageView(input.stringOrNull("screenName"))
+        "pageView" -> Event.PageView(path = input.stringOrNull("path"), title = input.stringOrNull("title"))
         "accountLogin" -> Event.AccountLogin(user(input.getJSONObject("user")))
         "accountSync" -> Event.AccountSync(user(input.getJSONObject("user")))
         "productView" -> Event.ProductView(product(input.getJSONObject("product")))

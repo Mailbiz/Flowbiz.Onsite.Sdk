@@ -28,6 +28,7 @@ import Testing
                 }
                 let input = fixture["input"] as? [String: Any] ?? [:]
                 let event = try FixtureSupport.buildEvent(eventName, input: input)
+                let baseUri = fixture["baseUri"] as? String
 
                 let wireName = EventSerializer.wireName(event)
                 if wireName != expectedWireEvent {
@@ -36,7 +37,7 @@ import Testing
 
                 // Serialize to the wire string, then parse it back — the wire
                 // string is what actually ships.
-                let wireString = try EventSerializer.dataJSONString(event)
+                let wireString = try EventSerializer.dataJSONString(event, baseUri: baseUri)
                 guard let wireData = wireString.data(using: .utf8),
                       let produced = try JSONSerialization.jsonObject(with: wireData) as? [String: Any]
                 else {

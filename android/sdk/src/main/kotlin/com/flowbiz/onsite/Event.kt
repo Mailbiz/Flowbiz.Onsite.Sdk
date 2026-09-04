@@ -10,8 +10,12 @@ package com.flowbiz.onsite
  */
 sealed class Event {
 
-    /** `page.view` — [screenName] also drives the synthetic `app://<screenName>` context URL. */
-    data class PageView(val screenName: String? = null) : Event()
+    /**
+     * `page.view` — [path] is resolved against `FlowbizConfig.baseUri`
+     * (spec §5) into `page.url` and the remembered `context.url`; [title]
+     * ships as `page.title`. Both optional.
+     */
+    data class PageView(val path: String? = null, val title: String? = null) : Event()
 
     /** `account.login`. */
     data class AccountLogin(val user: User) : Event()

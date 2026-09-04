@@ -23,7 +23,7 @@ import Testing
     }
 
     @Test func heartbeatIntervalComesFromConfig() {
-        let h = CoreHarness(config: FlowbizConfig(appId: "77777", heartbeatInterval: 15))
+        let h = CoreHarness(config: FlowbizConfig(appId: "77777", baseUri: "https://store.com", heartbeatInterval: 15))
         h.core.onForeground()
         #expect(h.scheduler.activeRepeating()?.delayMillis == 15_000)
     }
@@ -63,20 +63,64 @@ import Testing
     @Test func pingCarriesLastTrackedScreenAsPageData() throws {
         let h = CoreHarness()
         h.core.onForeground()
-        h.core.track(.pageView(screenName: "checkout"))
+        h.core.track(.pageView(path: "/checkout", title: "checkout"))
         h.scheduler.tickRepeating()
         #expect(
             try pingEntries(h).last?["data"] as? String
-                == #"{"page":{"title":"checkout","url":"app://checkout"}}"#
+                == #"{"page":{"title":"checkout","url":"https://store.com/checkout"}}"#
         )
 
         // An anonymous pageView does not clear the last named screen.
-        h.core.track(.pageView(screenName: nil))
+        h.core.track(.pageView())
         h.scheduler.tickRepeating()
         #expect(
             try pingEntries(h).last?["data"] as? String
-                == #"{"page":{"title":"checkout","url":"app://checkout"}}"#
+                == #"{"page":{"title":"checkout","url":"https://store.com/checkout"}}"#
         )
+    }
+
+    @Test func pingAndRawEventsCarryContextFields() throws {
+        let h = CoreHarness(config: FlowbizConfig(
+            appId: "77777", baseUri: "https://store.com", recoveryUrl: "https://store.com/carrinho"
+        ))
+        h.core.onForeground()
+        h.core.track(.pageView(path: "/home"))
+        h.scheduler.tickRepeating()
+        let ping = try #require(try pingEntries(h).last)
+        let context = object(ping, "context")
+        #expect(context["url"] as? String == "https://store.com/home")
+        #expect(context["baseuri"] as? String == "https://store.com")
+        #expect(context["recoveryUrl"] as? String == "https://store.com/carrinho")
+
+        // I2: raw (non-ping) events — e.g. the `push.token.sync` relay —
+        // go through `emitInternal`, a separate path from both `track`'s
+        // envelope build and the ping build above; pin that it carries the
+        // same context fields rather than only ever exercising ping/track.
+        h.core.setPushToken("tok")
+        let entries = try h.sentEntries()
+        let sync = try #require(entries.last { $0["event"] as? String == "push.token.sync" })
+        let syncContext = object(sync, "context")
+        #expect(syncContext["url"] as? String == "https://store.com/home")
+        #expect(syncContext["baseuri"] as? String == "https://store.com")
+        #expect(syncContext["recoveryUrl"] as? String == "https://store.com/carrinho")
+    }
+
+    /// I2: a title-only `pageView` (no path) resolves no URL (`UrlResolver`
+    /// on a nil path is nil), so it must not leak a stale/placeholder URL
+    /// into `context.url` — and the ping's `page` data carries the title
+    /// alone, no `url` key.
+    @Test func titleOnlyPageViewOmitsContextUrlButKeepsPingTitle() throws {
+        let h = CoreHarness()
+        h.core.onForeground()
+        h.core.track(.pageView(path: nil, title: "Só título"))
+
+        let tracked = try h.lastEntry()
+        #expect(object(tracked, "context")["url"] == nil)
+
+        h.scheduler.tickRepeating()
+        let ping = try #require(try pingEntries(h).last)
+        #expect(object(ping, "context")["url"] == nil)
+        #expect(ping["data"] as? String == #"{"page":{"title":"Só título"}}"#)
     }
 
     @Test func pingFailureIsDroppedNeverQueued() throws {
@@ -92,7 +136,7 @@ import Testing
         // SPEC §6: page.ping counts as activity — a foregrounded idle app
         // keeps its session.
         let h = CoreHarness()
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         let sessionBefore = object(try h.lastEntry(), "identity")["session_id"] as? String
         h.core.onForeground()
         for _ in 0..<3 {
@@ -100,14 +144,14 @@ import Testing
             h.scheduler.tickRepeating()
         }
         h.clock.advance(25 * minuteMs) // 25 < 30 since last ping
-        h.core.track(.pageView(screenName: "later"))
+        h.core.track(.pageView(path: "later"))
         #expect(object(try h.lastEntry(), "identity")["session_id"] as? String == sessionBefore)
     }
 
     @Test func foregroundRequestsFlushOfBacklog() {
         let h = CoreHarness()
         h.sender.results = [.retriableError]
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         #expect(h.queue.size == 1)
         h.core.onForeground()
         #expect(h.queue.size == 0)
@@ -120,7 +164,7 @@ import Testing
         h.core.onForeground()
         // Build a retriable backlog first (a retry is now scheduled).
         h.sender.defaultResult = .retriableError
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         #expect(h.queue.size == 1)
         let sendsBefore = h.sender.bodies.count
 
@@ -128,7 +172,7 @@ import Testing
         #expect(h.store[StorageKeys.enabled] as? Bool == false) // persisted
         #expect(h.scheduler.activeRepeating() == nil) // heartbeat stopped
 
-        h.core.track(.pageView(screenName: "dropped")) // dropped, not queued
+        h.core.track(.pageView(path: "dropped")) // dropped, not queued
         #expect(h.queue.size == 1)
 
         h.core.flush() // ignored while disabled
@@ -139,7 +183,7 @@ import Testing
     @Test func reachabilityWhileDisabledDoesNotTouchNetwork() {
         let h = CoreHarness()
         h.sender.results = [.retriableError]
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         let sendsBefore = h.sender.bodies.count
         h.core.setEnabled(false)
         h.reachability.callback?()
@@ -150,7 +194,7 @@ import Testing
         let h = CoreHarness()
         h.core.onForeground()
         h.sender.defaultResult = .retriableError
-        h.core.track(.pageView(screenName: "home"))
+        h.core.track(.pageView(path: "home"))
         h.core.setEnabled(false)
         #expect(h.queue.size == 1)
 
@@ -182,7 +226,7 @@ import Testing
         first.core.setEnabled(false)
 
         let second = CoreHarness(store: store)
-        second.core.track(.pageView(screenName: "home"))
+        second.core.track(.pageView(path: "home"))
         #expect(second.sender.bodies.isEmpty)
     }
 }

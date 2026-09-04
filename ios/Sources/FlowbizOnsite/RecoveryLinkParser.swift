@@ -1,99 +1,107 @@
 import Foundation
 
 /// Pure decoder behind `Flowbiz.handleLink` (SPEC §11): URL string →
-/// `mb_recovery` query value → LZ-string decompress → hash JSON
+/// `_mb_cr_` query value (+ `utm_source` guard) → base64 → hash JSON
 /// `{t, u, c, its: [[qty, product_id, sku, recovery_properties?]]}` →
-/// `RecoveryPayload`.
+/// `RecoveryPayload`. Mirrors the web tag's `getRecoveryDataFromQuery`.
 ///
-/// Operates on the raw URL *string* (the facade adapts `URL` via
-/// `absoluteString`) with manual query splitting — `URLComponents` decodes
-/// percent-escapes in `queryItems` but not `+`, and the two SDKs must
-/// tolerate identical encodings, so both share this string-level parsing.
+/// Encoding tolerance: the value is tried raw, percent-decoded (`%XX`
+/// only), and with `' '` restored to `'+'`; missing base64 padding is
+/// added; URL-safe `-`/`_` are accepted. First candidate that decodes to a
+/// valid payload wins.
 ///
-/// ## Percent-encoding tolerance
-/// The compressed value's alphabet (`A-Za-z0-9+-$`) is URL-safe by design,
-/// so the web puts the hash in links *unencoded* — but intermediate link
-/// handling may percent-encode (`+` → `%2B`, `$` → `%24`) or turn `+` into
-/// a space. The parser tries the raw value first (the decompressor itself
-/// restores `" "` → `"+"`, reference behavior), then a percent-decoded
-/// variant (decoding `%XX` only — never `+` → space). First candidate that
-/// decodes to a valid payload wins.
-///
-/// ## Hash → payload mapping (web `buildCartRecoveryPayload` parity)
-/// - `t`, `u`, `c` must be present and non-empty, `its` a non-empty array —
-///   else the whole payload is nil (web `getRecoveryDataFromQuery`
-///   validation). `t` (tenant) is *not* compared against the SDK config:
-///   `handleLink` is pure and callable before `initialize` (SPEC §3).
-/// - per item: `product_id`/`sku` from index 1/2 (missing → `""`), quantity
-///   `parseInt(it[0]) || 1`, `recovery_properties` from index 3
-///   (JSON-object string; garbage → nil). Non-array `its` elements are
-///   skipped (the JS would string-index them into garbage — not emulated).
-///
-/// Pure, synchronous, never throws.
+/// Tenant check: when `expectedAppId` is given (SDK initialized), `t` must
+/// equal it, like web `appId === hash.t`. Before initialize the decoder is
+/// pure and skips the check (SPEC §3). Never throws.
 enum RecoveryLinkParser {
 
-    private static let param = "mb_recovery"
+    private static let param = "_mb_cr_"
+    private static let utmParam = "utm_source"
 
-    static func parse(_ url: String?) -> RecoveryPayload? {
-        guard let url, let raw = queryParameter(url) else { return nil }
-        var candidates = [raw]
-        if let decoded = percentDecode(raw), decoded != raw {
-            candidates.append(decoded)
+    static func parse(_ url: String?, expectedAppId: String? = nil) -> RecoveryPayload? {
+        guard let url else { return nil }
+        let pairs = queryPairs(url)
+        guard let raw = pairs.first(where: { $0.key == param && !$0.value.isEmpty })?.value else { return nil }
+        guard let utm = pairs.first(where: { $0.key == utmParam })?.value, isValidUtm(utm) else { return nil }
+        // Order `[rawFix, raw, decodedFix, decoded]`, deduplicated
+        // preserving order (M1) — literally the same sequence as Kotlin's
+        // `LinkedHashSet`, so decode + mapHash + the tenant-mismatch debug
+        // line each run at most once per distinct candidate.
+        var candidates: [String] = []
+        var seen = Set<String>()
+        func add(_ candidate: String) {
+            if seen.insert(candidate).inserted { candidates.append(candidate) }
+        }
+        add(raw.replacingOccurrences(of: " ", with: "+"))
+        add(raw)
+        if let decoded = percentDecode(raw) {
+            add(decoded.replacingOccurrences(of: " ", with: "+"))
+            add(decoded)
         }
         for candidate in candidates {
-            guard let json = LZString.decompressFromEncodedURIComponent(candidate) else { continue }
-            if let payload = mapHash(json) {
-                return payload
-            }
+            guard let json = decodeBase64(candidate), let payload = mapHash(json, expectedAppId: expectedAppId) else { continue }
+            return payload
         }
         return nil
     }
 
-    /// Raw (undecoded) value of the first `mb_recovery` pair in the query string.
-    private static func queryParameter(_ url: String) -> String? {
-        guard let queryStart = url.firstIndex(of: "?") else { return nil }
-        var query = url[url.index(after: queryStart)...]
-        if let fragmentStart = query.firstIndex(of: "#") {
-            query = query[..<fragmentStart]
-        }
-        for pair in query.split(separator: "&", omittingEmptySubsequences: false) {
-            let key: Substring
-            let value: Substring
+    /// Query pairs in order. Fragment cut first (M2 — spec §7 step 1: a
+    /// `?` inside the fragment, e.g. `#/cart?_mb_cr_=…`, is not a query),
+    /// then the query is found within what remains. Keys are
+    /// percent-decoded; values are left raw (callers decide how to decode
+    /// them).
+    private static func queryPairs(_ url: String) -> [(key: String, value: String)] {
+        var beforeFragment = Substring(url)
+        if let fragmentStart = url.firstIndex(of: "#") { beforeFragment = url[..<fragmentStart] }
+        guard let queryStart = beforeFragment.firstIndex(of: "?") else { return [] }
+        let query = beforeFragment[beforeFragment.index(after: queryStart)...]
+        return query.split(separator: "&", omittingEmptySubsequences: true).map { pair in
             if let eq = pair.firstIndex(of: "=") {
-                key = pair[..<eq]
-                value = pair[pair.index(after: eq)...]
-            } else {
-                key = pair
-                value = ""
+                let key = String(pair[..<eq])
+                return (percentDecode(key) ?? key, String(pair[pair.index(after: eq)...]))
             }
-            if key == param || percentDecode(String(key)) == param, !value.isEmpty {
-                return String(value)
-            }
+            return (percentDecode(String(pair)) ?? String(pair), "")
         }
-        return nil
     }
 
-    /// `%XX` decoding that does NOT decode `+` to a space (the LZ alphabet
-    /// contains `+`); `removingPercentEncoding` has exactly that behavior.
-    /// Returns nil for malformed escapes — the raw candidate then stands on
-    /// its own.
+    /// Web `isValidUtm`: contains "mailbiz" or "flowbiz", case-insensitive.
+    private static func isValidUtm(_ raw: String) -> Bool {
+        let value = (percentDecode(raw) ?? raw).lowercased()
+        return value.contains("mailbiz") || value.contains("flowbiz")
+    }
+
     private static func percentDecode(_ value: String) -> String? {
         guard value.contains("%") else { return value }
         return value.removingPercentEncoding
     }
 
+    /// Standard or URL-safe base64, padding optional → UTF-8 string.
+    private static func decodeBase64(_ value: String) -> String? {
+        var normalized = value.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        let remainder = normalized.count % 4
+        if remainder == 1 { return nil }
+        if remainder > 0 { normalized += String(repeating: "=", count: 4 - remainder) }
+        guard let data = Data(base64Encoded: normalized) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     // MARK: hash → payload
 
-    private static func mapHash(_ json: String) -> RecoveryPayload? {
+    private static func mapHash(_ json: String, expectedAppId: String?) -> RecoveryPayload? {
         guard
             let root = try? JSONSerialization.jsonObject(with: Data(json.utf8)),
             let hash = root as? [String: Any],
             let cartId = nonEmptyString(hash["c"]),
             let userId = nonEmptyString(hash["u"]),
-            nonEmptyString(hash["t"]) != nil,
+            let tenant = nonEmptyString(hash["t"]),
             let its = hash["its"] as? [Any],
             !its.isEmpty
         else { return nil }
+
+        if let expectedAppId, tenant != expectedAppId {
+            SdkLog.debug("recovery link ignored: tenant mismatch")
+            return nil
+        }
 
         var products = [RecoveryProduct]()
         products.reserveCapacity(its.count)
@@ -144,7 +152,17 @@ enum RecoveryLinkParser {
         switch value {
         case let number as NSNumber where !JSONValue.isBoolean(number):
             let double = number.doubleValue
-            parsed = double.isNaN ? nil : Int(double.rounded(.towardZero))
+            if double.isNaN {
+                parsed = nil
+            } else {
+                // `Int(double)` traps when the value is outside Int's range
+                // (e.g. a decoded hash quantity of 1e30); clamp to Int32's
+                // range first, matching `parseIntLeading` and Kotlin's
+                // saturating `toDouble().toInt()` (SPEC §3: never traps).
+                let truncated = double.rounded(.towardZero)
+                let clamped = min(max(truncated, Double(Int32.min)), Double(Int32.max))
+                parsed = Int(clamped)
+            }
         case let string as String:
             parsed = parseIntLeading(string)
         default:

@@ -1,0 +1,168 @@
+[
+  {
+    "name": "basic",
+    "hash_json": "{\"t\":\"77777\",\"u\":\"user-123\",\"c\":\"cart-abc-001\",\"its\":[[\"2\",\"P100\",\"SKU-100-P\"],[\"1\",\"P200\",\"SKU-200-M\"]]}",
+    "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-abc-001", "userId": "user-123",
+      "products": [
+        { "productId": "P100", "sku": "SKU-100-P", "quantity": 2, "recoveryProperties": null },
+        { "productId": "P200", "sku": "SKU-200-M", "quantity": 1, "recoveryProperties": null }
+      ]
+    }
+  },
+  {
+    "name": "basic_before_initialize_skips_tenant_check",
+    "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19",
+    "appId": null,
+    "expected": {
+      "cartId": "cart-abc-001", "userId": "user-123",
+      "products": [
+        { "productId": "P100", "sku": "SKU-100-P", "quantity": 2, "recoveryProperties": null },
+        { "productId": "P200", "sku": "SKU-200-M", "quantity": 1, "recoveryProperties": null }
+      ]
+    }
+  },
+  {
+    "name": "with_recovery_properties_padded",
+    "hash_json": "{\"t\":\"77777\",\"u\":\"u-9f2c\",\"c\":\"cart-77-xyz\",\"its\":[[\"3\",\"PROD-1\",\"SKU-1-AZUL\",\"{\\\"cor\\\":\\\"Azul Marinho\\\",\\\"tamanho\\\":\\\"P\\\"}\"],[\"1\",\"PROD-2\",\"SKU-2-VERDE\",\"{\\\"cor\\\":\\\"Verde\\\"}\"]]}",
+    "url": "https://store.com/carrinho?utm_source=mailbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidS05ZjJjIiwiYyI6ImNhcnQtNzcteHl6IiwiaXRzIjpbWyIzIiwiUFJPRC0xIiwiU0tVLTEtQVpVTCIsIntcImNvclwiOlwiQXp1bCBNYXJpbmhvXCIsXCJ0YW1hbmhvXCI6XCJQXCJ9Il0sWyIxIiwiUFJPRC0yIiwiU0tVLTItVkVSREUiLCJ7XCJjb3JcIjpcIlZlcmRlXCJ9Il1dfQ==",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-77-xyz", "userId": "u-9f2c",
+      "products": [
+        { "productId": "PROD-1", "sku": "SKU-1-AZUL", "quantity": 3, "recoveryProperties": { "cor": "Azul Marinho", "tamanho": "P" } },
+        { "productId": "PROD-2", "sku": "SKU-2-VERDE", "quantity": 1, "recoveryProperties": { "cor": "Verde" } }
+      ]
+    }
+  },
+  {
+    "name": "with_recovery_properties_percent_encoded_padding",
+    "url": "https://store.com/carrinho?utm_source=mailbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidS05ZjJjIiwiYyI6ImNhcnQtNzcteHl6IiwiaXRzIjpbWyIzIiwiUFJPRC0xIiwiU0tVLTEtQVpVTCIsIntcImNvclwiOlwiQXp1bCBNYXJpbmhvXCIsXCJ0YW1hbmhvXCI6XCJQXCJ9Il0sWyIxIiwiUFJPRC0yIiwiU0tVLTItVkVSREUiLCJ7XCJjb3JcIjpcIlZlcmRlXCJ9Il1dfQ%3D%3D",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-77-xyz", "userId": "u-9f2c",
+      "products": [
+        { "productId": "PROD-1", "sku": "SKU-1-AZUL", "quantity": 3, "recoveryProperties": { "cor": "Azul Marinho", "tamanho": "P" } },
+        { "productId": "PROD-2", "sku": "SKU-2-VERDE", "quantity": 1, "recoveryProperties": { "cor": "Verde" } }
+      ]
+    }
+  },
+  {
+    "name": "with_recovery_properties_unpadded",
+    "url": "https://store.com/carrinho?utm_source=mailbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidS05ZjJjIiwiYyI6ImNhcnQtNzcteHl6IiwiaXRzIjpbWyIzIiwiUFJPRC0xIiwiU0tVLTEtQVpVTCIsIntcImNvclwiOlwiQXp1bCBNYXJpbmhvXCIsXCJ0YW1hbmhvXCI6XCJQXCJ9Il0sWyIxIiwiUFJPRC0yIiwiU0tVLTItVkVSREUiLCJ7XCJjb3JcIjpcIlZlcmRlXCJ9Il1dfQ",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-77-xyz", "userId": "u-9f2c",
+      "products": [
+        { "productId": "PROD-1", "sku": "SKU-1-AZUL", "quantity": 3, "recoveryProperties": { "cor": "Azul Marinho", "tamanho": "P" } },
+        { "productId": "PROD-2", "sku": "SKU-2-VERDE", "quantity": 1, "recoveryProperties": { "cor": "Verde" } }
+      ]
+    }
+  },
+  {
+    "name": "unicode_product_data",
+    "hash_json": "{\"t\":\"77777\",\"u\":\"maria@exemplo.com.br\",\"c\":\"cart-u1\",\"its\":[[\"1\",\"CAMISETA-AÇAÍ\",\"SKU-A\",\"{\\\"nome\\\":\\\"Camiseta Açaí 🛒\\\"}\"]]}",
+    "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoibWFyaWFAZXhlbXBsby5jb20uYnIiLCJjIjoiY2FydC11MSIsIml0cyI6W1siMSIsIkNBTUlTRVRBLUHDh0HDjSIsIlNLVS1BIiwie1wibm9tZVwiOlwiQ2FtaXNldGEgQcOnYcOtIPCfm5JcIn0iXV19",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-u1", "userId": "maria@exemplo.com.br",
+      "products": [
+        { "productId": "CAMISETA-AÇAÍ", "sku": "SKU-A", "quantity": 1, "recoveryProperties": { "nome": "Camiseta Açaí 🛒" } }
+      ]
+    }
+  },
+  {
+    "name": "quantity_and_field_fallbacks_match_web",
+    "hash_json": "{\"t\":\"77777\",\"u\":\"u-q\",\"c\":\"cart-q\",\"its\":[[\"0\",\"P1\",\"S1\"],[\"abc\",\"P2\",\"S2\"],[\"4\"],[\"2\",\"P4\",\"S4\",\"{not json\"]]}",
+    "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidS1xIiwiYyI6ImNhcnQtcSIsIml0cyI6W1siMCIsIlAxIiwiUzEiXSxbImFiYyIsIlAyIiwiUzIiXSxbIjQiXSxbIjIiLCJQNCIsIlM0Iiwie25vdCBqc29uIl1dfQ==",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-q", "userId": "u-q",
+      "products": [
+        { "productId": "P1", "sku": "S1", "quantity": 1, "recoveryProperties": null },
+        { "productId": "P2", "sku": "S2", "quantity": 1, "recoveryProperties": null },
+        { "productId": "", "sku": "", "quantity": 4, "recoveryProperties": null },
+        { "productId": "P4", "sku": "S4", "quantity": 2, "recoveryProperties": null }
+      ]
+    }
+  },
+  {
+    "name": "utm_source_with_campaign_suffix_and_uppercase",
+    "url": "https://store.com/carrinho?utm_source=MailBiz_email&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-abc-001", "userId": "user-123",
+      "products": [
+        { "productId": "P100", "sku": "SKU-100-P", "quantity": 2, "recoveryProperties": null },
+        { "productId": "P200", "sku": "SKU-200-M", "quantity": 1, "recoveryProperties": null }
+      ]
+    }
+  },
+  {
+    "name": "param_among_others_before_fragment",
+    "url": "https://store.com/p?a=1&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_source=flowbiz&b=2#section",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-abc-001", "userId": "user-123",
+      "products": [
+        { "productId": "P100", "sku": "SKU-100-P", "quantity": 2, "recoveryProperties": null },
+        { "productId": "P200", "sku": "SKU-200-M", "quantity": 1, "recoveryProperties": null }
+      ]
+    }
+  },
+  { "name": "missing_utm_source", "url": "https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19", "appId": "77777", "expected": null },
+  { "name": "wrong_utm_source", "url": "https://store.com/carrinho?utm_source=google&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19", "appId": "77777", "expected": null },
+  { "name": "param_only_in_fragment_is_ignored", "url": "https://store.com/carrinho?utm_source=flowbiz#_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19", "appId": "77777", "expected": null },
+  { "name": "missing_param", "url": "https://store.com/carrinho?utm_source=flowbiz", "appId": "77777", "expected": null },
+  { "name": "empty_param", "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=", "appId": "77777", "expected": null },
+  { "name": "no_query_at_all", "url": "https://store.com/carrinho", "appId": "77777", "expected": null },
+  { "name": "not_base64", "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=%%%garbage!!", "appId": "77777", "expected": null },
+  { "name": "base64_but_not_json", "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=aGVsbG8=", "appId": "77777", "expected": null },
+  { "name": "missing_user", "hash_json": "{\"t\":\"77777\",\"c\":\"cart-x\",\"its\":[[\"1\",\"P1\",\"S1\"]]}", "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJjIjoiY2FydC14IiwiaXRzIjpbWyIxIiwiUDEiLCJTMSJdXX0=", "appId": "77777", "expected": null },
+  { "name": "empty_items", "hash_json": "{\"t\":\"77777\",\"u\":\"u\",\"c\":\"cart-x\",\"its\":[]}", "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidSIsImMiOiJjYXJ0LXgiLCJpdHMiOltdfQ==", "appId": "77777", "expected": null },
+  {
+    "name": "tenant_mismatch_when_initialized",
+    "hash_json": "{\"t\":\"12345\",\"u\":\"user-123\",\"c\":\"cart-abc-001\",\"its\":[[\"2\",\"P100\",\"SKU-100-P\"]]}",
+    "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiMTIzNDUiLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdXX0=",
+    "appId": "77777",
+    "expected": null
+  },
+  {
+    "name": "tenant_mismatch_ignored_before_initialize",
+    "url": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiMTIzNDUiLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdXX0=",
+    "appId": null,
+    "expected": {
+      "cartId": "cart-abc-001", "userId": "user-123",
+      "products": [ { "productId": "P100", "sku": "SKU-100-P", "quantity": 2, "recoveryProperties": null } ]
+    }
+  },
+  { "name": "legacy_mb_recovery_param_not_recognized", "url": "https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMSAC6iYV2RiiU5HMV62eALLq1AXyA", "appId": "77777", "expected": null },
+  {
+    "name": "quantity_out_of_int_range",
+    "hash_json": "{\"t\":\"77777\",\"u\":\"u1\",\"c\":\"c1\",\"its\":[[1e+30,\"p\",\"s\"]]}",
+    "url": "https://store.com/c?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidTEiLCJjIjoiYzEiLCJpdHMiOltbMWUrMzAsInAiLCJzIl1dfQ==",
+    "appId": "77777",
+    "expected": {
+      "cartId": "c1", "userId": "u1",
+      "products": [ { "productId": "p", "sku": "s", "quantity": 2147483647, "recoveryProperties": null } ]
+    }
+  },
+  {
+    "name": "quantity_negative_out_of_int_range",
+    "hash_json": "{\"t\":\"77777\",\"u\":\"u1\",\"c\":\"c1\",\"its\":[[-1e30,\"p\",\"s\"]]}",
+    "url": "https://store.com/c?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidTEiLCJjIjoiYzEiLCJpdHMiOltbLTFlMzAsInAiLCJzIl1dfQ==",
+    "appId": "77777",
+    "expected": {
+      "cartId": "c1", "userId": "u1",
+      "products": [ { "productId": "p", "sku": "s", "quantity": -2147483648, "recoveryProperties": null } ]
+    }
+  },
+  {
+    "name": "query_inside_fragment_is_ignored",
+    "url": "https://s.com/#/cart?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_source=flowbiz",
+    "appId": "77777",
+    "expected": null
+  }
+]

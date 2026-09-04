@@ -69,6 +69,40 @@ public enum Flowbiz {
 
     private static let state = State()
 
+    /// Lock-guarded holder mirroring `SdkLog`'s `SinkBox` (warning-clean
+    /// under strict concurrency) for the testable `debugSink` seam below.
+    private final class DebugSinkBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: @Sendable (String) -> Void = { message in
+            os_log(.debug, log: OSLog(subsystem: "com.flowbiz.onsite", category: "FlowbizOnsite"), "%{public}s", message)
+        }
+
+        var current: @Sendable (String) -> Void {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return value
+            }
+            set {
+                lock.lock()
+                defer { lock.unlock() }
+                value = newValue
+            }
+        }
+    }
+
+    private static let debugSinkBox = DebugSinkBox()
+
+    /// Testable seam for the sink installed when `debug` is enabled.
+    /// Production default writes through `os_log`; tests substitute a
+    /// capture so `ConfigSanitizer` warnings (I1: emitted during
+    /// `initialize`, before any test could otherwise observe them) can be
+    /// asserted without reading the system log.
+    static var debugSink: @Sendable (String) -> Void {
+        get { debugSinkBox.current }
+        set { debugSinkBox.current = newValue }
+    }
+
     /// Initializes the SDK. Call once, ideally from
     /// `application(_:didFinishLaunchingWithOptions:)` on the main thread.
     /// Initializing while the app is already foregrounded is handled: the
@@ -82,20 +116,27 @@ public enum Flowbiz {
             SdkLog.debug("initialize ignored: already initialized (first config wins)")
             return
         }
-        guard let sanitized = ConfigSanitizer.sanitize(config) else { return }
+        guard !config.appId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            SdkLog.debug("FlowbizConfig.appId is blank; initialize is a no-op")
+            return
+        }
         let serialQueue = DispatchQueue(label: "com.flowbiz.onsite")
         // The core is constructed inside the install lock: a concurrent
         // initialize that loses the race must return before building a
         // core at all (its init starts reachability monitoring). The debug
         // log sink is installed inside the same closure — only the *winning*
         // initialize may set it (a losing concurrent call must leave no
-        // trace), and before the core construction so init-time logs land.
+        // trace) — and *before* `ConfigSanitizer.sanitize` runs (I1), so its
+        // warnings (invalid baseUri/recoveryUrl/collectorUrl, clamped
+        // heartbeat) land in the sink instead of being dropped on the first
+        // ever `initialize` call. `config.debug` gates this (not
+        // `sanitized.debug`, which isn't known yet — sanitize doesn't touch
+        // the flag itself, so the raw value is equivalent).
         guard let core = state.installIfAbsent({
-            if sanitized.debug {
-                SdkLog.sink = { message in
-                    os_log(.debug, log: OSLog(subsystem: "com.flowbiz.onsite", category: "FlowbizOnsite"), "%{public}s", message)
-                }
+            if config.debug {
+                SdkLog.sink = Flowbiz.debugSink
             }
+            let sanitized = ConfigSanitizer.sanitize(config) ?? config
             return FlowbizCore(
                 config: sanitized,
                 store: UserDefaultsStore(appId: sanitized.appId),
@@ -112,7 +153,7 @@ public enum Flowbiz {
             return
         }
         startLifecycleTracking(core)
-        SdkLog.debug("initialized (appId=\(sanitized.appId))")
+        SdkLog.debug("initialized (appId=\(config.appId))")
     }
 
     /// Tracks a typed event (SPEC §5). Enqueues and returns immediately.
@@ -173,14 +214,15 @@ public enum Flowbiz {
         return nil
     }
 
-    /// SPEC §11: decodes the `mb_recovery` query parameter of an incoming
+    /// SPEC §11: decodes the `_mb_cr_` query parameter of an incoming
     /// deep link (Universal Link entry point) into a `RecoveryPayload`.
-    /// Returns nil when the parameter is absent or undecodable.
+    /// Returns null = no decodable `_mb_cr_` param, missing/invalid
+    /// `utm_source`, or (once initialized) a tenant mismatch.
     ///
     /// Pure, synchronous, never throws; callable before `initialize`
     /// (SPEC §3). The SDK does not adopt the decoded user as its identity.
     public static func handleLink(_ url: URL?) -> RecoveryPayload? {
-        RecoveryLinkParser.parse(url?.absoluteString)
+        RecoveryLinkParser.parse(url?.absoluteString, expectedAppId: state.currentCore?.config.appId)
     }
 
     private static func withCore(_ name: String, _ action: (FlowbizCore) -> Void) {

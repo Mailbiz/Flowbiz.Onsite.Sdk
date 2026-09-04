@@ -8,8 +8,10 @@ import Foundation
 /// fields omitted when nil). All cases carry `Sendable` value types (SPEC §3).
 public enum Event: Sendable, Equatable {
 
-    /// `page.view` — `screenName` also drives the synthetic `app://<screenName>` context URL.
-    case pageView(screenName: String?)
+    /// `page.view` — `path` is resolved against `FlowbizConfig.baseUri`
+    /// (spec §5) into `page.url` and the remembered `context.url`;
+    /// `title` ships as `page.title`. Both optional.
+    case pageView(path: String? = nil, title: String? = nil)
 
     /// `account.login`.
     case accountLogin(user: User)

@@ -13,7 +13,7 @@ import java.util.UUID
  * Every entry point hops onto the serial [scheduler] and returns
  * immediately (SPEC §3): all pipeline work — session touch, serialization,
  * dedup, queue I/O — is thread-confined to the scheduler thread.
- * [lastScreenName] and [foregrounded] are scheduler-confined state.
+ * [lastPage] and [foregrounded] are scheduler-confined state.
  *
  * ## Never-throw
  * Each submitted task is wrapped in a catch-all (SPEC §3): a failure
@@ -28,7 +28,7 @@ import java.util.UUID
  * task or reachability callback).
  */
 internal class FlowbizCore(
-    private val config: FlowbizConfig,
+    internal val config: FlowbizConfig,
     store: KeyValueStore,
     queueFactory: () -> EventQueue,
     private val sender: HttpSender,
@@ -53,12 +53,13 @@ internal class FlowbizCore(
     private val heartbeatIntervalMillis = config.heartbeatIntervalSeconds * 1000L
 
     /**
-     * Screen name of the last `pageView`-with-screenName — feeds the ping
-     * `page` payload (SPEC §8, web parity). In-memory only by design; also
-     * refreshed by suppressed duplicate pageViews (the user *is* on that
-     * screen). Scheduler-confined.
+     * Last page carried by a `pageView` with a path or title — feeds
+     * `context.url` on every event and the ping `page` payload (spec §4,
+     * §6). In-memory only; refreshed even by suppressed duplicate
+     * pageViews (the user *is* on that screen). Scheduler-confined.
      */
-    private var lastScreenName: String? = null
+    internal data class PageState(val title: String?, val url: String?)
+    private var lastPage: PageState? = null
 
     /** Foreground state (drives heartbeat resume on re-enable). Scheduler-confined. */
     private var foregrounded = false
@@ -97,9 +98,9 @@ internal class FlowbizCore(
         try {
             // 4. Serialize; non-finite numbers throw → drop (SPEC §3).
             val wireName = EventSerializer.wireName(event)
-            val dataJson = EventSerializer.dataJson(event)
-            if (event is Event.PageView && event.screenName != null) {
-                lastScreenName = event.screenName
+            val dataJson = EventSerializer.dataJson(event, config.baseUriOrNull)
+            if (event is Event.PageView && (event.path != null || event.title != null)) {
+                lastPage = PageState(event.title, UrlResolver.resolve(event.path, config.baseUriOrNull))
             }
             // 5. Dedup (SPEC §7): identical payload within 20 min → suppress.
             if (dedupStore.shouldSuppress(wireName, dataJson)) {
@@ -123,6 +124,9 @@ internal class FlowbizCore(
                 appId = config.appId,
                 platform = PLATFORM,
                 sdkVersion = SdkVersion.CURRENT,
+                contextUrl = lastPage?.url,
+                baseUri = config.baseUriOrNull,
+                recoveryUrl = config.recoveryUrl,
             )
             // 7. Durable queue + immediate flush attempt (SPEC §9).
             queue.append(CanonicalJson.render(entry))
@@ -265,6 +269,9 @@ internal class FlowbizCore(
                 appId = config.appId,
                 platform = PLATFORM,
                 sdkVersion = SdkVersion.CURRENT,
+                contextUrl = lastPage?.url,
+                baseUri = config.baseUriOrNull,
+                recoveryUrl = config.recoveryUrl,
                 dataJson = pingDataJson(),
             )
             CanonicalJson.render(entry)
@@ -275,9 +282,11 @@ internal class FlowbizCore(
     }
 
     private fun pingDataJson(): String {
-        val screenName = lastScreenName ?: return "{}"
-        val page = JSONObject().put("title", screenName).put("url", "app://$screenName")
-        return CanonicalJson.render(JSONObject().put("page", page))
+        val page = lastPage ?: return "{}"
+        val obj = JSONObject()
+        if (page.title != null) obj.put("title", page.title)
+        if (page.url != null) obj.put("url", page.url)
+        return CanonicalJson.render(JSONObject().put("page", obj))
     }
 
     // MARK: internal raw events (SPEC §10.1)
@@ -333,6 +342,9 @@ internal class FlowbizCore(
                 appId = config.appId,
                 platform = PLATFORM,
                 sdkVersion = SdkVersion.CURRENT,
+                contextUrl = lastPage?.url,
+                baseUri = config.baseUriOrNull,
+                recoveryUrl = config.recoveryUrl,
             )
             queue.append(CanonicalJson.render(entry))
             flushController.requestFlush(FlushController.FlushReason.EVENT_TRACKED)

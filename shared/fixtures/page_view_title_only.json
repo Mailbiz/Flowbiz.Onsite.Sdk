@@ -1,0 +1,11 @@
+{
+  "name": "page_view_title_only",
+  "event": "pageView",
+  "baseUri": "https://www.belamodastore.com.br",
+  "input": { "title": "Home" },
+  "expected": {
+    "wire_event": "page.view",
+    "data": { "page": { "title": "Home" } },
+    "data_canonical": "{\"page\":{\"title\":\"Home\"}}"
+  }
+}

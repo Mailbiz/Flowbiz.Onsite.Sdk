@@ -48,7 +48,7 @@ enum FixtureSupport {
     static func buildEvent(_ eventName: String, input: [String: Any]) throws -> Event {
         switch eventName {
         case "pageView":
-            return .pageView(screenName: input["screenName"] as? String)
+            return .pageView(path: input["path"] as? String, title: input["title"] as? String)
         case "accountLogin":
             return .accountLogin(user: try user(try object(input, "user")))
         case "accountSync":

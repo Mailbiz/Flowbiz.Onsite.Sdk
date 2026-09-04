@@ -31,20 +31,20 @@ Branding is **Flowbiz**: entry point `Flowbiz`, Android package `com.flowbiz.ons
 
 ```kotlin
 // Android — all entry points @JvmStatic (Java host apps supported)
-Flowbiz.initialize(context, FlowbizConfig(appId = "77777", /* optional: */ collectorUrl, debug, heartbeatIntervalSeconds))
+Flowbiz.initialize(context, FlowbizConfig(appId = "77777", baseUri = "https://store.com", /* optional: */ collectorUrl, debug, heartbeatIntervalSeconds, recoveryUrl))
 Flowbiz.track(event)                    // typed event, see §5
 Flowbiz.logout()                        // clears user identity, rotates session, auto-sends push token removal
 Flowbiz.setEnabled(enabled: Boolean)    // opt-out switch, see §12; persisted; default true
 Flowbiz.setPushToken(token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(payload: Map<String, String>): FlowbizPush?   // null = not ours
-Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no mb_recovery param
+Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch)
 Flowbiz.flush()                         // force queue flush (optional nicety, fire-and-forget)
 ```
 
 ```swift
 // iOS — identical semantics
-Flowbiz.initialize(FlowbizConfig(appId: "77777"))
+Flowbiz.initialize(FlowbizConfig(appId: "77777", baseUri: "https://store.com"))
 Flowbiz.track(_ event: Event)
 Flowbiz.logout()
 Flowbiz.setEnabled(_ enabled: Bool)
@@ -62,9 +62,11 @@ No callback/handler registration anywhere. The receiving side is **return-style 
 | Field | Required | Default | Notes |
 |---|---|---|---|
 | `appId` | yes | — | tenant ID, same value as web `app_id` |
+| `baseUri` | yes | — | store origin (`https://store.com`), same as web `baseuri`; prepended to path-only URLs (§5) and sent as `context.baseuri`. Invalid → `""` with a debug warning; path URLs then ship unresolved |
 | `collectorUrl` | no | `https://collector.mailbiz.one` | full base URL; must be HTTPS (ATS / Android cleartext policy) |
 | `debug` | no | `false` | verbose logging; never prints PII (see §12) |
 | `heartbeatIntervalSeconds` (Android) / `heartbeatInterval: TimeInterval` (iOS) | no | 60 s | `page.ping` cadence, matches web `pagePingDelay`. Units are explicit per platform idiom: seconds as a `Long` on Android, `TimeInterval` on iOS. Clamped to the 15 s floor and a defensive 24 h ceiling |
+| `recoveryUrl` | no | — | absolute https URL cart-recovery links land on (`context.recoveryUrl`, web `setRecoveryUrl`); must be on a domain the app claims (§11). Fragment stripped; invalid → omitted |
 
 Session timeout (30 min), dedup window (20 min), queue cap (1000), and connection timeout (5 s) are **internal constants**, not config knobs.
 
@@ -114,7 +116,9 @@ Session timeout (30 min), dedup window (20 min), queue cap (1000), and connectio
         "screen":         "1080x2400",
         "vendor":         "flowbiz-android-sdk",
         "onsite_version": "<sdk version>",
-        "url":            "app://checkout"
+        "url":            "https://store.com/checkout",
+        "baseuri":        "https://store.com",
+        "recoveryUrl":    "https://store.com/carrinho"
       },
       "app_id":    "77777",
       "platform":  "android",
@@ -127,7 +131,7 @@ Session timeout (30 min), dedup window (20 min), queue cap (1000), and connectio
 
 Collector facts this relies on (verified): all fields optional, `platform` free-form, browser-only context fields safely omitted, `ip`/`user_agent` injected server-side from headers, 3 MB max request, disabled tenants return 200 and drop silently.
 
-`context.url` is only present when the event carries a screen name (see `pageView`), as a synthetic `app://<screen-name>` value so URL-shaped downstream consumers keep working.
+`context.baseuri` and `context.recoveryUrl` (when configured) ride on every event, ping and internal event, exactly like the web tracker's payload context — MessageBuilder reads them off the cart event to build recovery links. `context.url` is the resolved URL of the most recent `pageView` carrying a path or title (omitted until then). Every URL-shaped field (`page.url`, product/variant/item `url` and `image_url`) is resolved by the **URL resolver**: a value with a scheme is unchanged, `//host/…` gets `https:`, `/path` becomes `baseUri + path`, `path` becomes `baseUri + "/" + path`; nothing is stripped or encoded.
 
 Timing semantics: `created_at` is set once at `track()` time; `sent_at` is set/updated at **each transmission attempt**, so for retried events the `created_at`→`sent_at` skew reflects real offline latency. Both use the device wall clock.
 
@@ -137,7 +141,7 @@ Single typed entry point: Kotlin sealed class / Swift enum with associated value
 
 | API event | Wire name | Payload |
 |---|---|---|
-| `PageView(screenName?)` | `page.view` | `page: { title?: screenName, url?: "app://<screenName>" }` |
+| `PageView(path?, title?)` | `page.view` | `page: { title?: title, url?: resolve(path) }` |
 | *(automatic)* | `page.ping` | heartbeat, see §8 |
 | `AccountLogin(user)` | `account.login` | `user: { user_id, email, phone?, name?, plan?, created_at? }` |
 | `AccountSync(user)` | `account.sync` | same as login |
@@ -177,7 +181,7 @@ Per event type, the last sent payload is persisted with a timestamp. An identica
 
 ## 8. Heartbeat
 
-While the app is foregrounded, the SDK emits `page.ping` every `heartbeatInterval` (default 60 s) to keep the session alive server-side, matching web `enableActivityTracking`. Stops in background; resumes on foreground. The ping's `data` payload carries `{"page":{"title":"<last named screen>","url":"app://<last named screen>"}}` once a named `pageView` has occurred in the process, and `{}` before.
+While the app is foregrounded, the SDK emits `page.ping` every `heartbeatInterval` (default 60 s) to keep the session alive server-side, matching web `enableActivityTracking`. Stops in background; resumes on foreground. The ping's `data` payload carries `{"page":{"title":"<last title>","url":"<last resolved url>"}}` once a `pageView` with a path or title has occurred in the process, and `{}` before.
 
 `page.ping` is **fire-and-forget**: sent directly when online, dropped on failure, **never persisted to the queue** and exempt from dedup. A flaky network session must not fill the durable queue with heartbeats and evict real events.
 
@@ -216,7 +220,7 @@ A Flowbiz push is an FCM/APNs **data payload** containing the marker key `flowbi
 
 ```json
 {
-  "flowbiz": "{\"v\":1,\"type\":\"cart_recovery\",\"title\":\"Sua sacola te espera!\",\"body\":\"Finalize sua compra...\",\"deep_link\":\"https://store.com?mb_recovery=...\",\"data\":{\"campaign_id\":\"abc123\"}}"
+  "flowbiz": "{\"v\":1,\"type\":\"cart_recovery\",\"title\":\"Sua sacola te espera!\",\"body\":\"Finalize sua compra...\",\"deep_link\":\"https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=...\",\"data\":{\"campaign_id\":\"abc123\"}}"
 }
 ```
 
@@ -228,12 +232,12 @@ Decoded shape:
   "type": "cart_recovery",
   "title": "Sua sacola te espera!",
   "body": "Finalize sua compra...",
-  "deep_link": "https://store.com?mb_recovery=...",
+  "deep_link": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=...",
   "data": { "campaign_id": "abc123" }
 }
 ```
 
-`type` is a free-form string — new push kinds require no SDK update. A cart-recovery push carries its `mb_recovery` link in `deep_link`, reusing the `handleLink` decoder. Size note for the sending backend: the entire APNs payload is capped at **4 KB**, and `deep_link` carries an LZ-compressed cart — the compressed link must be budgeted accordingly. This contract is the spec the future push-sending backend must implement.
+`type` is a free-form string — new push kinds require no SDK update. A cart-recovery push carries its `_mb_cr_` link in `deep_link`, reusing the `handleLink` decoder. Size note for the sending backend: the entire APNs payload is capped at **4 KB**, and `deep_link` carries a base64-encoded cart — the encoded link must be budgeted accordingly. This contract is the spec the future push-sending backend must implement.
 
 ### 10.3 `handlePush`
 `handlePush(rawPayload) -> FlowbizPush?` — parses the marker envelope; returns `FlowbizPush(type, title?, body?, deepLink?, data)` or null if the payload isn't ours (marker absent or undecodable). Called by the app from its `FirebaseMessagingService` / `UNUserNotificationCenter` delegate / launch intent — both on notification tap and on foreground receipt. Presentation and routing are entirely the app's decision.
@@ -243,9 +247,9 @@ Decoded shape:
 `handleLink(url) -> RecoveryPayload?`:
 
 1. App forwards any incoming deep link (App Link / Universal Link entry point).
-2. SDK looks for the `mb_recovery` query parameter.
-3. Value is decoded with a **native port of LZ-string `decompressFromEncodedURIComponent`** (~100 lines, implemented in-SDK on both platforms — no dependency; must pass the shared test vectors, see §14).
-4. Decoded hash `{ t, u, c, its: [[qty, product_id, sku, recovery_properties?]] }` is transformed into:
+2. SDK reads the `_mb_cr_` query parameter and requires `utm_source` containing `mailbiz` or `flowbiz` (web `getRecoveryDataFromQuery` parity).
+3. Value is plain base64 of UTF-8 JSON (`btoa(unescape(encodeURIComponent(json)))` on the web side); percent-encoding, missing padding and `+`→space mangling are tolerated.
+4. Decoded hash `{ t, u, c, its }` → `RecoveryPayload` (unchanged):
 
 ```
 RecoveryPayload {
@@ -255,11 +259,11 @@ RecoveryPayload {
 }
 ```
 
-5. Returns null if the param is absent or undecodable. The app restores the cart however it wants — same self-contained, no-server-round-trip flow as web `mb_recover_cart`.
+5. Returns null if the param is absent, undecodable, `utm_source` invalid, or — once the SDK is initialized — `t` differs from `appId`; before `initialize` the decoder stays pure and skips the tenant check. The app restores the cart however it wants — same self-contained, no-server-round-trip flow as web `mb_recover_cart`.
 
 The SDK does **not** adopt the decoded `userId` as its identity — `handleLink` is pure (see §3) and only returns data. If the recovered user signs in, the app's normal `AccountLogin`/`AccountSync` flow sets identity.
 
-Prerequisite for integrators (documented, not SDK work): recovery links must point at a domain the app claims via App Links / Universal Links. If the app isn't installed, the same URL falls back to the existing web recovery flow.
+Prerequisite for integrators (documented, not SDK work): recovery links must point at a domain the app claims via App Links / Universal Links. If the app isn't installed, the same URL falls back to the existing web recovery flow. The link target is whatever the app configured as `recoveryUrl` (or `baseUri` + the vendor cart path when absent) — see §2. Custom URL schemes must not be used for recovery links: they have no browser fallback.
 
 ## 12. Privacy & compliance
 
@@ -277,7 +281,7 @@ Flowbiz.Onsite.Sdk/
 ├── SPEC.md
 ├── shared/                  # cross-platform contract — the drift guard
 │   ├── fixtures/            #   event input → expected envelope JSON pairs
-│   ├── lzstring-vectors/    #   compressed input → expected recovery payload
+│   ├── recovery-links/      #   link → expected recovery payload (or null)
 │   └── push-samples/        #   raw push payload → expected FlowbizPush
 ├── android/                 # Gradle project: sdk module + demo app
 │   ├── sdk/
@@ -302,7 +306,7 @@ Release engineering:
 
 Two layers (no staging/e2e layer for now):
 
-1. **Shared-fixture unit tests** — both SDKs consume `shared/`: identical event inputs must produce equivalent envelope JSON (ignoring uuids/timestamps), identical LZ-string vectors must decode to identical recovery payloads, identical push samples must parse identically. This is the mechanism that keeps two hand-written SDKs behaviorally identical. **These run in CI on both platforms on every PR** — the drift guard only guards if it's enforced.
+1. **Shared-fixture unit tests** — both SDKs consume `shared/`: identical event inputs must produce equivalent envelope JSON (ignoring uuids/timestamps), identical recovery-link vectors must decode to identical recovery payloads, identical push samples must parse identically. This is the mechanism that keeps two hand-written SDKs behaviorally identical. **These run in CI on both platforms on every PR** — the drift guard only guards if it's enforced.
 2. **Demo apps** — a minimal fake store per platform (product screen, cart, checkout, login) exercising every public API, including deep-link recovery and simulated push payloads.
 
 ## 15. Explicitly out of scope

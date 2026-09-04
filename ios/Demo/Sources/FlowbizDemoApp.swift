@@ -27,8 +27,10 @@ struct FlowbizDemoApp: App {
         #endif
         Flowbiz.initialize(FlowbizConfig(
             appId: "77777",
+            baseUri: "https://www.belamodastore.com.br",          // spec §3: store origin, prepended to path URLs
             collectorUrl: collectorUrl,
-            debug: true
+            debug: true,
+            recoveryUrl: "https://www.belamodastore.com.br/carrinho" // spec §3: where recovery links land (Universal Link domain)
         ))
     }
 

@@ -25,9 +25,8 @@ internal object EnvelopeBuilder {
      * Builds one entry of the envelope `data` array (SPEC §4).
      *
      * - `identity.user_id` is omitted when [userId] is null.
-     * - `context.url` is present only for a [Event.PageView] carrying a
-     *   screen name (`app://<screenName>`); context carries only SPEC §4
-     *   fields — the screen name itself ships as `page.title` inside `data`.
+     * - `context.url` / `context.baseuri` / `context.recoveryUrl` are
+     *   passed in by the core, spec §4; omitted when null or empty.
      * - `data` is a JSON **string** (the payload serialized separately),
      *   not a nested object.
      * - Throws only for non-finite numbers in the payload (see
@@ -55,10 +54,15 @@ internal object EnvelopeBuilder {
         appId: String,
         platform: String,
         sdkVersion: String,
+        contextUrl: String? = null,
+        baseUri: String? = null,
+        recoveryUrl: String? = null,
     ): JSONObject = buildEntry(
         wireName = EventSerializer.wireName(event),
-        dataJson = EventSerializer.dataJson(event),
-        contextUrl = (event as? Event.PageView)?.screenName?.let { "app://$it" },
+        dataJson = EventSerializer.dataJson(event, baseUri),
+        contextUrl = contextUrl,
+        baseUri = baseUri,
+        recoveryUrl = recoveryUrl,
         hash = hash,
         createdAtMillis = createdAtMillis,
         sentAtMillis = sentAtMillis,
@@ -78,9 +82,10 @@ internal object EnvelopeBuilder {
      * Builds a SPEC §8 `page.ping` heartbeat entry. Not part of the [Event]
      * catalog (the heartbeat is automatic, never tracked by the host app).
      * [dataJson] defaults to an empty object; the facade passes the
-     * last-tracked screen as `{"page":{"title":...,"url":"app://..."}}`
+     * last-tracked page as `{"page":{"title":...,"url":...}}`
      * (web semantics: pings describe the current page). Same shape rules as
-     * [build]; no `context.url`.
+     * [build], including `context.url` / `context.baseuri` /
+     * `context.recoveryUrl` passed in by the caller.
      */
     fun buildPing(
         hash: String,
@@ -96,11 +101,16 @@ internal object EnvelopeBuilder {
         appId: String,
         platform: String,
         sdkVersion: String,
+        contextUrl: String? = null,
+        baseUri: String? = null,
+        recoveryUrl: String? = null,
         dataJson: String = "{}",
     ): JSONObject = buildEntry(
         wireName = "page.ping",
         dataJson = dataJson,
-        contextUrl = null,
+        contextUrl = contextUrl,
+        baseUri = baseUri,
+        recoveryUrl = recoveryUrl,
         hash = hash,
         createdAtMillis = createdAtMillis,
         sentAtMillis = sentAtMillis,
@@ -120,7 +130,8 @@ internal object EnvelopeBuilder {
      * Builds an entry for an *internal* raw event — a wire name outside the
      * public [Event] catalog with a pre-rendered `data` JSON string
      * (SPEC §10.1 `push.token.sync` / `push.token.remove`). Same envelope
-     * shape as [build]; no `context.url`.
+     * shape as [build], including `context.url` / `context.baseuri` /
+     * `context.recoveryUrl` passed in by the caller.
      */
     fun buildRaw(
         wireName: String,
@@ -138,10 +149,15 @@ internal object EnvelopeBuilder {
         appId: String,
         platform: String,
         sdkVersion: String,
+        contextUrl: String? = null,
+        baseUri: String? = null,
+        recoveryUrl: String? = null,
     ): JSONObject = buildEntry(
         wireName = wireName,
         dataJson = dataJson,
-        contextUrl = null,
+        contextUrl = contextUrl,
+        baseUri = baseUri,
+        recoveryUrl = recoveryUrl,
         hash = hash,
         createdAtMillis = createdAtMillis,
         sentAtMillis = sentAtMillis,
@@ -161,6 +177,8 @@ internal object EnvelopeBuilder {
         wireName: String,
         dataJson: String,
         contextUrl: String?,
+        baseUri: String?,
+        recoveryUrl: String?,
         hash: String,
         createdAtMillis: Long,
         sentAtMillis: Long,
@@ -195,9 +213,11 @@ internal object EnvelopeBuilder {
             .put("screen", screen)
             .put("vendor", vendor)
             .put("onsite_version", sdkVersion)
-        if (contextUrl != null) {
+        if (!contextUrl.isNullOrEmpty()) {
             context.put("url", contextUrl)
         }
+        if (!baseUri.isNullOrEmpty()) context.put("baseuri", baseUri)
+        if (!recoveryUrl.isNullOrEmpty()) context.put("recoveryUrl", recoveryUrl)
 
         return JSONObject()
             .put("event", wireName)

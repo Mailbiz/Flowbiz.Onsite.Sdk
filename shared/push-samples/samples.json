@@ -33,16 +33,16 @@
     }
   },
   {
-    "name": "cart_recovery_with_real_mb_recovery_deep_link",
+    "name": "cart_recovery_with_real_mb_cr_deep_link",
     "payload": {
-      "flowbiz": "{\"v\":1,\"type\":\"cart_recovery\",\"title\":\"Sua sacola te espera!\",\"body\":\"Finalize sua compra...\",\"deep_link\":\"https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMeWAAdSgHscmyJoCCALxQAbTYk1gaAWxoA7ABZa9msZoC+IALqJhXZDEiKWQ5RWC2PABZH28PIA\",\"data\":{\"campaign_id\":\"cr-42\"}}"
+      "flowbiz": "{\"v\":1,\"type\":\"cart_recovery\",\"title\":\"Sua sacola te espera!\",\"body\":\"Finalize sua compra...\",\"deep_link\":\"https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCIsIntcImNvclwiOlwiQXp1bFwiLFwidGFtYW5ob1wiOlwiUFwifSJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19\",\"data\":{\"campaign_id\":\"cr-42\"}}"
     },
     "expected": {
       "version": 1,
       "type": "cart_recovery",
       "title": "Sua sacola te espera!",
       "body": "Finalize sua compra...",
-      "deepLink": "https://store.com/recover?utm_source=flowbiz&mb_recovery=N4IgLiBcIOx3IA0ICuVUGcCmAnAtAIwBMAzEiAMboUCGOYeNARhXgAxsHkCWYGUAbQEgi5AAoEO5AMoBpAKqEOeMeWAAdSgHscmyJoCCALxQAbTYk1gaAWxoA7ABZa9msZoC+IALqJhXZDEiKWQ5RWC2PABZH28PIA",
+      "deepLink": "https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCIsIntcImNvclwiOlwiQXp1bFwiLFwidGFtYW5ob1wiOlwiUFwifSJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19",
       "data": {
         "campaign_id": "cr-42"
       }

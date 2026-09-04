@@ -1,6 +1,6 @@
 # SPEC §14: the shared-fixture drift guard only guards if it is enforced —
 # both platform jobs run on every PR and push to main. The shared-fixture
-# suites (wire fixtures, LZ-string vectors, push samples) are part of each
+# suites (wire fixtures, recovery links, push samples) are part of each
 # platform's regular unit-test task, so running the unit tests IS running
 # the drift guard; no separate step is needed.
 name: CI
@@ -26,7 +26,7 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       # testDebugUnitTest includes the shared-fixture suites
-      # (WireFixtureTest, LZStringTest, PushParserTest) — SPEC §14 layer 1.
+      # (WireFixtureTest, RecoveryLinkParserTest, PushParserTest) — SPEC §14 layer 1.
       - name: Unit tests, release AAR, lint
         working-directory: android
         run: ./gradlew :sdk:testDebugUnitTest :sdk:assembleRelease :sdk:lint
@@ -52,12 +52,12 @@ jobs:
           swift --version
       # 1) Plain SwiftPM run on the macOS host — fast, no simulator boot.
       #    Includes the shared-fixture suites (WireFixtureSuite,
-      #    LZStringSuite, PushParserSuite) — SPEC §14 layer 1.
+      #    RecoveryLinkSuite, PushParserSuite) — SPEC §14 layer 1.
       - name: swift test (macOS host)
         run: |
           set -euo pipefail
           swift test 2>&1 | tee swift-test.log
-      # Green-wash guard: the full suite is ~191 Swift Testing tests. If the
+      # Green-wash guard: the full suite is ~204 Swift Testing tests. If the
       # toolchain ever compiles the `canImport(Testing)` suites away again,
       # `swift test` still exits 0 — so assert the executed-test count from
       # the "Test run with N tests passed" summary line stays above a floor.

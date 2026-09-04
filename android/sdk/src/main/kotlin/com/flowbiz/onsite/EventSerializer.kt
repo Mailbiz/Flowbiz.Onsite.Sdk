@@ -45,16 +45,16 @@ internal object EventSerializer {
      * The envelope `data` field value: the payload as a canonical JSON string
      * (see [CanonicalJson]). Throws only for non-finite numbers.
      */
-    fun dataJson(event: Event): String = CanonicalJson.render(dataObject(event))
+    fun dataJson(event: Event, baseUri: String? = null): String = CanonicalJson.render(dataObject(event, baseUri))
 
     /** The payload as a JSON object (snake_case keys, nulls omitted). */
-    fun dataObject(event: Event): JSONObject = when (event) {
-        is Event.PageView -> JSONObject().put("page", pageObject(event.screenName))
+    fun dataObject(event: Event, baseUri: String? = null): JSONObject = when (event) {
+        is Event.PageView -> JSONObject().put("page", pageObject(event, baseUri))
         is Event.AccountLogin -> JSONObject().put("user", userObject(event.user))
         is Event.AccountSync -> JSONObject().put("user", userObject(event.user))
-        is Event.ProductView -> JSONObject().put("product", productObject(event.product))
-        is Event.CartSync -> JSONObject().put("cart", cartObject(event.cart))
-        is Event.AddToCart -> JSONObject().put("products", JSONArray(event.products.map { cartItemObject(it) }))
+        is Event.ProductView -> JSONObject().put("product", productObject(event.product, baseUri))
+        is Event.CartSync -> JSONObject().put("cart", cartObject(event.cart, baseUri))
+        is Event.AddToCart -> JSONObject().put("products", JSONArray(event.products.map { cartItemObject(it, baseUri) }))
         is Event.CartItemUpdate -> JSONObject()
             .put("cart_id", event.cartId)
             .put("product_id", event.productId)
@@ -67,20 +67,15 @@ internal object EventSerializer {
             .put("cart_id", event.cartId)
             .put("coupon", event.coupon)
         is Event.CheckoutStep -> JSONObject().put("checkout", checkoutObject(event.checkout))
-        is Event.OrderComplete -> JSONObject().put("order", orderObject(event.order))
+        is Event.OrderComplete -> JSONObject().put("order", orderObject(event.order, baseUri))
         is Event.OrderCancel -> JSONObject()
             .putIfPresent("order_id", event.orderId)
             .putIfPresent("cart_id", event.cartId)
     }
 
-    private fun pageObject(screenName: String?): JSONObject {
-        val page = JSONObject()
-        if (screenName != null) {
-            page.put("title", screenName)
-            page.put("url", "app://$screenName")
-        }
-        return page
-    }
+    private fun pageObject(event: Event.PageView, baseUri: String?): JSONObject = JSONObject()
+        .putIfPresent("title", event.title)
+        .putIfPresent("url", UrlResolver.resolve(event.path, baseUri))
 
     private fun userObject(user: User): JSONObject = JSONObject()
         .put("user_id", user.userId)
@@ -90,26 +85,26 @@ internal object EventSerializer {
         .putIfPresent("plan", user.plan)
         .putIfPresent("created_at", user.createdAt)
 
-    private fun productObject(product: Product): JSONObject = JSONObject()
+    private fun productObject(product: Product, baseUri: String?): JSONObject = JSONObject()
         .put("product_id", product.productId)
-        .putIfPresent("url", product.url)
+        .putIfPresent("url", UrlResolver.resolve(product.url, baseUri))
         .putIfPresent("category", product.category)
         .putIfPresent("brand", product.brand)
-        .put("variants", JSONArray(product.variants.map { variantObject(it) }))
+        .put("variants", JSONArray(product.variants.map { variantObject(it, baseUri) }))
 
-    private fun variantObject(variant: ProductVariant): JSONObject = JSONObject()
+    private fun variantObject(variant: ProductVariant, baseUri: String?): JSONObject = JSONObject()
         .put("sku", variant.sku)
         .put("price", variant.price)
         .putIfPresent("name", variant.name)
-        .putIfPresent("url", variant.url)
-        .putIfPresent("image_url", variant.imageUrl)
+        .putIfPresent("url", UrlResolver.resolve(variant.url, baseUri))
+        .putIfPresent("image_url", UrlResolver.resolve(variant.imageUrl, baseUri))
         .putIfPresent("price_from", variant.priceFrom)
         .putIfPresent("stock", variant.stock)
         .putIfPresent("available", variant.available)
         .putIfPresent("properties", variant.properties?.let { freeFormObject(it) })
         .putIfPresent("recovery_properties", variant.recoveryProperties?.let { freeFormObject(it) })
 
-    private fun cartItemObject(item: CartItem): JSONObject = JSONObject()
+    private fun cartItemObject(item: CartItem, baseUri: String?): JSONObject = JSONObject()
         .put("product_id", item.productId)
         .put("sku", item.sku)
         .put("quantity", item.quantity)
@@ -118,8 +113,8 @@ internal object EventSerializer {
         .putIfPresent("price_from", item.priceFrom)
         .putIfPresent("category", item.category)
         .putIfPresent("brand", item.brand)
-        .putIfPresent("url", item.url)
-        .putIfPresent("image_url", item.imageUrl)
+        .putIfPresent("url", UrlResolver.resolve(item.url, baseUri))
+        .putIfPresent("image_url", UrlResolver.resolve(item.imageUrl, baseUri))
         .putIfPresent("properties", item.properties?.let { freeFormObject(it) })
         .putIfPresent("recovery_properties", item.recoveryProperties?.let { freeFormObject(it) })
 
@@ -133,7 +128,7 @@ internal object EventSerializer {
         .putIfPresent("country", address.country)
         .putIfPresent("neighborhood", address.neighborhood)
 
-    private fun cartObject(cart: Cart): JSONObject = JSONObject()
+    private fun cartObject(cart: Cart, baseUri: String?): JSONObject = JSONObject()
         .put("cart_id", cart.cartId)
         .put("subtotal", cart.subtotal)
         .put("total", cart.total)
@@ -142,7 +137,7 @@ internal object EventSerializer {
         .put("discounts", cart.discounts)
         .putIfPresent("currency", cart.currency)
         .putIfPresent("coupons", cart.coupons?.let { JSONArray(it) })
-        .putIfPresent("items", cart.items?.let { items -> JSONArray(items.map { cartItemObject(it) }) })
+        .putIfPresent("items", cart.items?.let { items -> JSONArray(items.map { cartItemObject(it, baseUri) }) })
         .putIfPresent("delivery_address", cart.deliveryAddress?.let { addressObject(it) })
 
     private fun checkoutObject(checkout: Checkout): JSONObject = JSONObject()
@@ -151,7 +146,7 @@ internal object EventSerializer {
         .put("total_steps", checkout.totalSteps)
         .put("step_name", checkout.stepName)
 
-    private fun orderObject(order: Order): JSONObject = JSONObject()
+    private fun orderObject(order: Order, baseUri: String?): JSONObject = JSONObject()
         .put("cart_id", order.cartId)
         .putIfPresent("order_id", order.orderId)
         .put("subtotal", order.subtotal)
@@ -161,7 +156,7 @@ internal object EventSerializer {
         .put("discounts", order.discounts)
         .putIfPresent("currency", order.currency)
         .putIfPresent("coupons", order.coupons?.let { JSONArray(it) })
-        .putIfPresent("items", order.items?.let { items -> JSONArray(items.map { cartItemObject(it) }) })
+        .putIfPresent("items", order.items?.let { items -> JSONArray(items.map { cartItemObject(it, baseUri) }) })
         .putIfPresent("delivery_address", order.deliveryAddress?.let { addressObject(it) })
         .putIfPresent("payment_methods", order.paymentMethods?.let { methods ->
             JSONArray(methods.map { JSONObject().put("type", it.type).put("amount", it.amount) })

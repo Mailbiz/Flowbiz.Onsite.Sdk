@@ -85,20 +85,63 @@ import Testing
         #expect(identity["anonymous_id"] != nil)
     }
 
-    @Test func contextUrlOnlyForPageViewWithScreenNameAndNeverTitle() throws {
-        let withScreen = try #require(try build(event: .pageView(screenName: "checkout"))["context"] as? [String: Any])
-        #expect(withScreen["url"] as? String == "app://checkout")
-        // Context carries only SPEC §4 fields — no `title`, even for a
-        // pageView with a screen name (it ships as `page.title` inside data).
-        #expect(withScreen["title"] == nil)
+    @Test func contextCarriesUrlBaseUriAndRecoveryUrlWhenGiven() throws {
+        let envelope = try EnvelopeBuilder.build(
+            event: .cartSetCoupon(cartId: "c-1", coupon: "X"),
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+            contextUrl: "https://store.com/checkout",
+            baseUri: "https://store.com",
+            recoveryUrl: "https://store.com/carrinho"
+        )
+        let context = try #require(envelope["context"] as? [String: Any])
+        #expect(context["url"] as? String == "https://store.com/checkout")
+        #expect(context["baseuri"] as? String == "https://store.com")
+        #expect(context["recoveryUrl"] as? String == "https://store.com/carrinho")
+        #expect(context["title"] == nil)
+    }
 
-        let withoutScreen = try #require(try build(event: .pageView(screenName: nil))["context"] as? [String: Any])
-        #expect(withoutScreen["url"] == nil)
-        #expect(withoutScreen["title"] == nil)
+    @Test func contextOmitsUrlBaseUriAndRecoveryUrlByDefault() throws {
+        let context = try #require(try build(event: .pageView(path: "/checkout"))["context"] as? [String: Any])
+        #expect(context["url"] == nil)
+        #expect(context["baseuri"] == nil)
+        #expect(context["recoveryUrl"] == nil)
+    }
 
-        let nonPageView = try #require(try build()["context"] as? [String: Any])
-        #expect(nonPageView["url"] == nil)
-        #expect(nonPageView["title"] == nil)
+    @Test func emptyBaseUriIsOmitted() throws {
+        let envelope = try EnvelopeBuilder.build(
+            event: .cartSetCoupon(cartId: "c-1", coupon: "X"),
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+            baseUri: ""
+        )
+        #expect((envelope["context"] as? [String: Any])?["baseuri"] == nil)
+    }
+
+    /// M4: `context.url` uses the same non-empty guard as `baseuri` /
+    /// `recoveryUrl` — an empty (not nil) `contextUrl` must be omitted too.
+    @Test func emptyContextUrlIsOmitted() throws {
+        let envelope = try EnvelopeBuilder.build(
+            event: .cartSetCoupon(cartId: "c-1", coupon: "X"),
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+            contextUrl: ""
+        )
+        #expect((envelope["context"] as? [String: Any])?["url"] == nil)
+    }
+
+    @Test func buildUsesBaseUriToResolveDataUrls() throws {
+        let envelope = try EnvelopeBuilder.build(
+            event: .pageView(path: "/checkout", title: "Checkout"),
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+            baseUri: "https://store.com"
+        )
+        #expect(envelope["data"] as? String == #"{"page":{"title":"Checkout","url":"https://store.com/checkout"}}"#)
     }
 }
 #endif

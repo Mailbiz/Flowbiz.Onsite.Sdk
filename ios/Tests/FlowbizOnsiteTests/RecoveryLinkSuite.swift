@@ -1,8 +1,5 @@
-// `handleLink` decoding (SPEC §11) — exercised through the public facade
-// (pure, no initialize needed) and the string-level parser. Compressed
-// inputs come from `shared/lzstring-vectors/vectors.json`, generated with
-// the real lz-string library — links built here are byte-identical to
-// web-generated ones.
+// `handleLink` decoding (SPEC §11): the `_mb_cr_` + `utm_source` link the
+// backend emits, pinned by `shared/recovery-links/vectors.json`.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -10,146 +7,157 @@ import Testing
 
 @Suite struct RecoveryLinkSuite {
 
-    static let vectors: [String: String] = {
-        guard let array = try? LZStringSuite.vectors() else { return [:] }
-        var result = [String: String]()
-        for vector in array {
-            if let name = vector["name"] as? String, let compressed = vector["compressed"] as? String {
-                result[name] = compressed
+    static func vectors() throws -> [[String: Any]] {
+        let url = FixtureSupport.sharedDirectory("recovery-links").appendingPathComponent("vectors.json")
+        let data = try Data(contentsOf: url)
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw FixtureSupport.FixtureError("vectors.json: root is not an array")
+        }
+        return array
+    }
+
+    @Test func allSharedVectorsDecodeAsExpected() throws {
+        let vectors = try Self.vectors()
+        #expect(vectors.count >= 20)
+        for vector in vectors {
+            let name = vector["name"] as? String ?? "?"
+            let url = try #require(vector["url"] as? String, "\(name): url")
+            let appId = vector["appId"] as? String
+            let actual = RecoveryLinkParser.parse(url, expectedAppId: appId)
+            if let expected = vector["expected"] as? [String: Any] {
+                let payload = try #require(actual, "\(name): expected a payload")
+                #expect(payload == (try Self.payload(expected)), "\(name)")
+            } else {
+                #expect(actual == nil, "\(name): expected nil")
             }
         }
-        return result
-    }()
-
-    private func vector(_ name: String) throws -> String {
-        guard let compressed = Self.vectors[name] else {
-            throw FixtureSupport.FixtureError("missing vector '\(name)'")
-        }
-        return compressed
     }
-
-    private func link(_ compressed: String) -> String {
-        "https://store.com/recover?utm_source=flowbiz&mb_recovery=\(compressed)"
-    }
-
-    // MARK: end-to-end against real web-generated compressed hashes
 
     /// Purity proof (SPEC §3): the public facade decodes with no initialize.
-    @Test func facadeDecodesRealCompressedBasicHashWithoutInitialize() throws {
-        let url = URL(string: link(try vector("recovery_hash_basic")))
+    @Test func facadeDecodesBasicLinkWithoutInitialize() throws {
+        let vector = try #require(try Self.vectors().first { ($0["name"] as? String) == "basic" })
+        let url = URL(string: try #require(vector["url"] as? String))
         let payload = try #require(Flowbiz.handleLink(url))
         #expect(payload.cartId == "cart-abc-001")
-        #expect(payload.userId == "user-123")
-        #expect(payload.products == [
-            RecoveryProduct(productId: "P100", sku: "SKU-100-P", quantity: 2, recoveryProperties: nil),
-            RecoveryProduct(productId: "P200", sku: "SKU-200-M", quantity: 1, recoveryProperties: nil),
-        ])
-    }
-
-    @Test func decodesRecoveryPropertiesFromJsonStringElement() throws {
-        let payload = try #require(RecoveryLinkParser.parse(link(try vector("recovery_hash_with_recovery_properties"))))
-        #expect(payload.cartId == "cart-77-xyz")
-        #expect(payload.userId == "u-9f2c")
-        #expect(payload.products[0].quantity == 3)
-        #expect(payload.products[0].recoveryProperties == [
-            "cor": "Azul Marinho", "tamanho": "P", "seller": "loja-1",
-        ])
-        #expect(payload.products[1].recoveryProperties == ["cor": "Verde", "tamanho": "GG"])
-    }
-
-    @Test func decodesUnicodeProductData() throws {
-        let payload = try #require(RecoveryLinkParser.parse(link(try vector("recovery_hash_unicode_product_data"))))
-        #expect(payload.userId == "maria@exemplo.com.br")
-        #expect(payload.products[0].productId == "CAMISETA-AÇAÍ")
-        #expect(payload.products[0].recoveryProperties?["nome"] == "Camiseta Açaí 🛒")
-        #expect(payload.products[0].recoveryProperties?["descrição"] == "Tamanho médio — çãõ")
-    }
-
-    @Test func decodesLongCart() throws {
-        let payload = try #require(RecoveryLinkParser.parse(link(try vector("recovery_hash_long_cart_25_items"))))
-        #expect(payload.products.count == 25)
-        #expect(payload.products[0].productId == "PROD-1000")
-        #expect(payload.products[24].productId == "PROD-1024")
-        #expect(payload.products[0].recoveryProperties?["estoque"] == 10)
-    }
-
-    /// Web `parseInt(it[0]) || 1` semantics: "0" → 1, "abc" → 1, missing fields → "".
-    @Test func quantityAndFieldFallbacksMatchWebSemantics() throws {
-        let payload = try #require(RecoveryLinkParser.parse(link(try vector("recovery_hash_quantity_edge_cases"))))
-        let products = payload.products
-        #expect(products.count == 4)
-        #expect(products[0].quantity == 1) // "0" is falsy in JS -> 1
-        #expect(products[1].quantity == 1) // "abc" -> NaN -> 1
-        #expect(products[2].quantity == 4)
-        #expect(products[2].productId == "") // missing -> ""
-        #expect(products[2].sku == "")
-        #expect(products[3].quantity == 2)
-        #expect(products[3].recoveryProperties == nil) // "{not json" -> nil
-    }
-
-    // MARK: URL-encoding tolerance
-
-    @Test func percentEncodedValueDecodes() throws {
-        let compressed = try vector("recovery_hash_basic")
-        let encoded = compressed
-            .replacingOccurrences(of: "+", with: "%2B")
-            .replacingOccurrences(of: "$", with: "%24")
-        #expect(RecoveryLinkParser.parse(link(encoded)) == RecoveryLinkParser.parse(link(compressed)))
-        #expect(RecoveryLinkParser.parse(link(encoded)) != nil)
+        #expect(payload.products.count == 2)
     }
 
     @Test func plusTurnedIntoSpaceStillDecodes() throws {
-        // A naive URL decoder turns '+' into ' '; the decompressor restores it.
-        let compressed = try vector("recovery_hash_basic")
-        let mangled = compressed.replacingOccurrences(of: "+", with: " ")
-        #expect(RecoveryLinkParser.parse(link(mangled)) == RecoveryLinkParser.parse(link(compressed)))
+        // Base64 alphabet contains '+'; a naive decoder turns it into ' '.
+        let json = #"{"t":"77777","u":"u","c":"c","its":[["1","P>>1","S"]]}"#   // '>' forces a '+' in base64
+        let b64 = Data(json.utf8).base64EncodedString()
+        #expect(b64.contains("+"))
+        let mangled = b64.replacingOccurrences(of: "+", with: " ")
+        let link = "https://store.com/c?utm_source=flowbiz&_mb_cr_=\(mangled)"
+        #expect(RecoveryLinkParser.parse(link)?.products.first?.productId == "P>>1")
     }
 
-    @Test func parameterIsFoundAmongOthersAndBeforeFragment() throws {
-        let compressed = try vector("recovery_hash_basic")
-        let url = "https://store.com/p?a=1&mb_recovery=\(compressed)&b=2#section"
-        #expect(RecoveryLinkParser.parse(url) != nil)
-    }
-
-    // MARK: nil paths
-
-    @Test func missingParameterIsNil() {
-        #expect(Flowbiz.handleLink(URL(string: "https://store.com/recover")) == nil)
-        #expect(Flowbiz.handleLink(URL(string: "https://store.com/recover?utm_source=flowbiz")) == nil)
-        #expect(Flowbiz.handleLink(URL(string: "https://store.com/recover?mb_recovery=")) == nil)
-        #expect(Flowbiz.handleLink(nil) == nil)
-    }
-
-    @Test func undecodableValueIsNil() {
-        #expect(RecoveryLinkParser.parse(link("!!!not-compressed!!!")) == nil)
-    }
-
-    /// Web validation parity: t, u and c must be present and non-empty, its non-empty.
-    @Test func invalidHashShapesAreNilWholePayload() throws {
-        for name in [
-            "invalid_hash_missing_u",
-            "invalid_hash_empty_c",
-            "invalid_hash_empty_its",
-            "invalid_hash_its_not_array",
-            "invalid_hash_not_json",
-        ] {
-            #expect(RecoveryLinkParser.parse(link(try vector(name))) == nil, "vector '\(name)' must map to nil")
-        }
-    }
-
-    /// Never-throw fuzz over whole URLs.
-    @Test func randomGarbageUrlsNeverCrash() {
-        var generator = SplitMix64(seed: 42)
+    /// I3: seeded fuzz over the *decoded* hash JSON (not just URL bytes) —
+    /// `its` and item slots take every adversarial shape SPEC §3 must
+    /// survive (wrong types, huge/negative numbers, deep nesting, giant
+    /// strings). The only assertion is that `parse` returns (nil or a
+    /// payload) instead of throwing/trapping.
+    @Test func adversarialDecodedHashesNeverThrow() {
+        var generator = SplitMix64(seed: 20260902)
         for _ in 0..<300 {
-            var garbage = "https://x.com/?mb_recovery="
-            for _ in 0..<(generator.next() % 60) {
-                if let scalar = UnicodeScalar(UInt32(0x20 + generator.next() % 0x2FDF)) {
-                    garbage.unicodeScalars.append(scalar)
-                }
-            }
-            _ = RecoveryLinkParser.parse(garbage) // must not crash
-            _ = Flowbiz.handleLink(URL(string: garbage))
+            let hash = Self.randomHash(&generator)
+            guard let data = try? JSONSerialization.data(withJSONObject: hash) else { continue }
+            let b64 = data.base64EncodedString()
+            let url = "https://store.com/c?utm_source=flowbiz&_mb_cr_=\(b64)"
+            _ = RecoveryLinkParser.parse(url, expectedAppId: "77777") // must not crash
         }
+    }
+
+    /// One adversarial `{t, u, c, its}` hash. `t`/`u`/`c` may be non-string
+    /// (number/bool/null/empty); `its` may be a non-array, and its items
+    /// may be non-arrays or arrays whose slots are wildly-typed values.
+    private static func randomHash(_ gen: inout SplitMix64) -> [String: Any] {
+        ["t": randomField(&gen), "u": randomField(&gen), "c": randomField(&gen), "its": randomIts(&gen)]
+    }
+
+    private static func randomField(_ gen: inout SplitMix64) -> Any {
+        switch gen.next() % 5 {
+        case 0: return "field-\(gen.next() % 1000)"
+        case 1: return gen.next() % 100_000
+        case 2: return gen.next() % 2 == 0
+        case 3: return NSNull()
+        default: return ""
+        }
+    }
+
+    /// `its`: usually an array of items, occasionally a non-array (object,
+    /// string, number, null) to exercise the "`its` is not an array" path.
+    private static func randomIts(_ gen: inout SplitMix64) -> Any {
+        switch gen.next() % 6 {
+        case 0: return NSNull()
+        case 1: return "not an array"
+        case 2: return gen.next() % 1000
+        case 3: return ["k": "v"]
+        case 4: return []
+        default:
+            var items = [Any]()
+            let count = Int(gen.next() % 4) + 1
+            for _ in 0..<count { items.append(randomItem(&gen)) }
+            return items
+        }
+    }
+
+    /// One `its` element: usually an array of adversarial slot values,
+    /// sometimes a non-array item (garbage — SPEC §3: `guard let item = ...
+    /// as? [Any] else { continue }` must skip it, never trap).
+    private static func randomItem(_ gen: inout SplitMix64) -> Any {
+        if gen.next() % 4 == 0 { return randomSlot(&gen) }
+        var item = [Any]()
+        let slotCount = Int(gen.next() % 5)
+        for _ in 0..<slotCount { item.append(randomSlot(&gen)) }
+        return item
+    }
+
+    /// One `its[i]` slot value (quantity, product id, sku or recovery
+    /// properties position): a huge/negative/out-of-Int32-range number, a
+    /// bool, null, a nested object, a deeply nested array (depth 20), an
+    /// empty string, or a ~10 kB string.
+    private static func randomSlot(_ gen: inout SplitMix64) -> Any {
+        switch gen.next() % 9 {
+        case 0: return 1e30
+        case 1: return -1e30
+        case 2: return 1e308
+        case 3: return gen.next() % 2 == 0
+        case 4: return NSNull()
+        case 5: return ["nested": "object"]
+        case 6:
+            var value: Any = ["leaf"]
+            for _ in 0..<20 { value = [value] }
+            return value
+        case 7: return ""
+        default: return String(repeating: "x", count: 10_000)
+        }
+    }
+
+    @Test func nilAndGarbageNeverThrow() {
+        #expect(Flowbiz.handleLink(nil) == nil)
+        #expect(RecoveryLinkParser.parse("") == nil)
+        #expect(RecoveryLinkParser.parse("?&&=&_mb_cr_&utm_source") == nil)
+    }
+
+    private static func payload(_ json: [String: Any]) throws -> RecoveryPayload {
+        let products = try (json["products"] as? [[String: Any]] ?? []).map { item -> RecoveryProduct in
+            var properties: [String: JSONValue]? = nil
+            if let raw = item["recoveryProperties"] as? [String: Any] {
+                properties = JSONValue.objectFromFoundation(raw)
+            }
+            return RecoveryProduct(
+                productId: try #require(item["productId"] as? String),
+                sku: try #require(item["sku"] as? String),
+                quantity: try #require(item["quantity"] as? Int),
+                recoveryProperties: properties
+            )
+        }
+        return RecoveryPayload(
+            cartId: try #require(json["cartId"] as? String),
+            userId: try #require(json["userId"] as? String),
+            products: products
+        )
     }
 }
 #endif

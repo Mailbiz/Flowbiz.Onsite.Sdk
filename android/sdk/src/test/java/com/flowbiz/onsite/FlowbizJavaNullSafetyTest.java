@@ -27,7 +27,7 @@ public class FlowbizJavaNullSafetyTest {
 
     @Test
     public void initializeWithNullArgumentsIsANoOpNotAnNpe() {
-        Flowbiz.initialize(null, new FlowbizConfig("77777"));
+        Flowbiz.initialize(null, new FlowbizConfig("77777", "https://store.com"));
         Flowbiz.initialize(null, null);
         // No core was installed by the null calls: track stays a silent no-op.
         Flowbiz.track(null);

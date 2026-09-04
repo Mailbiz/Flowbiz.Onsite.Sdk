@@ -19,7 +19,7 @@ import Testing
 @Suite struct FlowbizFacadeSmokeSuite {
 
     @Test func preInitializeCallsAreSilentNoOpsAndNeverThrow() {
-        Flowbiz.track(.pageView(screenName: "home"))
+        Flowbiz.track(.pageView(path: "home"))
         Flowbiz.track(.productView(
             product: Product(productId: "P1", variants: [ProductVariant(sku: "S1", price: .nan)])
         ))
@@ -31,9 +31,9 @@ import Testing
     }
 
     @Test func initializeWithBlankAppIdIsACompleteNoOp() {
-        Flowbiz.initialize(FlowbizConfig(appId: "   "))
+        Flowbiz.initialize(FlowbizConfig(appId: "   ", baseUri: "https://store.com"))
         // Still uninitialized: subsequent calls stay no-ops.
-        Flowbiz.track(.pageView(screenName: "after-blank-init"))
+        Flowbiz.track(.pageView(path: "after-blank-init"))
         Flowbiz.flush()
     }
 }

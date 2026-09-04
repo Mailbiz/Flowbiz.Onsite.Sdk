@@ -1,0 +1,10 @@
+{
+  "name": "page_view_absolute_url_no_base",
+  "event": "pageView",
+  "input": { "path": "https://other.example.com/x", "title": "Externo" },
+  "expected": {
+    "wire_event": "page.view",
+    "data": { "page": { "title": "Externo", "url": "https://other.example.com/x" } },
+    "data_canonical": "{\"page\":{\"title\":\"Externo\",\"url\":\"https://other.example.com/x\"}}"
+  }
+}

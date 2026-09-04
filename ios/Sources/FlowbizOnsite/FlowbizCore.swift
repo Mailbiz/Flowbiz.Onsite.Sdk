@@ -9,7 +9,7 @@ import Foundation
 /// Every entry point hops onto the serial `scheduler` and returns
 /// immediately (SPEC §3): all pipeline work — session touch, serialization,
 /// dedup, queue I/O — is thread-confined to the scheduler queue.
-/// `lastScreenName` and `foregrounded` are scheduler-confined state.
+/// `lastPage` and `foregrounded` are scheduler-confined state.
 ///
 /// ## Never-throw
 /// Each submitted task handles its throwing steps internally (SPEC §3): a
@@ -26,7 +26,7 @@ final class FlowbizCore: @unchecked Sendable {
 
     static let platform = "ios"
 
-    private let config: FlowbizConfig
+    let config: FlowbizConfig
     private let identityStore: IdentityStore
     private let sessionManager: SessionManager
     private let enabledState: EnabledState
@@ -48,11 +48,12 @@ final class FlowbizCore: @unchecked Sendable {
         self?.buildPingEntry()
     }
 
-    /// Screen name of the last `pageView`-with-screenName — feeds the ping
-    /// `page` payload (SPEC §8, web parity). In-memory only by design; also
-    /// refreshed by suppressed duplicate pageViews (the user *is* on that
-    /// screen). Scheduler-confined.
-    private var lastScreenName: String?
+    /// Last page carried by a `pageView` with a path or title — feeds
+    /// `context.url` on every event and the ping `page` payload (spec §4,
+    /// §6). In-memory only; refreshed even by suppressed duplicate
+    /// pageViews (the user *is* on that screen). Scheduler-confined.
+    struct PageState { let title: String?; let url: String? }
+    private var lastPage: PageState?
 
     /// Foreground state (drives heartbeat resume on re-enable). Scheduler-confined.
     private var foregrounded = false
@@ -111,9 +112,9 @@ final class FlowbizCore: @unchecked Sendable {
             do {
                 // 4. Serialize; non-finite numbers throw → drop (SPEC §3).
                 let wireName = EventSerializer.wireName(event)
-                let dataJSON = try EventSerializer.dataJSONString(event)
-                if case .pageView(let screenName) = event, let screenName {
-                    core.lastScreenName = screenName
+                let dataJSON = try EventSerializer.dataJSONString(event, baseUri: core.config.baseUriOrNil)
+                if case .pageView(let path, let title) = event, path != nil || title != nil {
+                    core.lastPage = PageState(title: title, url: UrlResolver.resolve(path, baseUri: core.config.baseUriOrNil))
                 }
                 // 5. Dedup (SPEC §7): identical payload within 20 min → suppress.
                 if core.dedupStore.shouldSuppress(wireName: wireName, dataJSON: dataJSON) {
@@ -136,7 +137,10 @@ final class FlowbizCore: @unchecked Sendable {
                     screen: core.deviceContext.screen(),
                     appId: core.config.appId,
                     platform: Self.platform,
-                    sdkVersion: SDKVersion.current
+                    sdkVersion: SDKVersion.current,
+                    contextUrl: core.lastPage?.url,
+                    baseUri: core.config.baseUriOrNil,
+                    recoveryUrl: core.config.recoveryUrl
                 )
                 // 7. Durable queue + immediate flush attempt (SPEC §9).
                 core.queue.append(try CanonicalJSON.render(entry))
@@ -285,15 +289,20 @@ final class FlowbizCore: @unchecked Sendable {
             appId: config.appId,
             platform: Self.platform,
             sdkVersion: SDKVersion.current,
+            contextUrl: lastPage?.url,
+            baseUri: config.baseUriOrNil,
+            recoveryUrl: config.recoveryUrl,
             dataJSON: pingDataJSON()
         )
         return try? CanonicalJSON.render(entry)
     }
 
     private func pingDataJSON() -> String {
-        guard let screenName = lastScreenName else { return "{}" }
-        let page: [String: Any] = ["title": screenName, "url": "app://\(screenName)"]
-        return (try? CanonicalJSON.render(["page": page])) ?? "{}"
+        guard let page = lastPage else { return "{}" }
+        var object = [String: Any]()
+        if let title = page.title { object["title"] = title }
+        if let url = page.url { object["url"] = url }
+        return (try? CanonicalJSON.render(["page": object])) ?? "{}"
     }
 
     // MARK: - Internal raw events (SPEC §10.1)
@@ -349,7 +358,10 @@ final class FlowbizCore: @unchecked Sendable {
                 screen: deviceContext.screen(),
                 appId: config.appId,
                 platform: Self.platform,
-                sdkVersion: SDKVersion.current
+                sdkVersion: SDKVersion.current,
+                contextUrl: lastPage?.url,
+                baseUri: config.baseUriOrNil,
+                recoveryUrl: config.recoveryUrl
             )
             queue.append(try CanonicalJSON.render(entry))
             flushController.requestFlush(.eventTracked)

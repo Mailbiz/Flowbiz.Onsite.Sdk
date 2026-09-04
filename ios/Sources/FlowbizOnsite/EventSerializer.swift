@@ -39,32 +39,30 @@ enum EventSerializer {
 
     /// The envelope `data` field value: the payload as a canonical JSON
     /// string (see ``CanonicalJSON``). Throws only for non-finite numbers.
-    static func dataJSONString(_ event: Event) throws -> String {
-        try CanonicalJSON.render(dataObject(event))
+    static func dataJSONString(_ event: Event, baseUri: String? = nil) throws -> String {
+        try CanonicalJSON.render(dataObject(event, baseUri: baseUri))
     }
 
     /// The payload as a JSON-compatible dictionary (snake_case keys, nils omitted).
-    static func dataObject(_ event: Event) -> [String: Any] {
+    static func dataObject(_ event: Event, baseUri: String? = nil) -> [String: Any] {
         switch event {
-        case .pageView(let screenName):
+        case .pageView(let path, let title):
             var page = [String: Any]()
-            if let screenName {
-                page["title"] = screenName
-                page["url"] = "app://\(screenName)"
-            }
+            setIfPresent(&page, "title", title)
+            setIfPresent(&page, "url", UrlResolver.resolve(path, baseUri: baseUri))
             return ["page": page]
 
         case .accountLogin(let user), .accountSync(let user):
             return ["user": userObject(user)]
 
         case .productView(let product):
-            return ["product": productObject(product)]
+            return ["product": productObject(product, baseUri: baseUri)]
 
         case .cartSync(let cart):
-            return ["cart": cartObject(cart)]
+            return ["cart": cartObject(cart, baseUri: baseUri)]
 
         case .addToCart(let products):
-            return ["products": products.map(cartItemObject)]
+            return ["products": products.map { cartItemObject($0, baseUri: baseUri) }]
 
         case .cartItemUpdate(let cartId, let productId, let sku, let quantity):
             return [
@@ -91,7 +89,7 @@ enum EventSerializer {
             ]
 
         case .orderComplete(let order):
-            return ["order": orderObject(order)]
+            return ["order": orderObject(order, baseUri: baseUri)]
 
         case .orderCancel(let orderId, let cartId):
             var payload = [String: Any]()
@@ -113,23 +111,23 @@ enum EventSerializer {
         return object
     }
 
-    private static func productObject(_ product: Product) -> [String: Any] {
+    private static func productObject(_ product: Product, baseUri: String?) -> [String: Any] {
         var object: [String: Any] = ["product_id": product.productId]
-        setIfPresent(&object, "url", product.url)
+        setIfPresent(&object, "url", UrlResolver.resolve(product.url, baseUri: baseUri))
         setIfPresent(&object, "category", product.category)
         setIfPresent(&object, "brand", product.brand)
-        object["variants"] = product.variants.map(variantObject)
+        object["variants"] = product.variants.map { variantObject($0, baseUri: baseUri) }
         return object
     }
 
-    private static func variantObject(_ variant: ProductVariant) -> [String: Any] {
+    private static func variantObject(_ variant: ProductVariant, baseUri: String?) -> [String: Any] {
         var object: [String: Any] = [
             "sku": variant.sku,
             "price": variant.price,
         ]
         setIfPresent(&object, "name", variant.name)
-        setIfPresent(&object, "url", variant.url)
-        setIfPresent(&object, "image_url", variant.imageUrl)
+        setIfPresent(&object, "url", UrlResolver.resolve(variant.url, baseUri: baseUri))
+        setIfPresent(&object, "image_url", UrlResolver.resolve(variant.imageUrl, baseUri: baseUri))
         setIfPresent(&object, "price_from", variant.priceFrom)
         setIfPresent(&object, "stock", variant.stock)
         setIfPresent(&object, "available", variant.available)
@@ -138,7 +136,7 @@ enum EventSerializer {
         return object
     }
 
-    private static func cartItemObject(_ item: CartItem) -> [String: Any] {
+    private static func cartItemObject(_ item: CartItem, baseUri: String?) -> [String: Any] {
         var object: [String: Any] = [
             "product_id": item.productId,
             "sku": item.sku,
@@ -149,8 +147,8 @@ enum EventSerializer {
         setIfPresent(&object, "price_from", item.priceFrom)
         setIfPresent(&object, "category", item.category)
         setIfPresent(&object, "brand", item.brand)
-        setIfPresent(&object, "url", item.url)
-        setIfPresent(&object, "image_url", item.imageUrl)
+        setIfPresent(&object, "url", UrlResolver.resolve(item.url, baseUri: baseUri))
+        setIfPresent(&object, "image_url", UrlResolver.resolve(item.imageUrl, baseUri: baseUri))
         setIfPresent(&object, "properties", item.properties.map(freeFormObject))
         setIfPresent(&object, "recovery_properties", item.recoveryProperties.map(freeFormObject))
         return object
@@ -169,7 +167,7 @@ enum EventSerializer {
         return object
     }
 
-    private static func cartObject(_ cart: Cart) -> [String: Any] {
+    private static func cartObject(_ cart: Cart, baseUri: String?) -> [String: Any] {
         var object: [String: Any] = [
             "cart_id": cart.cartId,
             "subtotal": cart.subtotal,
@@ -180,12 +178,12 @@ enum EventSerializer {
         ]
         setIfPresent(&object, "currency", cart.currency)
         setIfPresent(&object, "coupons", cart.coupons)
-        setIfPresent(&object, "items", cart.items.map { $0.map(cartItemObject) })
+        setIfPresent(&object, "items", cart.items.map { $0.map { cartItemObject($0, baseUri: baseUri) } })
         setIfPresent(&object, "delivery_address", cart.deliveryAddress.map(addressObject))
         return object
     }
 
-    private static func orderObject(_ order: Order) -> [String: Any] {
+    private static func orderObject(_ order: Order, baseUri: String?) -> [String: Any] {
         var object: [String: Any] = ["cart_id": order.cartId]
         setIfPresent(&object, "order_id", order.orderId)
         object["subtotal"] = order.subtotal
@@ -195,7 +193,7 @@ enum EventSerializer {
         object["discounts"] = order.discounts
         setIfPresent(&object, "currency", order.currency)
         setIfPresent(&object, "coupons", order.coupons)
-        setIfPresent(&object, "items", order.items.map { $0.map(cartItemObject) })
+        setIfPresent(&object, "items", order.items.map { $0.map { cartItemObject($0, baseUri: baseUri) } })
         setIfPresent(&object, "delivery_address", order.deliveryAddress.map(addressObject))
         setIfPresent(&object, "payment_methods", order.paymentMethods.map { methods in
             methods.map { ["type": $0.type, "amount": $0.amount] as [String: Any] }
