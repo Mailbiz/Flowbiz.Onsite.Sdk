@@ -97,10 +97,8 @@ afterEvaluate {
                     }
                     licenses {
                         license {
-                            // Proprietary placeholder (see /LICENSE at the repo root);
-                            // flagged for legal review before 1.0 (SPEC §13).
-                            name.set("All rights reserved")
-                            url.set("https://github.com/Mailbiz/Flowbiz.Onsite.Sdk/blob/main/LICENSE")
+                            name.set("The Apache License, Version 2.0")
+                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                             distribution.set("repo")
                         }
                     }

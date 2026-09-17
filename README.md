@@ -317,3 +317,7 @@ flowbiz.com.br), the repository secrets `CENTRAL_USERNAME`,
 `CENTRAL_PASSWORD`, `SIGNING_IN_MEMORY_KEY` and
 `SIGNING_IN_MEMORY_KEY_PASSWORD`, and the signing key's public half on a
 keyserver.
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).
