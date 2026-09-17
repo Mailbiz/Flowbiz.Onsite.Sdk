@@ -293,7 +293,7 @@ Flowbiz.Onsite.Sdk/
 └── Package.swift            # SPM manifest at root pointing into ios/
 ```
 
-Distribution: **Maven Central** (`com.flowbiz:onsite-sdk`, Sonatype namespace setup required) and **Swift Package Manager** (git tags on this repo). CocoaPods only if a client asks. Version tags shared (`vX.Y.Z`); the two SDKs version in lockstep.
+Distribution: **Maven Central** (`br.com.flowbiz:onsite-sdk`, Sonatype namespace setup required) and **Swift Package Manager** (git tags on this repo). CocoaPods only if a client asks. Version tags shared (`vX.Y.Z`); the two SDKs version in lockstep.
 
 Release engineering:
 

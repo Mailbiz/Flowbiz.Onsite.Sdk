@@ -4,7 +4,7 @@
 #
 # SKELETON STATUS: this workflow is authored but not yet fully operational.
 # Pending before the first real release (marked TODO below):
-#   - Sonatype Central Portal namespace registration for com.flowbiz
+#   - Sonatype Central Portal namespace registration for br.com.flowbiz
 #   - repository secrets: CENTRAL_USERNAME, CENTRAL_PASSWORD (portal token),
 #     SIGNING_IN_MEMORY_KEY (ASCII-armored GPG private key),
 #     SIGNING_IN_MEMORY_KEY_PASSWORD

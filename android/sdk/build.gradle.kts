@@ -5,11 +5,11 @@ plugins {
     signing
 }
 
-// SPEC §13 distribution coordinates (Maven Central: com.flowbiz:onsite-sdk).
+// SPEC §13 distribution coordinates (Maven Central: br.com.flowbiz:onsite-sdk).
 // The version is kept in lockstep with SdkVersion.CURRENT and the iOS
 // SDKVersion.current; the release workflow asserts all of them match the
 // vX.Y.Z tag before publishing.
-group = "com.flowbiz"
+group = "br.com.flowbiz"
 version = "0.1.0"
 
 android {
@@ -55,7 +55,7 @@ val emptyJavadocJar = tasks.register<Jar>("emptyJavadocJar") {
 publishing {
     repositories {
         // Maven Central via the Sonatype Central Portal's OSSRH-compatible
-        // staging API. TODO(SPEC §13): com.flowbiz namespace registration in
+        // staging API. TODO(SPEC §13): br.com.flowbiz namespace registration in
         // the Central Portal is pending; credentials arrive via CI secrets
         // (CENTRAL_USERNAME / CENTRAL_PASSWORD) — absent locally, which is
         // fine: publishToMavenLocal never touches this repository.
@@ -77,7 +77,7 @@ afterEvaluate {
     publishing {
         publications {
             register<MavenPublication>("release") {
-                groupId = "com.flowbiz"
+                groupId = "br.com.flowbiz"
                 artifactId = "onsite-sdk"
                 version = project.version.toString()
                 from(components["release"])
@@ -90,15 +90,17 @@ afterEvaluate {
                             "tracking with a durable offline queue, session/identity management, " +
                             "push token relay and cart-recovery deep-link decoding."
                     )
-                    // TODO(SPEC §13): placeholder URLs — confirm the public repository
-                    // location before the first Central release.
-                    url.set("https://github.com/flowbiz/flowbiz-onsite-sdk")
+                    url.set("https://github.com/Mailbiz/Flowbiz.Onsite.Sdk")
+                    organization {
+                        name.set("Flowbiz")
+                        url.set("https://www.flowbiz.com.br/")
+                    }
                     licenses {
                         license {
                             // Proprietary placeholder (see /LICENSE at the repo root);
                             // flagged for legal review before 1.0 (SPEC §13).
                             name.set("All rights reserved")
-                            url.set("https://github.com/flowbiz/flowbiz-onsite-sdk/blob/main/LICENSE")
+                            url.set("https://github.com/Mailbiz/Flowbiz.Onsite.Sdk/blob/main/LICENSE")
                             distribution.set("repo")
                         }
                     }
@@ -106,14 +108,15 @@ afterEvaluate {
                         developer {
                             id.set("flowbiz")
                             name.set("Flowbiz")
-                            // TODO(SPEC §13): placeholder contact — set before the first release.
-                            email.set("sdk@flowbiz.example")
+                            email.set("derik.lopez@flowbiz.com.br")
+                            organization.set("Flowbiz")
+                            organizationUrl.set("https://www.flowbiz.com.br/")
                         }
                     }
                     scm {
-                        connection.set("scm:git:git://github.com/flowbiz/flowbiz-onsite-sdk.git")
-                        developerConnection.set("scm:git:ssh://git@github.com/flowbiz/flowbiz-onsite-sdk.git")
-                        url.set("https://github.com/flowbiz/flowbiz-onsite-sdk")
+                        connection.set("scm:git:git://github.com/Mailbiz/Flowbiz.Onsite.Sdk.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/Mailbiz/Flowbiz.Onsite.Sdk.git")
+                        url.set("https://github.com/Mailbiz/Flowbiz.Onsite.Sdk")
                     }
                 }
             }

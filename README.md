@@ -22,7 +22,7 @@ The iOS package bundles a `PrivacyInfo.xcprivacy` privacy manifest.
 
 ```kotlin
 dependencies {
-    implementation("com.flowbiz:onsite-sdk:0.1.0")
+    implementation("br.com.flowbiz:onsite-sdk:0.1.0")
 }
 ```
 
@@ -312,7 +312,7 @@ goes to Maven Central, and the tag itself is the SPM release.
    Central within the hour.
 
 One-time prerequisites, still pending (see the TODOs in `release.yml`): the
-`com.flowbiz` namespace verified in the Central Portal (DNS TXT record on
+`br.com.flowbiz` namespace verified in the Central Portal (DNS TXT record on
 flowbiz.com.br), the repository secrets `CENTRAL_USERNAME`,
 `CENTRAL_PASSWORD`, `SIGNING_IN_MEMORY_KEY` and
 `SIGNING_IN_MEMORY_KEY_PASSWORD`, and the signing key's public half on a
