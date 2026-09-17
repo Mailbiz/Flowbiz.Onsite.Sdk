@@ -25,7 +25,7 @@ Reference implementations:
 
 \* iOS 13 floor retained pending device-share data from the merchant base; revisit raising to iOS 15 before 1.0.
 
-Branding is **Flowbiz**: entry point `Flowbiz`, Android package `com.flowbiz.onsite`, iOS module `FlowbizOnsite`.
+Branding is **Flowbiz**: entry point `Flowbiz`, Android package `br.com.flowbiz.onsite`, iOS module `FlowbizOnsite`.
 
 ## 2. Public API surface (complete)
 
@@ -293,7 +293,7 @@ Flowbiz.Onsite.Sdk/
 └── Package.swift            # SPM manifest at root pointing into ios/
 ```
 
-Distribution: **Maven Central** (`com.flowbiz:onsite-sdk`, Sonatype namespace setup required) and **Swift Package Manager** (git tags on this repo). CocoaPods only if a client asks. Version tags shared (`vX.Y.Z`); the two SDKs version in lockstep.
+Distribution: **Maven Central** (`br.com.flowbiz:onsite-sdk`, Sonatype namespace setup required) and **Swift Package Manager** (git tags on this repo). CocoaPods only if a client asks. Version tags shared (`vX.Y.Z`); the two SDKs version in lockstep.
 
 Release engineering:
 

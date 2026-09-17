@@ -1,4 +1,4 @@
-# Consumer R8/ProGuard rules for com.flowbiz:onsite-sdk (SPEC §13).
+# Consumer R8/ProGuard rules for br.com.flowbiz:onsite-sdk (SPEC §13).
 #
 # Deliberately empty — audited 2026-07 against the full SDK source:
 #

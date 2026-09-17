@@ -3,7 +3,7 @@
 # The generated FlowbizDemo.xcodeproj and Sources/Info.plist are gitignored.
 name: FlowbizDemo
 options:
-  bundleIdPrefix: com.flowbiz.onsite
+  bundleIdPrefix: br.com.flowbiz.onsite
   deploymentTarget:
     iOS: "15.0"
 settings:
@@ -33,6 +33,6 @@ targets:
         #   xcrun simctl openurl booted "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"
         # — or use the in-app "simulate recovery link" button.
         CFBundleURLTypes:
-          - CFBundleURLName: com.flowbiz.onsite.demo
+          - CFBundleURLName: br.com.flowbiz.onsite.demo
             CFBundleURLSchemes:
               - flowbizdemo
