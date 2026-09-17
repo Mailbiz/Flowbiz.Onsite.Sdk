@@ -74,7 +74,7 @@ public enum Flowbiz {
     private final class DebugSinkBox: @unchecked Sendable {
         private let lock = NSLock()
         private var value: @Sendable (String) -> Void = { message in
-            os_log(.debug, log: OSLog(subsystem: "com.flowbiz.onsite", category: "FlowbizOnsite"), "%{public}s", message)
+            os_log(.debug, log: OSLog(subsystem: "br.com.flowbiz.onsite", category: "FlowbizOnsite"), "%{public}s", message)
         }
 
         var current: @Sendable (String) -> Void {
@@ -120,7 +120,7 @@ public enum Flowbiz {
             SdkLog.debug("FlowbizConfig.appId is blank; initialize is a no-op")
             return
         }
-        let serialQueue = DispatchQueue(label: "com.flowbiz.onsite")
+        let serialQueue = DispatchQueue(label: "br.com.flowbiz.onsite")
         // The core is constructed inside the install lock: a concurrent
         // initialize that loses the race must return before building a
         // core at all (its init starts reachability monitoring). The debug

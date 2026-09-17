@@ -54,4 +54,4 @@ root (`path: ../..`) is wired by `project.yml`.
   `recoveryPayload`.
 - **Offline behavior**: the default collectorUrl failing is expected and
   demonstrates the SPEC §9 durable queue + backoff. Logs: os_log subsystem
-  `com.flowbiz.onsite`, category `FlowbizOnsite` (debug=true).
+  `br.com.flowbiz.onsite`, category `FlowbizOnsite` (debug=true).

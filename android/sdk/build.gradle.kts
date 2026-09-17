@@ -13,7 +13,7 @@ group = "br.com.flowbiz"
 version = "0.1.0"
 
 android {
-    namespace = "com.flowbiz.onsite"
+    namespace = "br.com.flowbiz.onsite"
     compileSdk = 35
 
     defaultConfig {

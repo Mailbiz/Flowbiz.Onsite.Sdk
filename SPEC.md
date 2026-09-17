@@ -25,7 +25,7 @@ Reference implementations:
 
 \* iOS 13 floor retained pending device-share data from the merchant base; revisit raising to iOS 15 before 1.0.
 
-Branding is **Flowbiz**: entry point `Flowbiz`, Android package `com.flowbiz.onsite`, iOS module `FlowbizOnsite`.
+Branding is **Flowbiz**: entry point `Flowbiz`, Android package `br.com.flowbiz.onsite`, iOS module `FlowbizOnsite`.
 
 ## 2. Public API surface (complete)
 

@@ -254,7 +254,7 @@ Around the SDK sources:
 ```sh
 cd android
 ./gradlew :sdk:testDebugUnitTest                                   # full suite, incl. shared-fixture tests
-./gradlew :sdk:testDebugUnitTest --tests 'com.flowbiz.onsite.SessionManagerTest'
+./gradlew :sdk:testDebugUnitTest --tests 'br.com.flowbiz.onsite.SessionManagerTest'
 ./gradlew :sdk:testDebugUnitTest :sdk:assembleRelease :sdk:lint    # exactly what CI runs
 ```
 

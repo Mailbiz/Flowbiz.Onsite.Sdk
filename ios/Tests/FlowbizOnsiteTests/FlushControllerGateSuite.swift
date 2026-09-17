@@ -53,7 +53,7 @@ import Testing
     /// `DispatchTaskScheduler` (serial `DispatchQueue`) — real asynchrony,
     /// real ~1 s backoff delay, real serial-queue confinement.
     @Test func drainsRetriesAndSettlesOnARealSerialDispatchQueue() {
-        let serialQueue = DispatchQueue(label: "com.flowbiz.onsite.tests")
+        let serialQueue = DispatchQueue(label: "br.com.flowbiz.onsite.tests")
         let scheduler = DispatchTaskScheduler(queue: serialQueue)
         let queue = EventQueue(fileURL: temporaryQueueFile())
         let sender = FakeHttpSender()
