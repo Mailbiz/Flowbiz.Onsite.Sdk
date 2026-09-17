@@ -300,7 +300,7 @@ Release engineering:
 - Android AAR ships a **consumer R8 rules file** (`consumerProguardFiles`) — empty by audit: the SDK uses no reflection/JNI/name-based serialization, so R8 keeps referenced public APIs automatically; the file is the placeholder where keep rules must land if that ever changes.
 - POM carries complete metadata including the license entry; artifacts are **GPG-signed** for Central.
 - One **CI pipeline releases both platforms from a single `vX.Y.Z` tag**: publish AAR to Central, cut the SPM release.
-- **Decision**: both SDKs are open source under the **Apache License 2.0** (`/LICENSE`, `/NOTICE`; POM license entry matches). The current layout (`Sources/` in this repo) source-distributes the iOS SDK from this public repo, and the Android sources ride along, which is consistent with the license.
+- **Decision**: both SDKs are open source under the **Apache License 2.0** (`/LICENSE`; POM license entry matches). The current layout (`Sources/` in this repo) source-distributes the iOS SDK from this public repo, and the Android sources ride along, which is consistent with the license.
 
 ## 14. Validation
 
