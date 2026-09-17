@@ -17,7 +17,7 @@ on:
 jobs:
   verify-versions:
     name: Tag matches SDK version constants
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       # The two SDKs version in lockstep (SPEC §13); a tag that does not
@@ -55,7 +55,7 @@ jobs:
   android-publish:
     name: Publish AAR to Maven Central
     needs: verify-versions
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -87,7 +87,7 @@ jobs:
   ios-release:
     name: iOS release (SPM = the tag)
     needs: verify-versions
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       # Swift Package Manager consumes the git tag directly — there is no
       # artifact to build or upload for iOS (SPEC §13 source-distributed

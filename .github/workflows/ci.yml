@@ -17,7 +17,7 @@ concurrency:
 jobs:
   android:
     name: Android (ubuntu, JDK 17)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -33,7 +33,7 @@ jobs:
 
   ios:
     name: iOS (macOS 15, Xcode 16.4)
-    runs-on: macos-15
+    runs-on: blacksmith-6vcpu-macos-15
     env:
       # Pin the toolchain explicitly. The test suites are Swift Testing
       # (`#if canImport(Testing)`-guarded): an older Xcode (15.x, Swift 5.10)
