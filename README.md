@@ -211,7 +211,7 @@ public APIs are callable from any thread, and — with the exception of
 ### Where things live
 
 The two SDKs are mirrored file-for-file: the same file name exists under
-`android/sdk/src/main/kotlin/com/flowbiz/onsite/` (Kotlin) and
+`android/sdk/src/main/kotlin/br/com/flowbiz/onsite/` (Kotlin) and
 `ios/Sources/FlowbizOnsite/` (Swift), and every file's header comment names
 the [SPEC.md](SPEC.md) section it implements. Change both sides together.
 
@@ -234,7 +234,7 @@ Around the SDK sources:
   wire payload, byte-for-byte), `recovery-links/` (`handleLink` vectors)
   and `push-samples/` (`handlePush` samples). A change that affects the
   wire starts with a fixture here, so both platforms are held to it.
-- `android/sdk/src/test/kotlin/com/flowbiz/onsite/` — JUnit 4 tests
+- `android/sdk/src/test/kotlin/br/com/flowbiz/onsite/` — JUnit 4 tests
   (`*Test.kt`; doubles in `StateTestDoubles.kt` / `TransportTestDoubles.kt`,
   fixture loading in `FixtureSupport.kt`).
 - `ios/Tests/FlowbizOnsiteTests/` — Swift Testing suites (`*Suite.swift`;
@@ -285,7 +285,7 @@ goes to Maven Central, and the tag itself is the SPM release.
 
 1. **Bump the version** in the three places the release workflow checks —
    all must equal the tag, or nothing is published:
-   - `android/sdk/src/main/kotlin/com/flowbiz/onsite/SdkVersion.kt` (`CURRENT`)
+   - `android/sdk/src/main/kotlin/br/com/flowbiz/onsite/SdkVersion.kt` (`CURRENT`)
    - `ios/Sources/FlowbizOnsite/SDKVersion.swift` (`current`)
    - `android/sdk/build.gradle.kts` (`version`)
 
@@ -294,7 +294,7 @@ goes to Maven Central, and the tag itself is the SPM release.
    mentioned in `android/DATA_DISCLOSURE.md`.
 2. **Dry-run the Android artifact** locally and inspect the POM and AAR:
    `cd android && ./gradlew :sdk:publishToMavenLocal` writes to
-   `~/.m2/repository/com/flowbiz/onsite-sdk/<version>/`.
+   `~/.m2/repository/br/com/flowbiz/onsite-sdk/<version>/`.
 3. **Merge to `main`** through a PR with CI green.
 4. **Tag and push** — this is the release trigger:
 
@@ -305,17 +305,20 @@ goes to Maven Central, and the tag itself is the SPM release.
 
 5. The **Release workflow** (`.github/workflows/release.yml`) verifies the
    tag against the three version constants, runs the Android unit tests,
-   builds and GPG-signs the AAR + sources + javadoc jars and uploads them to
-   Maven Central staging. iOS needs no artifact: SPM resolves the tag.
-6. **Publish the staged deployment** in the Sonatype Central Portal (manual
-   until that step is automated). Artifacts are usually visible on Maven
-   Central within the hour.
+   builds and GPG-signs the AAR + sources + javadoc jars, uploads them
+   through the Central Portal's OSSRH Staging API, and then hands the
+   staging repository to the Portal (`publishing_type=user_managed`).
+   iOS needs no artifact: SPM resolves the tag.
+6. **Publish the deployment** at
+   <https://central.sonatype.com/publishing/deployments>: it appears there
+   after the hand-off step, is validated by Central, and goes out to Maven
+   Central only when you click *Publish* (or is discarded with *Drop*).
+   Artifacts are usually visible on Maven Central within the hour.
 
-One-time prerequisites, still pending (see the TODOs in `release.yml`): the
-`br.com.flowbiz` namespace verified in the Central Portal (DNS TXT record on
-flowbiz.com.br), the repository secrets `CENTRAL_USERNAME`,
-`CENTRAL_PASSWORD`, `SIGNING_IN_MEMORY_KEY` and
-`SIGNING_IN_MEMORY_KEY_PASSWORD`, and the signing key's public half on a
+One-time prerequisites (the `br.com.flowbiz` namespace is already verified
+in the Central Portal): the repository secrets `CENTRAL_USERNAME` and
+`CENTRAL_PASSWORD` (a Central Portal user token), `SIGNING_IN_MEMORY_KEY`
+and `SIGNING_IN_MEMORY_KEY_PASSWORD`, and the signing key's public half on a
 keyserver.
 
 ## License

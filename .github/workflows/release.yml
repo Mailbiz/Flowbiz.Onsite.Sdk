@@ -2,12 +2,20 @@
 # the AAR is published to Maven Central; the iOS release is the git tag
 # itself (SPM resolves it, source-distributed package).
 #
-# SKELETON STATUS: this workflow is authored but not yet fully operational.
-# Pending before the first real release (marked TODO below):
-#   - Sonatype Central Portal namespace registration for br.com.flowbiz
-#   - repository secrets: CENTRAL_USERNAME, CENTRAL_PASSWORD (portal token),
-#     SIGNING_IN_MEMORY_KEY (ASCII-armored GPG private key),
-#     SIGNING_IN_MEMORY_KEY_PASSWORD
+# One-time prerequisites (the br.com.flowbiz namespace is already verified
+# in the Central Portal):
+#   - repository secrets: CENTRAL_USERNAME, CENTRAL_PASSWORD (a Central
+#     Portal user token — OSSRH tokens get 401), SIGNING_IN_MEMORY_KEY
+#     (ASCII-armored GPG private key), SIGNING_IN_MEMORY_KEY_PASSWORD
+#   - the signing key's public half uploaded to a keyserver
+#     (keys.openpgp.org or keyserver.ubuntu.com) — Central validates it
+#
+# Publishing goes through the Portal's OSSRH Staging API compatibility
+# service: Gradle's maven-publish PUTs the artifacts into an implicitly
+# created staging repository, and a final POST hands that repository to the
+# Central Portal, where the deployment is reviewed and released by hand.
+# Without that POST the upload never shows up in the Portal (Sonatype docs:
+# central.sonatype.org/publish/publish-portal-ossrh-staging-api/).
 name: Release
 
 on:
@@ -33,7 +41,7 @@ jobs:
           echo "Tag version: ${TAG_VERSION}"
 
           ANDROID_VERSION=$(sed -nE 's/^[[:space:]]*const val CURRENT: String = "([^"]+)".*/\1/p' \
-            android/sdk/src/main/kotlin/com/flowbiz/onsite/SdkVersion.kt)
+            android/sdk/src/main/kotlin/br/com/flowbiz/onsite/SdkVersion.kt)
           IOS_VERSION=$(sed -nE 's/^[[:space:]]*static let current = "([^"]+)".*/\1/p' \
             ios/Sources/FlowbizOnsite/SDKVersion.swift)
           GRADLE_VERSION=$(sed -nE 's/^version = "([^"]+)".*/\1/p' \
@@ -66,12 +74,11 @@ jobs:
       - name: Unit tests (gate before publishing)
         working-directory: android
         run: ./gradlew :sdk:testDebugUnitTest
-      # TODO(SPEC §13): requires the Central namespace + secrets listed in
-      # the header. Until they exist this step fails at authentication —
-      # intentionally, so a tag can never silently "release" nothing.
-      # Signing activates via the ORG_GRADLE_PROJECT_* properties (see
-      # android/sdk/build.gradle.kts); without them artifacts would be
-      # unsigned and Central would reject them.
+      # Requires the secrets listed in the header. Without them this step
+      # fails at authentication — intentionally, so a tag can never silently
+      # "release" nothing. Signing activates via the ORG_GRADLE_PROJECT_*
+      # properties (see android/sdk/build.gradle.kts); without them the
+      # artifacts would be unsigned and Central would reject them.
       - name: Publish signed artifacts to Central staging
         working-directory: android
         env:
@@ -80,18 +87,38 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
         run: ./gradlew :sdk:publishReleasePublicationToCentralRepository
-      # TODO(SPEC §13): after staging upload, the deployment must be
-      # released in the Central Portal (manually, or automate here via the
-      # portal API once the namespace exists).
+      # The staging API groups the PUTs above into one repository by client
+      # IP, so this hand-off MUST run in the same job (same runner, same IP).
+      # publishing_type=user_managed: the deployment lands in
+      # https://central.sonatype.com/publishing/deployments for a manual
+      # "Publish" (or "Drop") — nothing reaches Maven Central without that
+      # click. Switch to `automatic` to release straight through once the
+      # process is trusted.
+      # Triage: if this step fails, the staging repository is left behind and
+      # blocks later uploads from the same IP — list it with
+      #   GET /manual/search/repositories?ip=any&profile_id=br.com.flowbiz
+      # and DELETE /manual/drop/repository/<key> (same Bearer auth).
+      - name: Hand the staging repository to the Central Portal
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          TOKEN=$(printf '%s:%s' "${CENTRAL_USERNAME}" "${CENTRAL_PASSWORD}" | base64 | tr -d '\n')
+          curl --fail-with-body --silent --show-error -X POST \
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/br.com.flowbiz?publishing_type=user_managed&deployment_name=onsite-sdk-${GITHUB_REF_NAME#v}" \
+            -H "Authorization: Bearer ${TOKEN}"
+          echo
+          echo "Deployment uploaded — review and Publish it at https://central.sonatype.com/publishing/deployments"
 
-  ios-release:
-    name: iOS release (SPM = the tag)
-    needs: verify-versions
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    steps:
-      # Swift Package Manager consumes the git tag directly — there is no
-      # artifact to build or upload for iOS (SPEC §13 source-distributed
-      # decision; this job would become an XCFramework build + upload if
-      # the closed-source option is chosen before 1.0).
-      - name: Nothing to upload
-        run: echo "The vX.Y.Z git tag itself is the iOS release — SPM resolves it."
+  # ios-release:
+  #   name: iOS release (SPM = the tag)
+  #   needs: verify-versions
+  #   runs-on: blacksmith-4vcpu-ubuntu-2404
+  #   steps:
+  #     # Swift Package Manager consumes the git tag directly — there is no
+  #     # artifact to build or upload for iOS (SPEC §13 source-distributed
+  #     # decision; this job would become an XCFramework build + upload if
+  #     # the closed-source option is chosen before 1.0).
+  #     - name: Nothing to upload
+  #       run: echo "The vX.Y.Z git tag itself is the iOS release — SPM resolves it."

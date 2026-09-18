@@ -36,3 +36,6 @@ ios/Demo/Sources/Info.plist
 .worktrees/
 # superpowers SDD scratch
 .superpowers/
+
+# Playwright MCP browser sessions (iOS demo automation)
+.playwright-mcp/
