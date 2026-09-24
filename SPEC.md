@@ -38,7 +38,8 @@ Flowbiz.setEnabled(enabled: Boolean)    // opt-out switch, see §12; persisted; 
 Flowbiz.setPushToken(token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(payload: Map<String, String>): FlowbizPush?   // null = not ours
-Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch)
+Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch); captures the link's UTMs whatever it returns (§11.1)
+Flowbiz.handlePushOpened(push: FlowbizPush): RecoveryPayload?    // the user opened this push: handleLink over its raw deep_link
 Flowbiz.flush()                         // force queue flush (optional nicety, fire-and-forget)
 ```
 
@@ -51,7 +52,8 @@ Flowbiz.setEnabled(_ enabled: Bool)
 Flowbiz.setPushToken(_ token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(_ payload: [AnyHashable: Any]) -> FlowbizPush?
-Flowbiz.handleLink(_ url: URL) -> RecoveryPayload?
+@discardableResult Flowbiz.handleLink(_ url: URL) -> RecoveryPayload?
+@discardableResult Flowbiz.handlePushOpened(_ push: FlowbizPush) -> RecoveryPayload?
 Flowbiz.flush()
 ```
 
@@ -85,7 +87,7 @@ Session timeout (30 min), dedup window (20 min), queue cap (1000), and connectio
 
 - Every public API is callable from any thread.
 - `track()` enqueues and returns immediately; it never blocks the calling thread. All I/O and HTTP run on the SDK's background executor/queue.
-- `handlePush` and `handleLink` are pure, synchronous functions — no I/O, no side effects, safe to call anywhere.
+- `handlePush` is a pure, synchronous function — no I/O, no side effects, safe to call anywhere. `handleLink` and `handlePushOpened` are synchronous and safe to call anywhere too: their decoding is pure, and their single side effect — UTM capture (§11.1) — is handed to the background executor like `track()`, never blocking the caller. Before `initialize` they capture nothing and stay silent.
 - iOS: public types (`Event`, `FlowbizConfig`, `FlowbizPush`, `RecoveryPayload`) are value types conforming to `Sendable` — the SDK is warning-clean under Swift 6 strict concurrency.
 
 ## 4. Wire contract
@@ -118,7 +120,8 @@ Session timeout (30 min), dedup window (20 min), queue cap (1000), and connectio
         "onsite_version": "<sdk version>",
         "url":            "https://store.com/checkout",
         "baseuri":        "https://store.com",
-        "recoveryUrl":    "https://store.com/carrinho"
+        "recoveryUrl":    "https://store.com/carrinho",
+        "utm":            "{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_journey\":\"16\"}"
       },
       "app_id":    "77777",
       "platform":  "android",
@@ -131,7 +134,7 @@ Session timeout (30 min), dedup window (20 min), queue cap (1000), and connectio
 
 Collector facts this relies on (verified): all fields optional, `platform` free-form, browser-only context fields safely omitted, `ip`/`user_agent` injected server-side from headers, 3 MB max request, disabled tenants return 200 and drop silently.
 
-`context.baseuri` and `context.recoveryUrl` (when configured) ride on every event, ping and internal event, exactly like the web tracker's payload context — MessageBuilder reads them off the cart event to build recovery links. `context.url` is the resolved URL of the most recent `pageView` carrying a path or title (omitted until then). Every URL-shaped field (`page.url`, product/variant/item `url` and `image_url`) is resolved by the **URL resolver**: a value with a scheme is unchanged, `//host/…` gets `https:`, `/path` becomes `baseUri + path`, `path` becomes `baseUri + "/" + path`; nothing is stripped or encoded.
+`context.baseuri` and `context.recoveryUrl` (when configured) ride on every event, ping and internal event, exactly like the web tracker's payload context — MessageBuilder reads them off the cart event to build recovery links. `context.utm` (web `setUtmData`) is the JSON **string** of the campaign UTMs captured from links (§11.1) — never an object — on every event, ping and internal event once captured, omitted while there are none; the backend attributes recovered carts from the `utm` of `cart.sync`. `context.url` is the resolved URL of the most recent `pageView` carrying a path or title (omitted until then). Every URL-shaped field (`page.url`, product/variant/item `url` and `image_url`) is resolved by the **URL resolver**: a value with a scheme is unchanged, `//host/…` gets `https:`, `/path` becomes `baseUri + path`, `path` becomes `baseUri + "/" + path`; nothing is stripped or encoded.
 
 Timing semantics: `created_at` is set once at `track()` time; `sent_at` is set/updated at **each transmission attempt**, so for retried events the `created_at`→`sent_at` skew reflects real offline latency. Both use the device wall clock.
 
@@ -174,7 +177,7 @@ Side effect: `AccountLogin`/`AccountSync` also store `user_id`/`email` locally s
 
 Per event type, the last sent payload is persisted with a timestamp. An identical payload for the same event type within **20 minutes** is suppressed; a suppressed duplicate renews the window (renew-on-duplicate), so a continuously repeated identical payload stays suppressed until it pauses for 20 minutes. This deliberately diverges from web: the web tracker (`storage.ts`) keeps its dedup entries under a single **25-minute** storage TTL that is renewed by *any* event, while mobile uses a fixed per-event-type 20-minute window with renew-on-duplicate — a deliberate simplification, not a port.
 
-- **Comparison basis**: the serialized `data` payload string only. Envelope fields (`hash`, `timings`, `identity`, `context`) are excluded — they always differ.
+- **Comparison basis**: the serialized `data` payload string only. Envelope fields (`hash`, `timings`, `identity`, `context`) are excluded — they always differ. A newly captured `context.utm` therefore does not un-suppress an identical payload (web `EventsState` compares `data` only too).
 - **Exempt from dedup**: `page.ping` (it is identical by design every beat; see §8).
 
 **No empty-cart suppression**: a `cartSync` with zero items always sends — emptying a cart is signal, not noise. (Deliberate divergence from web `EventsState`.)
@@ -237,10 +240,10 @@ Decoded shape:
 }
 ```
 
-`type` is a free-form string — new push kinds require no SDK update. A cart-recovery push carries its `_mb_cr_` link in `deep_link`, reusing the `handleLink` decoder. Size note for the sending backend: the entire APNs payload is capped at **4 KB**, and `deep_link` carries a base64-encoded cart — the encoded link must be budgeted accordingly. This contract is the spec the future push-sending backend must implement.
+`type` is a free-form string — new push kinds require no SDK update. A cart-recovery push carries its `_mb_cr_` link in `deep_link`, reusing the `handleLink` decoder. When the user opens the notification, the app calls `handlePushOpened(push)`: it runs `handleLink` over the **raw** `deep_link` string — so its UTMs are captured (§11.1) exactly as Android and web read them, which a `URL` round-trip cannot guarantee on iOS — and returns the tenant-checked recovery payload. `handlePush` itself never captures — receiving a push is not a click. Size note for the sending backend: the entire APNs payload is capped at **4 KB**, and `deep_link` carries a base64-encoded cart — the encoded link must be budgeted accordingly. This contract is the spec the future push-sending backend must implement.
 
 ### 10.3 `handlePush`
-`handlePush(rawPayload) -> FlowbizPush?` — parses the marker envelope; returns `FlowbizPush(type, title?, body?, deepLink?, data)` or null if the payload isn't ours (marker absent or undecodable). Called by the app from its `FirebaseMessagingService` / `UNUserNotificationCenter` delegate / launch intent — both on notification tap and on foreground receipt. Presentation and routing are entirely the app's decision.
+`handlePush(rawPayload) -> FlowbizPush?` — parses the marker envelope; returns `FlowbizPush(type, title?, body?, deepLink?, data)` or null if the payload isn't ours (marker absent or undecodable). Called by the app from its `FirebaseMessagingService` / `UNUserNotificationCenter` delegate / launch intent — both on notification tap and on foreground receipt. Presentation and routing are entirely the app's decision. On tap, the app also calls `handlePushOpened(push)` (§10.2) — it captures the deep link's UTMs and returns the same `RecoveryPayload` as `handleLink`, or null when the push has no decodable `_mb_cr_` link.
 
 ## 11. Cart recovery (receiving)
 
@@ -261,7 +264,24 @@ RecoveryPayload {
 
 5. Returns null if the param is absent, undecodable, `utm_source` invalid, or — once the SDK is initialized — `t` differs from `appId`; before `initialize` the decoder stays pure and skips the tenant check. The app restores the cart however it wants — same self-contained, no-server-round-trip flow as web `mb_recover_cart`.
 
-The SDK does **not** adopt the decoded `userId` as its identity — `handleLink` is pure (see §3) and only returns data. If the recovered user signs in, the app's normal `AccountLogin`/`AccountSync` flow sets identity.
+The SDK does **not** adopt the decoded `userId` as its identity — the decoder is pure (see §3) and only returns data. If the recovered user signs in, the app's normal `AccountLogin`/`AccountSync` flow sets identity.
+
+### 11.1 UTM attribution (web `setUtmNavigationContext` parity)
+
+Every link the app forwards to `handleLink` is a UTM source, exactly like a page URL on web: recovery links, any other campaign link, and the deep link of an opened push (`handlePushOpened`, §10.2). Capture does not depend on the decode result — a link with no `_mb_cr_`, a non-Mailbiz/Flowbiz `utm_source` or a tenant mismatch still has its UTMs captured. The rules are the web tag's (`onsite-core` `Url.getQueryParameters` + `setUtmNavigationContext`), quirks included, pinned by `shared/utm-links/vectors.json`, which is generated from the web code itself:
+
+1. **Extraction** over the link string exactly as delivered (`Uri.toString()` / `URL.absoluteString` / the raw push `deep_link`; no browser-style normalization — web reads the WHATWG-serialized `location.href`, which differs only when a value holds a raw tab or newline (the URL parser removes them) or, for a value that fails to decode, a character the browser percent-encodes (space, `"`, `<`, `>`, `'`, C0 controls, non-ASCII); never for links the backend builds):
+   - The query is the text between the first `?` and the next `?` (or the end), cut at the first `/#`, then at the first `#`. A query inside a hash route (`/#/cart?utm_source=x`) is read; a `?` inside a fragment that follows a real query is not.
+   - Split on `&`, then each pair on `=` (JS `split`: empty parts kept). Key = part 0, raw — not decoded, not lowercased, empty → skipped. Value = `decodeURIComponent(part 1)`: `+` stays `+`, a malformed escape or invalid UTF-8 keeps the raw part, parts after a second `=` are dropped, and a pair with no `=` yields the string `"undefined"`.
+   - The last occurrence of a key wins, an empty value included.
+   - `utm_flow_params` is split on `|` (after decoding) into `utm_step_id`, `utm_journey_version`, `utm_journey_instance` — the first `min(3, n)` parts; missing parts leave their key untouched. The `utm_flow_params` key itself is never kept.
+   - Allowlist, in this order: `utm_source`, `utm_medium`, `utm_campaign`, `utm_journey`, `utm_journey_channel`, `utm_journey_type`, `utm_step_id`, `utm_journey_version`, `utm_journey_instance`. Empty values are dropped; every other key (`utm_term`, `utm_content`, `gclid`, …) is ignored.
+2. **Merge** per key over the stored set (`{...stored, ...current}`): stored keys keep their position and take the new value; new keys are appended in allowlist order. A merge never removes a key.
+3. **Persistence**: the merged set is stored per `appId` (`utm_data`, an ordered `[key, value]` array, plus `utm_expires_at_wall_ms`) with an expiry of now + 30 days on the wall clock, rewritten by every evaluation whose merged set is non-empty — the sliding expiry of web's `tracker_u_<appId>` storage. Valid while `expires − now > 0`; an expired or corrupt entry is removed and reads as empty.
+4. **Evaluation points** — the mobile equivalents of a web visit, each run on the SDK executor and each sliding the expiry: every `handleLink`/`handlePushOpened` (with its link), every foreground transition, and `setEnabled(true)` after a disable while the app is foregrounded (without a link). An evaluation whose merged set is empty writes nothing and clears `context.utm`. `initialize` only **loads** the stored set (dropping it once expired) so it rides from the first event — it does not slide the expiry, because a process start is not a visit (a push or background job wakes the app without the user; the first real foreground transition follows every UI launch); a background re-enable loads the same way. While disabled, an evaluation point only removes an expired set (reading nothing but its expiry), so an opted-out set goes at the first evaluation point past its 30 days instead of being kept indefinitely.
+5. **Wire**: `context.utm` = `JSON.stringify` of the merged set — compact, keys in merge order, a JSON **string** inside `context` (§4). It is stamped on every event, ping and internal event built after the evaluation and omitted when the set is empty; already-queued events keep the value they were built with. `handleLink(url)` followed by `track(…)` from the same thread always carries the link's UTMs.
+6. **Not captured**: before `initialize` (dropped silently — no store is open yet; initialize at launch, before forwarding links, see §3); while disabled (§12); by `handlePush` (§10.2 — `handlePushOpened` captures on tap); from `PageView` paths (web does not re-read UTMs on client-side navigation). `logout()` keeps UTMs — they describe the traffic source, not the user, and web never clears them.
+7. Web drops the stored entry past 20 KB (compressed); not ported — unreachable with real links.
 
 Prerequisite for integrators (documented, not SDK work): recovery links must point at a domain the app claims via App Links / Universal Links. If the app isn't installed, the same URL falls back to the existing web recovery flow. The link target is whatever the app configured as `recoveryUrl` (or `baseUri` + the vendor cart path when absent) — see §2. Custom URL schemes must not be used for recovery links: they have no browser fallback.
 
@@ -271,7 +291,7 @@ The SDK transports PII (`email`, `phone`, `name`, purchase history) — complian
 
 - **iOS privacy manifest**: a `PrivacyInfo.xcprivacy` is bundled in the SPM target (mandatory for third-party SDKs since 2024; missing/incomplete manifests cause App Store rejections for host apps). It must declare: the `UserDefaults` required-reason API (reason `CA92.1`), and the collected data types (contact info, identifiers, purchase/product-interaction data). Exact declarations (`NSPrivacyTracking` in particular) to be finalized with legal review before 1.0.
 - **Android disclosure**: the SDK publishes a data-collection disclosure document so integrators can complete Google Play's **Data safety** form accurately. Registration in Google's **SDK Console** (Play SDK Index) once public.
-- **Opt-out**: `setEnabled(false)` — persisted across launches; while disabled the SDK drops new events, stops the heartbeat, and makes no network calls. Re-enabling resumes normal operation and re-emits `push.token.sync` for a stored push token (see §10.1), so a token registered while disabled is relayed once consent is granted. This is the hook for LGPD/GDPR consent gating; the consent UI/decision itself is the host app's responsibility.
+- **Opt-out**: `setEnabled(false)` — persisted across launches; while disabled the SDK drops new events, stops the heartbeat, makes no network calls, and captures no UTMs from links — stored UTMs are neither read nor refreshed, only removed once expired (§11.1). Re-enabling resumes normal operation and re-emits `push.token.sync` for a stored push token (see §10.1), so a token registered while disabled is relayed once consent is granted. This is the hook for LGPD/GDPR consent gating; the consent UI/decision itself is the host app's responsibility.
 - **Logging**: `debug` logging never prints PII (`email`, `phone`, `name` are redacted).
 
 ## 13. Repo layout & distribution
@@ -282,6 +302,7 @@ Flowbiz.Onsite.Sdk/
 ├── shared/                  # cross-platform contract — the drift guard
 │   ├── fixtures/            #   event input → expected envelope JSON pairs
 │   ├── recovery-links/      #   link → expected recovery payload (or null)
+│   ├── utm-links/           #   link(s) → expected context.utm, generated from the web tag's code
 │   └── push-samples/        #   raw push payload → expected FlowbizPush
 ├── android/                 # Gradle project: sdk module + demo app
 │   ├── sdk/
@@ -306,7 +327,7 @@ Release engineering:
 
 Two layers (no staging/e2e layer for now):
 
-1. **Shared-fixture unit tests** — both SDKs consume `shared/`: identical event inputs must produce equivalent envelope JSON (ignoring uuids/timestamps), identical recovery-link vectors must decode to identical recovery payloads, identical push samples must parse identically. This is the mechanism that keeps two hand-written SDKs behaviorally identical. **These run in CI on both platforms on every PR** — the drift guard only guards if it's enforced.
+1. **Shared-fixture unit tests** — both SDKs consume `shared/`: identical event inputs must produce equivalent envelope JSON (ignoring uuids/timestamps), identical recovery-link vectors must decode to identical recovery payloads, identical UTM-link vectors must produce the web tag's exact `context.utm` string, identical push samples must parse identically. This is the mechanism that keeps two hand-written SDKs behaviorally identical. **These run in CI on both platforms on every PR** — the drift guard only guards if it's enforced.
 2. **Demo apps** — a minimal fake store per platform (product screen, cart, checkout, login) exercising every public API, including deep-link recovery and simulated push payloads.
 
 ## 15. Explicitly out of scope
