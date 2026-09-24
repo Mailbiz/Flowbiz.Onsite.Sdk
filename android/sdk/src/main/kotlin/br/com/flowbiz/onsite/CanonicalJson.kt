@@ -28,7 +28,9 @@ import kotlin.math.abs
  * - **strings**: minimal escaping — only `"` `\` and control characters;
  *   raw slashes, raw unicode
  * - **objects**: keys sorted by UTF-16 code units (deterministic output;
- *   matches Swift's UTF-16 sort and JS `Array.prototype.sort`)
+ *   matches Swift's UTF-16 sort and JS `Array.prototype.sort`) — except
+ *   [renderStringPairs], which keeps the caller's order for the SPEC §11.1
+ *   `context.utm` string
  *
  * Mirrored by the Swift `CanonicalJSON`; both are pinned byte-for-byte by
  * `expected.data_canonical` in `shared/fixtures/`.
@@ -43,6 +45,27 @@ internal object CanonicalJson {
 
     /** Renders an org.json tree as a compact canonical string. */
     fun render(value: Any?): String = buildString { appendValue(this, value) }
+
+    /**
+     * Renders string pairs as one compact JSON object **in the given
+     * order** — byte-identical to `JSON.stringify` of a flat string map
+     * built in that insertion order. The one exception to sorted keys:
+     * SPEC §11.1 `context.utm` must match the web's `JSON.stringify(finalUtms)`
+     * byte for byte, and its key order (stored keys first, new keys in
+     * allowlist order) is part of that string. Same string escaping as
+     * [render]; keys are expected to be distinct (a JS object cannot hold
+     * duplicates).
+     */
+    fun renderStringPairs(pairs: List<Pair<String, String>>): String = buildString {
+        append('{')
+        pairs.forEachIndexed { index, (key, value) ->
+            if (index > 0) append(',')
+            appendString(this, key)
+            append(':')
+            appendString(this, value)
+        }
+        append('}')
+    }
 
     private fun appendValue(out: StringBuilder, value: Any?) {
         when {

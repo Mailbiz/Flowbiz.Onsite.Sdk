@@ -42,7 +42,7 @@ LGPD/GDPR consent gating.
 | Delivery address | `cartSync` / `orderComplete` optional `deliveryAddress`; `cartSetPostalCode` | `data.*.delivery_address`, `data.postal_code` | Only if the host app supplies it |
 | Product interaction | `pageView`, `productView`, `cartSetCoupon`, automatic `page.ping` heartbeat | `data.page` / `data.product` etc. | Screen names, product/SKU views |
 | Push token (FCM registration token) | `setPushToken` / `removePushToken` / `logout()` | `data.token` of `push.token.sync` / `push.token.remove` | Relayed so the Flowbiz backend can message the device |
-| Device/app context | Collected by the SDK | `context.language`, `context.screen` (resolution), `timings.timezone` (UTC offset), platform + SDK version | No hardware identifiers |
+| Device/app context | Collected by the SDK | `context.language`, `context.screen` (resolution), `timings.timezone` (UTC offset), platform + SDK version; `context.utm` (campaign UTM parameters — `utm_source`, `utm_medium`, `utm_campaign`, `utm_journey*`, step/instance — from links the host app forwards to `handleLink` / `handlePushOpened`) | No hardware identifiers; the UTMs describe the campaign that brought the user, not the user |
 | IP address / User-Agent | Not sent by the SDK | Derived server-side from HTTP headers at the collector | Standard for any HTTPS request |
 
 The SDK never accesses: advertising ID (AAID), Android ID, IMEI, location
@@ -54,7 +54,7 @@ normal-level `ACCESS_NETWORK_STATE` permission; the host app must hold
 
 | Storage | Location | Contents | Cleared by |
 |---|---|---|---|
-| SharedPreferences `flowbiz_onsite_<appId>` | App-private storage | `anonymous_id`; `user_id` + `email` (after account events); `session_id`, `visit_count`, `last_activity_wall_ms`; `enabled` opt-out flag; `push_token` (last registered token); `dedup_digest_<event>` / `dedup_at_<event>` (SHA-256 digests of last payloads — digests, not payloads) | `logout()` clears user identity + push token; uninstall clears all |
+| SharedPreferences `flowbiz_onsite_<appId>` | App-private storage | `anonymous_id`; `user_id` + `email` (after account events); `session_id`, `visit_count`, `last_activity_wall_ms`; `enabled` opt-out flag; `push_token` (last registered token); `dedup_digest_<event>` / `dedup_at_<event>` (SHA-256 digests of last payloads — digests, not payloads); `utm_data` + `utm_expires_at_wall_ms` (campaign UTMs captured from links, not captured while disabled) | `logout()` clears user identity + push token (captured UTMs are kept); UTMs are kept until 30 days after the last link (`handleLink`), push tap (`handlePushOpened`), foreground or foreground re-enable that refreshed them — a background launch (e.g. a push waking the app) only reads them; an expired set is deleted (and no longer sent) at the next launch, foreground or link; while opted out (`setEnabled(false)`) they are neither read, refreshed nor sent, and are still removed once expired at the next launch, foreground or link; uninstall clears all |
 | Event queue `files/flowbiz_onsite/<appId>/queue.jsonl` | App-private storage | Pending event envelopes (may contain the PII above) until successfully delivered; capped at 1000 events, compacted after flushes | Successful delivery; uninstall |
 
 All storage is app-private (`MODE_PRIVATE` / app files dir); nothing is
@@ -110,5 +110,6 @@ Additional form answers relevant to the SDK:
 
 With `debug = true` the SDK logs diagnostics via `Log.d("FlowbizOnsite", …)`.
 Logs never contain PII: they carry wire event names, counts, HTTP status
-codes and exception class names — never event payload strings, user fields
-or push tokens (SPEC §12; pinned by `DebugLogRedactionTest`).
+codes and exception class names — never event payload strings, user fields,
+push tokens, or the links passed to `handleLink` / `handlePushOpened` and
+their UTM values (SPEC §12; pinned by `DebugLogRedactionTest`).

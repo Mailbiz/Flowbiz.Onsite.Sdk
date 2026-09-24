@@ -25,9 +25,12 @@ class FlowbizPush internal constructor(
 ) {
 
     /**
-     * `deep_link` as a [Uri], or null when absent. `Uri.parse` is lenient
-     * (it validates nothing), so this is null only for an absent value; any
-     * parse surprise degrades to null with the push still returned.
+     * `deep_link` as a [Uri], or null when absent — for routing (SPEC §10.3:
+     * presentation and routing are the app's). `Uri.parse` is lenient (it
+     * validates nothing), so this is null only for an absent value; any
+     * parse surprise degrades to null with the push still returned. On tap,
+     * call [Flowbiz.handlePushOpened] with this push: it reads the raw
+     * `deep_link` string, not this [Uri].
      */
     val deepLink: Uri?
         get() = try {
@@ -40,7 +43,13 @@ class FlowbizPush internal constructor(
      * Convenience for cart-recovery pushes (SPEC §10.2: the `_mb_cr_`
      * link rides in `deep_link`): the deep link run through the
      * [Flowbiz.handleLink] decoder. Null when there is no deep link or it
-     * carries no decodable `_mb_cr_` value. Pure, like `handleLink`.
+     * carries no decodable `_mb_cr_` value.
+     *
+     * Pure — it captures no UTMs and skips the tenant check, so it is safe
+     * to read on receipt. When the user opens the notification, call
+     * [Flowbiz.handlePushOpened] with this push: it captures the deep link's
+     * campaign UTMs (SPEC §11.1) and returns this same payload with the
+     * tenant check applied.
      */
     val recoveryPayload: RecoveryPayload?
         get() = RecoveryLinkParser.parse(deepLinkString)

@@ -51,4 +51,14 @@ internal object StorageKeys {
 
     /** Last registered push token, kept for logout removal (SPEC §10.1). */
     const val PUSH_TOKEN = "push_token"
+
+    /**
+     * SPEC §11.1 captured UTMs: a JSON array of `[key, value]` string pairs
+     * in merge order (web key order is part of the `context.utm` string, so
+     * an object's unordered keys won't do), plus its wall-clock expiry in
+     * epoch millis — now + 30 days, slid by every evaluation that stores a
+     * non-empty set. Both are written and removed together ([UtmStore]).
+     */
+    const val UTM_DATA = "utm_data"
+    const val UTM_EXPIRES_AT_WALL_MS = "utm_expires_at_wall_ms"
 }

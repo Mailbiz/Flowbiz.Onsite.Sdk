@@ -25,8 +25,10 @@ internal object EnvelopeBuilder {
      * Builds one entry of the envelope `data` array (SPEC §4).
      *
      * - `identity.user_id` is omitted when [userId] is null.
-     * - `context.url` / `context.baseuri` / `context.recoveryUrl` are
-     *   passed in by the core, spec §4; omitted when null or empty.
+     * - `context.url` / `context.baseuri` / `context.recoveryUrl` /
+     *   `context.utm` are passed in by the core, spec §4; omitted when null
+     *   or empty. `context.utm` is the SPEC §11.1 JSON **string** of the
+     *   captured UTMs (web `setUtmData`), already rendered by the caller.
      * - `data` is a JSON **string** (the payload serialized separately),
      *   not a nested object.
      * - Throws only for non-finite numbers in the payload (see
@@ -57,12 +59,14 @@ internal object EnvelopeBuilder {
         contextUrl: String? = null,
         baseUri: String? = null,
         recoveryUrl: String? = null,
+        utm: String? = null,
     ): JSONObject = buildEntry(
         wireName = EventSerializer.wireName(event),
         dataJson = EventSerializer.dataJson(event, baseUri),
         contextUrl = contextUrl,
         baseUri = baseUri,
         recoveryUrl = recoveryUrl,
+        utm = utm,
         hash = hash,
         createdAtMillis = createdAtMillis,
         sentAtMillis = sentAtMillis,
@@ -85,7 +89,7 @@ internal object EnvelopeBuilder {
      * last-tracked page as `{"page":{"title":...,"url":...}}`
      * (web semantics: pings describe the current page). Same shape rules as
      * [build], including `context.url` / `context.baseuri` /
-     * `context.recoveryUrl` passed in by the caller.
+     * `context.recoveryUrl` / `context.utm` passed in by the caller.
      */
     fun buildPing(
         hash: String,
@@ -104,6 +108,7 @@ internal object EnvelopeBuilder {
         contextUrl: String? = null,
         baseUri: String? = null,
         recoveryUrl: String? = null,
+        utm: String? = null,
         dataJson: String = "{}",
     ): JSONObject = buildEntry(
         wireName = "page.ping",
@@ -111,6 +116,7 @@ internal object EnvelopeBuilder {
         contextUrl = contextUrl,
         baseUri = baseUri,
         recoveryUrl = recoveryUrl,
+        utm = utm,
         hash = hash,
         createdAtMillis = createdAtMillis,
         sentAtMillis = sentAtMillis,
@@ -131,7 +137,7 @@ internal object EnvelopeBuilder {
      * public [Event] catalog with a pre-rendered `data` JSON string
      * (SPEC §10.1 `push.token.sync` / `push.token.remove`). Same envelope
      * shape as [build], including `context.url` / `context.baseuri` /
-     * `context.recoveryUrl` passed in by the caller.
+     * `context.recoveryUrl` / `context.utm` passed in by the caller.
      */
     fun buildRaw(
         wireName: String,
@@ -152,12 +158,14 @@ internal object EnvelopeBuilder {
         contextUrl: String? = null,
         baseUri: String? = null,
         recoveryUrl: String? = null,
+        utm: String? = null,
     ): JSONObject = buildEntry(
         wireName = wireName,
         dataJson = dataJson,
         contextUrl = contextUrl,
         baseUri = baseUri,
         recoveryUrl = recoveryUrl,
+        utm = utm,
         hash = hash,
         createdAtMillis = createdAtMillis,
         sentAtMillis = sentAtMillis,
@@ -179,6 +187,7 @@ internal object EnvelopeBuilder {
         contextUrl: String?,
         baseUri: String?,
         recoveryUrl: String?,
+        utm: String?,
         hash: String,
         createdAtMillis: Long,
         sentAtMillis: Long,
@@ -218,6 +227,8 @@ internal object EnvelopeBuilder {
         }
         if (!baseUri.isNullOrEmpty()) context.put("baseuri", baseUri)
         if (!recoveryUrl.isNullOrEmpty()) context.put("recoveryUrl", recoveryUrl)
+        // SPEC §11.1: the JSON *string* of the captured UTMs, never an object.
+        if (!utm.isNullOrEmpty()) context.put("utm", utm)
 
         return JSONObject()
             .put("event", wireName)

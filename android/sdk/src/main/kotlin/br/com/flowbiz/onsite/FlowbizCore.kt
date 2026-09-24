@@ -12,8 +12,9 @@ import java.util.UUID
  * ## Threading
  * Every entry point hops onto the serial [scheduler] and returns
  * immediately (SPEC §3): all pipeline work — session touch, serialization,
- * dedup, queue I/O — is thread-confined to the scheduler thread.
- * [lastPage] and [foregrounded] are scheduler-confined state.
+ * dedup, queue I/O, UTM load/evaluation — is thread-confined to the scheduler
+ * thread. [lastPage], [foregrounded] and [utmContext] are
+ * scheduler-confined state.
  *
  * ## Never-throw
  * Each submitted task is wrapped in a catch-all (SPEC §3): a failure
@@ -64,6 +65,25 @@ internal class FlowbizCore(
     /** Foreground state (drives heartbeat resume on re-enable). Scheduler-confined. */
     private var foregrounded = false
 
+    /**
+     * SPEC §11.1 captured UTMs: [utmStore] persists the merged set with its
+     * sliding 30-day expiry; [utmContext] is the rendered `context.utm`
+     * string stamped on every entry built (null → key omitted). Set by the
+     * read-only loads ([loadUtmContext]: startup, background re-enable) and
+     * recomputed at the evaluation points ([evaluateUtm]) — between them the
+     * value rides as-is, even past the stored expiry, like the web context
+     * that lives for the page's lifetime. Never touched while disabled.
+     * Scheduler-confined.
+     *
+     * Declared **before** the `init` block on purpose: the startup load is
+     * submitted from there, and an inline scheduler (tests) runs it during
+     * construction — state declared after it would still be uninitialized
+     * when the load runs, or re-initialized after it (pinned by
+     * `FlowbizCoreUtmTest`).
+     */
+    private val utmStore = UtmStore(store, clock)
+    private var utmContext: String? = null
+
     init {
         reachability.start {
             try {
@@ -74,6 +94,13 @@ internal class FlowbizCore(
                 SdkLog.debug("network-restored flush failed: ${t.javaClass.simpleName}")
             }
         }
+        // SPEC §11.1 item 4 startup load: the stored UTMs ride from the
+        // first event, but the expiry does not slide — a process start is
+        // not a visit (a push or a background job wakes the app without the
+        // user; every UI launch is followed by a real foreground edge, which
+        // slides it). Keep this the last initializer of the class (see
+        // [utmContext]).
+        submit("utmStartup") { loadUtmContext() }
     }
 
     // MARK: facade entry points (any thread, return immediately, never throw)
@@ -127,6 +154,7 @@ internal class FlowbizCore(
                 contextUrl = lastPage?.url,
                 baseUri = config.baseUriOrNull,
                 recoveryUrl = config.recoveryUrl,
+                utm = utmContext,
             )
             // 7. Durable queue + immediate flush attempt (SPEC §9).
             queue.append(CanonicalJson.render(entry))
@@ -145,6 +173,9 @@ internal class FlowbizCore(
      * — the backend needs to know *whose* token to disassociate. While
      * disabled the event is dropped (SPEC §12) but the local state is still
      * cleared so identity never outlives a logout.
+     *
+     * Captured UTMs are kept (SPEC §11.1 item 6): they describe the traffic
+     * source, not the user, and the web never clears them either.
      */
     fun logout() = submit("logout") {
         pushTokenStore.token?.let { token ->
@@ -195,6 +226,11 @@ internal class FlowbizCore(
             heartbeat.stop()
             SdkLog.debug("SDK disabled: heartbeat stopped, events dropped, network gated")
         } else if (!wasEnabled) {
+            // SPEC §11.1 item 4: nothing was evaluated while disabled —
+            // refresh first, so the re-emitted token sync below carries it.
+            // A re-enable while foregrounded is an evaluation (slides the
+            // expiry); one from the background only loads (not a visit).
+            if (foregrounded) evaluateUtm(link = null) else loadUtmContext()
             if (foregrounded) heartbeat.start(heartbeatIntervalMillis)
             // SPEC §10.1/§12: a token registered while disabled was persisted
             // but its sync event was dropped — re-emit for the stored token
@@ -207,6 +243,14 @@ internal class FlowbizCore(
             SdkLog.debug("SDK re-enabled")
         }
     }
+
+    /**
+     * SPEC §11.1 capture for [Flowbiz.handleLink] (and so for
+     * [Flowbiz.handlePushOpened]): evaluates [link]'s UTMs on the scheduler
+     * — so a `track` issued afterwards from the same thread carries them —
+     * whatever the recovery decode of the link returned.
+     */
+    fun captureUtm(link: String) = submit("captureUtm") { evaluateUtm(link) }
 
     /** SPEC §2 explicit flush; fire-and-forget. */
     fun flush() = submit("flush") {
@@ -222,11 +266,17 @@ internal class FlowbizCore(
     /**
      * App entered foreground. Idempotent — a redundant call (already
      * foregrounded) is ignored so heartbeat cadence isn't reset.
+     *
+     * A real foreground edge is a SPEC §11.1 evaluation point (the web's
+     * per-visit page load): it slides the stored UTMs' expiry — or drops
+     * them once expired — before the heartbeat's first ping. While disabled
+     * it only removes an expired set.
      */
     fun onForeground() = submit("onForeground") {
         if (foregrounded) return@submit
         foregrounded = true
         sessionManager.onForeground()
+        evaluateUtm(link = null)
         if (enabledState.isEnabled) {
             heartbeat.start(heartbeatIntervalMillis)
             flushController.requestFlush(FlushController.FlushReason.APP_FOREGROUND)
@@ -272,6 +322,7 @@ internal class FlowbizCore(
                 contextUrl = lastPage?.url,
                 baseUri = config.baseUriOrNull,
                 recoveryUrl = config.recoveryUrl,
+                utm = utmContext,
                 dataJson = pingDataJson(),
             )
             CanonicalJson.render(entry)
@@ -287,6 +338,71 @@ internal class FlowbizCore(
         if (page.title != null) obj.put("title", page.title)
         if (page.url != null) obj.put("url", page.url)
         return CanonicalJson.render(JSONObject().put("page", obj))
+    }
+
+    // MARK: UTM attribution (SPEC §11.1)
+
+    /**
+     * One SPEC §11.1 evaluation — the web's `setUtmNavigationContext` on a
+     * page load (a visit): merge [link]'s UTMs (none without a link) over
+     * the stored set; an empty merge clears [utmContext] and writes nothing,
+     * otherwise the set is persisted with a fresh 30-day expiry and rendered
+     * as the `context.utm` string. Evaluation points: [captureUtm] (every
+     * `handleLink` / `handlePushOpened`), a real foreground edge and a
+     * re-enable while foregrounded; startup and a background re-enable only
+     * [loadUtmContext].
+     *
+     * While disabled (SPEC §12) nothing is read, refreshed or surfaced —
+     * only an expired set is removed ([UtmStore.purgeIfExpired], which
+     * reads the expiry alone). Scheduler-confined; never throws — a failure
+     * keeps the previous context. Logs counts only: never the link, a value
+     * or the JSON (SPEC §12).
+     */
+    private fun evaluateUtm(link: String?) {
+        try {
+            if (!enabledState.isEnabled) {
+                if (link != null) SdkLog.debug("utm capture skipped: SDK disabled")
+                utmStore.purgeIfExpired()
+                return
+            }
+            val current = link?.let(UtmLinkParser::extract).orEmpty()
+            val merged = UtmLinkParser.merge(utmStore.load(), current)
+            if (merged.isEmpty()) {
+                utmContext = null
+                if (link != null) SdkLog.debug("utm capture: no campaign parameters in link")
+                return
+            }
+            utmStore.save(merged)
+            utmContext = UtmLinkParser.render(merged)
+            SdkLog.debug("utm context set: ${current.size} captured, ${merged.size} active")
+        } catch (t: Throwable) {
+            SdkLog.debug("utm evaluation failed: ${t.javaClass.simpleName}")
+        }
+    }
+
+    /**
+     * The SPEC §11.1 item 4 read-only load — startup and a re-enable from
+     * the background, which are not visits: [utmContext] becomes the stored
+     * set (dropped by [UtmStore.load] once expired or corrupt), rendered,
+     * or null when there is none. Never writes, so the expiry does not
+     * slide.
+     *
+     * While disabled only an expired set is removed
+     * ([UtmStore.purgeIfExpired]) and [utmContext] is left untouched.
+     * Scheduler-confined; never throws — a failure keeps the previous
+     * context.
+     */
+    private fun loadUtmContext() {
+        try {
+            if (!enabledState.isEnabled) {
+                utmStore.purgeIfExpired()
+                return
+            }
+            val stored = utmStore.load()
+            utmContext = if (stored.isEmpty()) null else UtmLinkParser.render(stored)
+        } catch (t: Throwable) {
+            SdkLog.debug("utm load failed: ${t.javaClass.simpleName}")
+        }
     }
 
     // MARK: internal raw events (SPEC §10.1)
@@ -345,6 +461,7 @@ internal class FlowbizCore(
                 contextUrl = lastPage?.url,
                 baseUri = config.baseUriOrNull,
                 recoveryUrl = config.recoveryUrl,
+                utm = utmContext,
             )
             queue.append(CanonicalJson.render(entry))
             flushController.requestFlush(FlushController.FlushReason.EVENT_TRACKED)

@@ -93,11 +93,12 @@ class EnvelopeBuilderTest {
         contextUrl: String? = null,
         baseUri: String? = null,
         recoveryUrl: String? = null,
+        utm: String? = null,
     ): JSONObject = EnvelopeBuilder.build(
         event = event, hash = "h", createdAtMillis = createdAtMillis, sentAtMillis = sentAtMillis,
         timezone = "-03:00", userId = null, anonymousId = "a", sessionId = "s", visitCount = 1,
         language = "pt-BR", screen = "1080x2400", appId = "77777", platform = "android", sdkVersion = "1.0.0",
-        contextUrl = contextUrl, baseUri = baseUri, recoveryUrl = recoveryUrl,
+        contextUrl = contextUrl, baseUri = baseUri, recoveryUrl = recoveryUrl, utm = utm,
     )
 
     @Test
@@ -130,6 +131,47 @@ class EnvelopeBuilderTest {
     @Test
     fun emptyContextUrlIsOmitted() {
         assertFalse(buildWithContext(contextUrl = "").getJSONObject("context").has("url"))
+    }
+
+    // --- context.utm (SPEC §11.1) ---
+
+    private val utm = """{"utm_source":"flowbiz","utm_campaign":"jornadas|cart"}"""
+
+    private fun ping(utm: String?): JSONObject = EnvelopeBuilder.buildPing(
+        hash = "h", createdAtMillis = createdAtMillis, sentAtMillis = sentAtMillis, timezone = "-03:00",
+        userId = null, anonymousId = "a", sessionId = "s", visitCount = 1, language = "pt-BR",
+        screen = "1080x2400", appId = "77777", platform = "android", sdkVersion = "1.0.0", utm = utm,
+    )
+
+    private fun raw(utm: String?): JSONObject = EnvelopeBuilder.buildRaw(
+        wireName = "push.token.sync", dataJson = "{}", hash = "h", createdAtMillis = createdAtMillis,
+        sentAtMillis = sentAtMillis, timezone = "-03:00", userId = null, anonymousId = "a", sessionId = "s",
+        visitCount = 1, language = "pt-BR", screen = "1080x2400", appId = "77777", platform = "android",
+        sdkVersion = "1.0.0", utm = utm,
+    )
+
+    /** `context.utm` is the JSON **string** web sends (`setUtmData`), never a nested object — on every builder. */
+    @Test
+    fun contextCarriesUtmAsAStringOnEventPingAndRawEntries() {
+        for ((name, entry) in listOf("build" to buildWithContext(utm = utm), "ping" to ping(utm), "raw" to raw(utm))) {
+            val value = entry.getJSONObject("context").get("utm")
+            assertTrue("$name: utm must be a String on the wire", value is String)
+            assertEquals(name, utm, value)
+        }
+        assertTrue(
+            CanonicalJson.render(buildWithContext(utm = utm))
+                .contains(""""utm":"{\"utm_source\":\"flowbiz\",\"utm_campaign\":\"jornadas|cart\"}""""),
+        )
+    }
+
+    @Test
+    fun utmOmittedByDefaultAndWhenEmpty() {
+        assertFalse(build().getJSONObject("context").has("utm"))
+        assertFalse(ping(null).getJSONObject("context").has("utm"))
+        assertFalse(raw(null).getJSONObject("context").has("utm"))
+        assertFalse(buildWithContext(utm = "").getJSONObject("context").has("utm"))
+        assertFalse(ping("").getJSONObject("context").has("utm"))
+        assertFalse(raw("").getJSONObject("context").has("utm"))
     }
 
     @Test

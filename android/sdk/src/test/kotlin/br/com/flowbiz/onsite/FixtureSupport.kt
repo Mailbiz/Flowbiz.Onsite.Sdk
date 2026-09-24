@@ -27,6 +27,20 @@ object FixtureSupport {
     fun fixtureFiles(): List<File> =
         fixturesDir().listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
 
+    /**
+     * `shared/utm-links/vectors.json` (SPEC §11.1): the web-generated UTM
+     * ingestion vectors — `extract`, `sequences` and `envelope` (format in
+     * the sibling README).
+     */
+    fun utmLinkVectors(): JSONObject = JSONObject(File(sharedDir("utm-links"), "vectors.json").readText())
+
+    /** The `extract` vector called [name]: its `url` and the web's exact `context.utm` (`expected`). */
+    fun utmExtractVector(name: String): JSONObject {
+        val extract = utmLinkVectors().getJSONArray("extract")
+        return extract.objects().firstOrNull { it.getString("name") == name }
+            ?: error("utm-links extract vector '$name' not found")
+    }
+
     /** Maps a fixture (`event` name + camelCase `input`) onto the typed constructors. */
     fun buildEvent(eventName: String, input: JSONObject): Event = when (eventName) {
         "pageView" -> Event.PageView(path = input.stringOrNull("path"), title = input.stringOrNull("title"))

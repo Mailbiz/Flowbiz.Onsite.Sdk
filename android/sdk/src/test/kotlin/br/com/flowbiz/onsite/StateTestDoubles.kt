@@ -5,16 +5,25 @@ package br.com.flowbiz.onsite
  * device/Robolectric — deliberately not used). Mimics the hardened
  * [SharedPreferencesStore] semantics: a value read back as the wrong type
  * degrades to null, never a throw. [values] is exposed so tests can plant
- * corrupt entries and inspect persistence directly.
+ * corrupt entries and inspect persistence directly; [reads] records every
+ * key read so tests can pin that a key is never read.
  */
 internal class FakeKeyValueStore : KeyValueStore {
 
     val values = mutableMapOf<String, Any>()
 
-    override fun getString(key: String): String? = values[key] as? String
-    override fun getInt(key: String): Int? = values[key] as? Int
-    override fun getLong(key: String): Long? = values[key] as? Long
-    override fun getBoolean(key: String): Boolean? = values[key] as? Boolean
+    /** Keys passed to the getters, in call order. */
+    val reads = mutableListOf<String>()
+
+    private fun read(key: String): Any? {
+        reads += key
+        return values[key]
+    }
+
+    override fun getString(key: String): String? = read(key) as? String
+    override fun getInt(key: String): Int? = read(key) as? Int
+    override fun getLong(key: String): Long? = read(key) as? Long
+    override fun getBoolean(key: String): Boolean? = read(key) as? Boolean
 
     override fun putString(key: String, value: String) { values[key] = value }
     override fun putInt(key: String, value: Int) { values[key] = value }
@@ -42,3 +51,4 @@ internal class FakeClock(
 }
 
 internal const val MINUTE_MS = 60_000L
+internal const val DAY_MS = 24 * 60 * MINUTE_MS
