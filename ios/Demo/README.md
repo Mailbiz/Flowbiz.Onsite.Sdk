@@ -6,9 +6,10 @@ product list → product detail (`product.view`), cart (`cart.add`,
 three-step checkout (`checkout.step`, `order.complete`, `order.cancel`),
 login (`account.login`, `account.sync`, `logout`), a settings/debug panel
 (`setEnabled`, `setPushToken`, `removePushToken`, `flush`, simulated
-`handlePush`) and deep-link recovery (`handleLink`), with `page.view`
-tracked on every screen change. Every `Flowbiz.*` call site carries a
-one-line comment naming the SPEC section it demonstrates.
+`handlePush`, `handlePushOpened`) and deep-link recovery + UTM capture
+(`handleLink`), with `page.view` tracked on every screen change. Every
+`Flowbiz.*` call site carries a one-line comment naming the SPEC section it
+demonstrates.
 
 The demo is intentionally **not** part of the root `Package.swift` build
 graph (an iOS app can't build as a plain SPM target on a macOS host) — it
@@ -44,14 +45,34 @@ root (`path: ../..`) is wired by `project.yml`.
 ## Trying recovery & push
 
 - **Recovery deep link without any infra**: Settings ▸ "Simular link de
-  recuperação" uses the `basic` vector from
-  `shared/recovery-links/vectors.json`.
+  recuperação" opens a MessageBuilder-shaped journey link — the `basic`
+  hash from `shared/recovery-links/vectors.json` plus the full UTM set
+  (`messagebuilder_journey_cart_recovery` in
+  `shared/utm-links/vectors.json`). `handleLink` decodes the cart *and*
+  captures the UTMs (SPEC §11.1): every later event, e.g. the `cart.sync`
+  of "Restaurar carrinho", carries them as `context.utm`
+  (`{"utm_source":"flowbiz","utm_medium":"email","utm_campaign":"jornadas|cart|carrinho-abandonado",…}`);
+  the debug log shows `utm context set: 6 captured, 6 active`. The hash is
+  minted for the demo's placeholder appId `77777`: initialized with any
+  other appId, the tenant check makes `handleLink` return nil (the sheet
+  shows the nil case, no "Restaurar carrinho") while the UTMs are still
+  captured.
 - **Recovery via the OS**: with the app installed in a simulator,
-  `xcrun simctl openurl booted "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"`.
+  `xcrun simctl openurl booted "flowbizdemo://recover?_mb_cr_=<hash>&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas%7Ccart%7Ccarrinho-abandonado&utm_journey_type=1"`.
+  Write `|` as `%7C`: `URL(string:)` rejects a raw `|` on iOS 13–16, and
+  on iOS 17+ a raw `|` makes it re-encode the link's other `%XX` escapes.
+  Any link works for attribution — UTMs are captured even when there is
+  no `_mb_cr_` (e.g. `flowbizdemo://home?utm_source=google&utm_medium=cpc`).
 - **Push without APNs**: Settings ▸ "Simular push" feeds the canned
   SPEC §10.2 payload from `shared/push-samples/samples.json` into
   `Flowbiz.handlePush` and renders the parsed `FlowbizPush`, including its
-  `recoveryPayload`.
+  `recoveryPayload` (pure: no UTM capture, no tenant check). "Abrir
+  notificação" plays the notification tap: `Flowbiz.handlePushOpened(push)`
+  runs `handleLink` over the push's raw `deep_link`, so its UTMs are
+  captured exactly as Android and web read them (a `URL` round trip of
+  `deepLink` cannot guarantee that), and shows the tenant-checked payload
+  it returns — nil with an appId other than `77777`, UTMs still captured.
+  `handlePush` itself never captures: receiving a push is not a click.
 - **Offline behavior**: the default collectorUrl failing is expected and
   demonstrates the SPEC §9 durable queue + backoff. Logs: os_log subsystem
   `br.com.flowbiz.onsite`, category `FlowbizOnsite` (debug=true).

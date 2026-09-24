@@ -29,8 +29,9 @@ targets:
         UILaunchScreen: {}
         # SPEC §11 deep-link entry point. A custom scheme keeps the demo
         # self-contained (a real integration uses Universal Links, which
-        # require an entitlement + apple-app-site-association). Try it with:
-        #   xcrun simctl openurl booted "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"
+        # require an entitlement + apple-app-site-association). Try it with
+        # a MessageBuilder-shaped link (its UTMs are captured, SPEC §11.1):
+        #   xcrun simctl openurl booted "flowbizdemo://recover?_mb_cr_=<hash>&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas%7Ccart%7Ccarrinho-abandonado&utm_journey_type=1"
         # — or use the in-app "simulate recovery link" button.
         CFBundleURLTypes:
           - CFBundleURLName: br.com.flowbiz.onsite.demo

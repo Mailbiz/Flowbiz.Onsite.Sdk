@@ -34,8 +34,15 @@ struct RecoveryView: View {
                     }
                 } else {
                     Section {
-                        Text("Flowbiz.handleLink devolveu nil — o link não carrega um _mb_cr_ decodificável (SPEC §11).")
+                        Text("O SDK devolveu nil — o link não carrega um _mb_cr_ decodificável (SPEC §11).")
                     }
+                }
+                Section(footer: Text(
+                    "UTMs: handleLink / handlePushOpened capturam as UTMs de todo link recebido, com ou sem _mb_cr_ " +
+                    "(SPEC §11.1) — elas seguem como context.utm nos eventos seguintes, inclusive o cart.sync de " +
+                    "\"Restaurar carrinho\" (nada é capturado com o SDK desabilitado)."
+                )) {
+                    EmptyView()
                 }
             }
             .navigationTitle("Recuperação")

@@ -20,6 +20,18 @@ import br.com.flowbiz.onsite.Flowbiz
 import br.com.flowbiz.onsite.RecoveryPayload
 
 /**
+ * Whether [MainActivity.onCreate] should forward its intent's link to
+ * `Flowbiz.handleLink`: only on a fresh launch. A recreation (rotation,
+ * process restore: [restoring]) or a relaunch from Recents
+ * (`FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`) hands back an intent that was
+ * already handled; handling it again would count a click that never
+ * happened and re-capture that old link's UTMs over newer ones (SPEC §11.1:
+ * the latest capture's keys win).
+ */
+internal fun isFreshLinkLaunch(restoring: Boolean, intentFlags: Int): Boolean =
+    !restoring && (intentFlags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
+
+/**
  * Single-activity fake store (SPEC §14): product list → product detail →
  * cart → checkout, plus login, a settings/debug panel and a deep-link
  * recovery screen. Plain programmatic Views — no extra dependencies; the
@@ -82,18 +94,23 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!handleDeepLink(intent)) show(ProductListScreen)
+        val freshLaunch = isFreshLinkLaunch(restoring = savedInstanceState != null, intentFlags = intent.flags)
+        if (!(freshLaunch && handleDeepLink(intent))) show(ProductListScreen)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Keep getIntent() on the latest link, not the one that launched us.
+        setIntent(intent)
         handleDeepLink(intent)
     }
 
     /** SPEC §11 receiving side: forward any incoming link, branch on the return value. */
     private fun handleDeepLink(intent: Intent?): Boolean {
         val uri = intent?.data ?: return false
-        // SPEC §11: pure decoder — null means "no decodable _mb_cr_ param".
+        // SPEC §11: null means "no decodable _mb_cr_ param" (or a tenant
+        // mismatch). SPEC §11.1: the link's UTMs are captured either way and
+        // ride as context.utm from the page.view that show() tracks below.
         val payload = Flowbiz.handleLink(uri)
         show(RecoveryScreen(uri.toString(), payload))
         return true
@@ -300,7 +317,7 @@ class MainActivity : Activity() {
         }
         divider()
         action("Simular push (SPEC §10.2)") { simulatePush() }
-        action("Simular link de recuperação (SPEC §11)") { simulateRecoveryLink() }
+        action("Simular link de recuperação (SPEC §11/§11.1)") { simulateRecoveryLink() }
         divider()
         label(
             "Identidade anônima: o SDK mantém um anonymous_id persistente e um " +
@@ -317,9 +334,13 @@ class MainActivity : Activity() {
 
     private fun renderRecovery(screen: RecoveryScreen): Unit = content("Recuperação de carrinho") {
         label("Link recebido:\n${screen.source}")
+        label(
+            "handleLink / handlePushOpened também capturam as UTMs do link (SPEC §11.1), mesmo quando devolvem null: " +
+                "elas seguem como context.utm nos eventos seguintes (nada é capturado com o SDK desabilitado)."
+        )
         val payload = screen.payload
         if (payload == null) {
-            label("Flowbiz.handleLink devolveu null — o link não carrega um _mb_cr_ decodificável (SPEC §11).", bold = true)
+            label("O SDK devolveu null — o link não carrega um _mb_cr_ decodificável (SPEC §11).", bold = true)
         } else {
             label("RecoveryPayload (SPEC §11):", bold = true)
             label("cartId: ${payload.cartId}\nuserId: ${payload.userId}")
@@ -352,7 +373,8 @@ class MainActivity : Activity() {
             return
         }
         // SPEC §10.2: a cart-recovery push carries _mb_cr_ in deep_link,
-        // decoded by the same §11 parser via recoveryPayload.
+        // decoded by the same §11 parser via recoveryPayload (pure: no UTM
+        // capture, no tenant check — safe on receipt).
         val recovery = push.recoveryPayload
         val message = buildString {
             appendLine("FlowbizPush:")
@@ -367,17 +389,27 @@ class MainActivity : Activity() {
                 else "recoveryPayload: cart ${recovery.cartId}, user ${recovery.userId}, ${recovery.products.size} item(ns)"
             )
         }
-        val openRecovery: (Pair<String, () -> Unit>)? = recovery?.let {
-            "Abrir recuperação" to { show(RecoveryScreen("push deep_link: ${push.deepLink}", it)) }
+        val openNotification: (Pair<String, () -> Unit>)? = push.deepLink?.let { deepLink ->
+            "Abrir notificação" to {
+                // SPEC §10.2/§11.1: opening the notification is the click —
+                // handlePushOpened runs handleLink over the raw deep_link, so
+                // the campaign UTMs are captured (handlePush/recoveryPayload
+                // never capture) and the payload comes back tenant-checked.
+                val opened = Flowbiz.handlePushOpened(push)
+                show(RecoveryScreen("push deep_link: $deepLink", opened))
+            }
         }
-        dialog("Push simulado (SPEC §10)", message, openRecovery)
+        dialog("Push simulado (SPEC §10)", message, openNotification)
     }
 
     private fun simulateRecoveryLink() {
-        // Hash from shared/recovery-links/vectors.json ("basic"):
-        // decodes to cart-abc-001 / user-123 / P100 + P200 — no adb needed.
-        val uri = Uri.parse(DEMO_LINK_PREFIX + RECOVERY_HASH)
-        // SPEC §11: exactly the call the OS deep-link path (onNewIntent) uses.
+        // A MessageBuilder-shaped journey link: the "basic" hash from
+        // shared/recovery-links/vectors.json (cart-abc-001 / user-123 /
+        // P100 + P200) plus a cart-abandonment journey's full UTM set — no
+        // adb needed.
+        val uri = Uri.parse(DEMO_RECOVERY_LINK)
+        // SPEC §11/§11.1: exactly the call the OS deep-link path (onNewIntent)
+        // uses — decodes the cart and captures the UTMs.
         val payload = Flowbiz.handleLink(uri)
         show(RecoveryScreen(uri.toString(), payload))
     }
@@ -443,12 +475,23 @@ class MainActivity : Activity() {
 
         const val FAKE_PUSH_TOKEN = "fake-fcm-token-0123456789abcdef"
 
-        /** Custom demo scheme (see AndroidManifest intent filter). */
-        const val DEMO_LINK_PREFIX = "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_="
-
         /** "basic" vector from shared/recovery-links/vectors.json. */
         const val RECOVERY_HASH =
             "eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19"
+
+        /**
+         * Recovery link on the custom demo scheme (see AndroidManifest intent
+         * filter), shaped like MessageBuilder's journey cart-recovery links
+         * (the `messagebuilder_journey_cart_recovery` vector in
+         * shared/utm-links/): `_mb_cr_` first, then the UTMs appended raw and
+         * unencoded, `|` included, as the backend emits them. `Uri.parse` is
+         * lenient, so the string reaches handleLink unchanged; its
+         * context.utm is
+         * `{"utm_source":"flowbiz","utm_medium":"email","utm_campaign":"jornadas|cart|carrinho-abandonado","utm_journey":"16","utm_journey_channel":"email","utm_journey_type":"1"}`.
+         */
+        const val DEMO_RECOVERY_LINK = "flowbizdemo://recover?_mb_cr_=$RECOVERY_HASH" +
+            "&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email" +
+            "&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1"
 
         /** SPEC §10.2 marker value from shared/push-samples/samples.json. */
         const val SIMULATED_PUSH_MARKER =

@@ -115,6 +115,17 @@ final class DemoStore: ObservableObject {
     static let recoveryHash =
         "eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19"
 
+    /// A recovery link shaped like the ones MessageBuilder emits for a
+    /// cart-abandonment journey email: `_mb_cr_` plus the full UTM set
+    /// (`messagebuilder_journey_cart_recovery` in
+    /// shared/utm-links/vectors.json). The campaign's `|` separators are
+    /// written as `%7C` because `URL(string:)` on iOS 13–16 rejects a raw
+    /// `|` (the SDK decodes it back — context.utm carries
+    /// `jornadas|cart|carrinho-abandonado`).
+    static let recoveryLink =
+        "flowbizdemo://recover?_mb_cr_=\(recoveryHash)&utm_journey=16&utm_journey_channel=email" +
+        "&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas%7Ccart%7Ccarrinho-abandonado&utm_journey_type=1"
+
     /// SPEC §10.2 marker value from shared/push-samples/samples.json
     /// ("cart_recovery_with_real_mb_cr_deep_link").
     static let simulatedPushMarker =
