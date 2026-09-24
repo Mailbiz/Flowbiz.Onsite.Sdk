@@ -48,7 +48,8 @@ Flowbiz.setEnabled(enabled: Boolean)    // opt-out switch, see SPEC §12; persis
 Flowbiz.setPushToken(token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(payload: Map<String, String>): FlowbizPush?   // null = not ours
-Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch)
+Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch); captures the link's UTMs whatever it returns
+Flowbiz.handlePushOpened(push: FlowbizPush): RecoveryPayload?    // the user opened this push: handleLink over its raw deep_link
 Flowbiz.flush()                         // force queue flush (optional nicety, fire-and-forget)
 ```
 
@@ -61,7 +62,8 @@ Flowbiz.setEnabled(_ enabled: Bool)
 Flowbiz.setPushToken(_ token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(_ payload: [AnyHashable: Any]) -> FlowbizPush?
-Flowbiz.handleLink(_ url: URL) -> RecoveryPayload?
+@discardableResult Flowbiz.handleLink(_ url: URL) -> RecoveryPayload?
+@discardableResult Flowbiz.handlePushOpened(_ push: FlowbizPush) -> RecoveryPayload?
 Flowbiz.flush()
 ```
 
@@ -110,13 +112,26 @@ override fun onNewToken(token: String) {
     Flowbiz.setPushToken(token)
 }
 
-// Push receipt — from onMessageReceived (and notification-tap intent extras)
+// Push receipt — from onMessageReceived. Never call handlePushOpened here:
+// receiving a push is not a click
 val push: FlowbizPush? = Flowbiz.handlePush(message.data)
 if (push != null) {
     // push.type, push.title, push.body, push.deepLink, push.data — display/route as you wish
 }
 
-// Deep links — from your launcher/deep-link Activity intent
+// Notification tap — in the Activity the notification opens, from its intent
+// extras: captures the deep link's UTMs (from the raw deep_link) and decodes its
+// recovery link, tenant-checked; route with tappedPush.deepLink as usual
+// (extrasAsMap: your own helper reading back the data map the notification's
+// PendingIntent carried)
+val tappedPush: FlowbizPush? = Flowbiz.handlePush(extrasAsMap(intent.extras))
+val tapped: RecoveryPayload? = Flowbiz.handlePushOpened(tappedPush)
+
+// Deep links — from your launcher/deep-link Activity intent. Forward every
+// link (not only recovery links): its UTMs are captured and reported (SPEC §11.1).
+// Forward each link once: in onCreate only when savedInstanceState == null and the
+// intent lacks FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY, and call setIntent(intent) in
+// onNewIntent — otherwise a rotation re-captures an older link's UTMs.
 val recovery: RecoveryPayload? = Flowbiz.handleLink(intent.data)
 if (recovery != null) {
     // recovery.cartId, recovery.userId, recovery.products[{productId, sku, quantity, recoveryProperties?}]
@@ -147,7 +162,15 @@ if let push = Flowbiz.handlePush(notification.request.content.userInfo) {
     // push.type, push.title, push.body, push.deepLink, push.data
 }
 
-// Universal Links — from scene(_:continue:) / onOpenURL
+// Notification tap (didReceive response) — captures the deep link's UTMs from the
+// raw deep_link (a URL round-trip can alter them) and decodes its recovery link
+if let push = Flowbiz.handlePush(response.notification.request.content.userInfo),
+   let recovery = Flowbiz.handlePushOpened(push) {
+    // restore the cart; route with push.deepLink as usual
+}
+
+// Universal Links — from scene(_:continue:) / onOpenURL. Forward every link
+// (not only recovery links): its UTMs are captured and reported (SPEC §11.1)
 if let recovery = Flowbiz.handleLink(url) {
     // recovery.cartId, recovery.userId, recovery.products — restore the cart
 }
@@ -166,13 +189,32 @@ mobile browser otherwise, and desktop users get the normal web recovery
 flow. The claim files: `https://<domain>/.well-known/apple-app-site-association`
 and `https://<domain>/.well-known/assetlinks.json`.
 
+### Campaign attribution (UTMs)
+
+Every link forwarded to `handleLink` is also read for UTMs, exactly as the
+web tag reads the page URL (SPEC §11.1): `utm_source`, `utm_medium`,
+`utm_campaign`, `utm_journey`, `utm_journey_channel`, `utm_journey_type`
+and `utm_flow_params` (expanded into `utm_step_id`, `utm_journey_version`,
+`utm_journey_instance`). They are merged per key into what earlier links
+left, kept on the device for 30 days after the last visit that refreshed
+them (a link, a push tap or the app coming to the foreground — like a web
+page load; a background launch only reads them), and sent as `context.utm`
+on every event — the backend attributes a recovered cart to its journey
+from the `utm` on `cart.sync`. This works whatever `handleLink` returns, so
+forward campaign links that are not recovery links too, and call
+`handlePushOpened(push)` when a notification is tapped (`handlePush` alone
+captures nothing: a received notification is not a click). Nothing is
+captured before `initialize` or while disabled; while disabled, stored
+UTMs are only removed once expired.
+
 ### Consent / opt-out
 
 `Flowbiz.setEnabled(false)` is the LGPD/GDPR consent hook: persisted across
-launches; while disabled the SDK drops new events, stops the heartbeat and
-makes no network calls. Re-enabling resumes normal operation and re-syncs a
-push token registered while disabled (SPEC §12). The consent UI/decision is
-the host app's responsibility — the SDK collects by default until told
+launches; while disabled the SDK drops new events, stops the heartbeat,
+makes no network calls and captures no UTMs (stored ones are only removed
+once expired). Re-enabling resumes normal operation and re-syncs a push
+token registered while disabled (SPEC §12). The consent UI/decision is the
+host app's responsibility — the SDK collects by default until told
 otherwise.
 
 ## Demo apps
@@ -188,7 +230,8 @@ queue + backoff.
 
 - **Android**: `cd android && ./gradlew :demo:installDebug` (or open in
   Android Studio and run the `demo` configuration). Deep link:
-  `adb shell am start -a android.intent.action.VIEW -d "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"`.
+  `adb shell am start -a android.intent.action.VIEW -d "flowbizdemo://recover?utm_source=flowbiz\&utm_medium=email\&utm_journey=16\&_mb_cr_=<hash>"`
+  (the `\&` keeps the device shell from splitting the command at `&`).
 - **iOS**: `ios/Demo/` is a source set + XcodeGen spec (no checked-in
   `.xcodeproj`): `brew install xcodegen && cd ios/Demo && xcodegen generate && open FlowbizDemo.xcodeproj`.
   Manual-Xcode instructions in [ios/Demo/README.md](ios/Demo/README.md).
@@ -202,8 +245,10 @@ exponential backoff on network restore, app foreground, the next track, or
 20 minutes. A `page.ping` heartbeat (default 60 s, configurable ≥ 15 s)
 runs while foregrounded. Sessions rotate after 30 min of inactivity. All
 public APIs are callable from any thread, and — with the exception of
-`handlePush`/`handleLink`, which are pure parsers that work even before
-`initialize` (SPEC §3/§10/§11) — they are no-ops before `initialize`.
+`handlePush`/`handleLink`/`handlePushOpened`, whose decoding works even
+before `initialize` (SPEC §3/§10/§11) — they are no-ops before `initialize`.
+`handleLink` and `handlePushOpened` also capture the link's UTMs for
+`context.utm` (SPEC §11.1) once initialized.
 `debug = true` logs diagnostics but never PII.
 
 ## Development
@@ -224,6 +269,7 @@ the [SPEC.md](SPEC.md) section it implements. Change both sides together.
 | Dedup, heartbeat, opt-out (SPEC §7/§8/§12) | `DedupStore`, `HeartbeatScheduler`, `EnabledState` |
 | Offline queue & transport (SPEC §9) | `EventQueue`, `FlushController`, `HttpSender`, `Reachability` |
 | Push & recovery links (SPEC §10/§11) | `PushTokenStore`, `FlowbizPush`, `RecoveryLinkParser`, `RecoveryPayload` |
+| UTM attribution (SPEC §11.1) | `UtmLinkParser`, `UtmStore` |
 | Persistence | `KeyValueStore` + `SharedPreferencesStore`/`UserDefaultsStore` |
 | Version stamped into envelopes | `SdkVersion.kt` / `SDKVersion.swift` |
 
@@ -231,9 +277,11 @@ Around the SDK sources:
 
 - `shared/` — the cross-platform **drift guard** (SPEC §14). Both test
   suites load every JSON file here: `fixtures/` (typed event → expected
-  wire payload, byte-for-byte), `recovery-links/` (`handleLink` vectors)
-  and `push-samples/` (`handlePush` samples). A change that affects the
-  wire starts with a fixture here, so both platforms are held to it.
+  wire payload, byte-for-byte), `recovery-links/` (`handleLink` vectors),
+  `utm-links/` (`context.utm` vectors generated from the web tag's own code
+  by `generate.mts`) and `push-samples/` (`handlePush` samples). A change
+  that affects the wire starts with a fixture here, so both platforms are
+  held to it.
 - `android/sdk/src/test/kotlin/br/com/flowbiz/onsite/` — JUnit 4 tests
   (`*Test.kt`; doubles in `StateTestDoubles.kt` / `TransportTestDoubles.kt`,
   fixture loading in `FixtureSupport.kt`).
