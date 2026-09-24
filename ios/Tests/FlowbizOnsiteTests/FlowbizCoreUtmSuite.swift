@@ -233,12 +233,14 @@ import Testing
     /// SPEC §10.2: links whose `URL` round trip loses or changes what is
     /// captured. On iOS 13–18 Foundation turns the `#` of a rootless custom
     /// scheme into `%23`, so the fragment lands in the last UTM value. On
-    /// iOS 13–16 it rejects a raw `|`, a non-ASCII host, a bare `%`, `[`/`]`
-    /// in the query or a second `#` (no URL, nothing captured). On iOS 17+
-    /// it accepts them only by re-encoding the link's own escapes (`%20` →
-    /// `%2520`). Read from the raw `deep_link`, each link captures exactly
-    /// what web and Android send. The `web` strings come from running the
-    /// web tag's `url.ts` on the raw links.
+    /// iOS 13–16 it rejects a non-ASCII host, a bare `%` or a second `#`
+    /// (no URL, nothing captured); `deepLink` repairs a raw `|` or other
+    /// invalid character by percent-encoding it, which still alters a
+    /// value web cannot decode. On iOS 17+ it accepts them all only by
+    /// re-encoding the link's own escapes (`%20` → `%2520`). Read from the
+    /// raw `deep_link`, each link captures exactly what web and Android
+    /// send. The `web` strings come from running the web tag's `url.ts` on
+    /// the raw links.
     @Test func handlePushOpenedCapturesLinksAURLRoundTripWouldAlter() throws {
         let journey = try Self.journeyVector()
         let cases: [(raw: String, web: String)] = [
