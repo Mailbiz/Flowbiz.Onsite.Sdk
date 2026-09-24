@@ -14,18 +14,34 @@ public struct FlowbizPush: Sendable {
     public let body: String?
     /// `deep_link` as a `URL`, or nil when absent or rejected by
     /// `URL(string:)` — the push itself is still returned then.
+    ///
+    /// For routing only. On tap, call `Flowbiz.handlePushOpened(push)`
+    /// rather than forwarding this URL to `Flowbiz.handleLink`: it reads the
+    /// raw `deep_link`, which a `URL` cannot always represent. On iOS 13–16
+    /// `URL(string:)` rejects a raw `|` (MessageBuilder writes the
+    /// campaign's that way) or a non-ASCII host. On iOS 17+ it accepts them
+    /// only by re-encoding the link's own escapes (`%20` → `%2520`) and
+    /// punycoding the host. On iOS 13–18 it turns the fragment of a rootless
+    /// custom scheme (`myapp:cart?…#promo`) into `%23promo` inside the
+    /// query. A `URL` round trip can therefore lose or alter the UTMs
+    /// (SPEC §10.2, §11.1).
     public let deepLink: URL?
     /// `data` object of the decoded payload; empty when absent.
     public let data: [String: JSONValue]
 
     /// The raw `deep_link` string — kept internally so `recoveryPayload`
-    /// works even when `URL(string:)` and the raw string disagree.
+    /// and `Flowbiz.handlePushOpened` work even when `URL(string:)` and the
+    /// raw string disagree.
     let deepLinkString: String?
 
     /// Convenience for cart-recovery pushes (SPEC §10.2: the `_mb_cr_`
-    /// link rides in `deep_link`): the deep link run through the
+    /// link rides in `deep_link`): the raw deep link run through the
     /// `Flowbiz.handleLink` decoder. Nil when there is no deep link or it
-    /// carries no decodable `_mb_cr_` value. Pure, like `handleLink`.
+    /// carries no decodable `_mb_cr_` value. Pure: no tenant check and **no
+    /// UTM capture** (receiving a push is not a click). When the user taps
+    /// the notification, call `Flowbiz.handlePushOpened(push)` instead: it
+    /// captures the deep link's UTMs and returns this payload, or nil for
+    /// another tenant's link once initialized (SPEC §10.2, §10.3, §11.1).
     public var recoveryPayload: RecoveryPayload? {
         RecoveryLinkParser.parse(deepLinkString)
     }

@@ -133,6 +133,86 @@ import Testing
         #expect((envelope["context"] as? [String: Any])?["url"] == nil)
     }
 
+    // MARK: context.utm (SPEC §4 / §11.1)
+
+    private let utm = #"{"utm_source":"flowbiz","utm_medium":"email"}"#
+
+    @Test func contextCarriesUtmAsAStringOnBuildPingAndRaw() throws {
+        let tracked = try EnvelopeBuilder.build(
+            event: .cartSetCoupon(cartId: "c-1", coupon: "X"),
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+            utm: utm
+        )
+        let ping = EnvelopeBuilder.buildPing(
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+            utm: utm
+        )
+        let raw = EnvelopeBuilder.buildRaw(
+            wireName: "push.token.sync", dataJSON: "{}",
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+            utm: utm
+        )
+        for entry in [tracked, ping, raw] {
+            let context = try #require(entry["context"] as? [String: Any])
+            // A JSON *string*, never a nested object (web `setUtmData`).
+            #expect(context["utm"] as? String == utm)
+        }
+        #expect(
+            try CanonicalJSON.render(try #require(raw["context"]))
+                .contains(#""utm":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\"}""#)
+        )
+    }
+
+    /// Every builder, with `utm` left at its default (nil) and set to "".
+    @Test func utmOmittedByDefaultAndWhenEmpty() throws {
+        for utm in [nil, ""] as [String?] {
+            let tracked = try EnvelopeBuilder.build(
+                event: .cartSetCoupon(cartId: "c-1", coupon: "X"),
+                hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+                userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+                language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+                utm: utm
+            )
+            let ping = EnvelopeBuilder.buildPing(
+                hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+                userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+                language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+                utm: utm
+            )
+            let raw = EnvelopeBuilder.buildRaw(
+                wireName: "push.token.sync", dataJSON: "{}",
+                hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+                userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+                language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0",
+                utm: utm
+            )
+            for (name, entry) in [("build", tracked), ("buildPing", ping), ("buildRaw", raw)] {
+                #expect((entry["context"] as? [String: Any])?["utm"] == nil, "\(name), utm: \(utm.debugDescription)")
+            }
+        }
+        // The parameter's default, not just an explicit nil.
+        #expect((try build()["context"] as? [String: Any])?["utm"] == nil)
+        let defaultPing = EnvelopeBuilder.buildPing(
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0"
+        )
+        #expect((defaultPing["context"] as? [String: Any])?["utm"] == nil)
+        let defaultRaw = EnvelopeBuilder.buildRaw(
+            wireName: "push.token.sync", dataJSON: "{}",
+            hash: "h", createdAtMillis: createdAtMillis, sentAtMillis: sentAtMillis, timezone: "-03:00",
+            userId: nil, anonymousId: "a", sessionId: "s", visitCount: 1,
+            language: "pt-BR", screen: "1170x2532", appId: "77777", platform: "ios", sdkVersion: "1.0.0"
+        )
+        #expect((defaultRaw["context"] as? [String: Any])?["utm"] == nil)
+    }
+
     @Test func buildUsesBaseUriToResolveDataUrls() throws {
         let envelope = try EnvelopeBuilder.build(
             event: .pageView(path: "/checkout", title: "Checkout"),

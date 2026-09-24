@@ -9,7 +9,7 @@ import Foundation
 /// Every entry point hops onto the serial `scheduler` and returns
 /// immediately (SPEC §3): all pipeline work — session touch, serialization,
 /// dedup, queue I/O — is thread-confined to the scheduler queue.
-/// `lastPage` and `foregrounded` are scheduler-confined state.
+/// `lastPage`, `foregrounded` and `utmContext` are scheduler-confined state.
 ///
 /// ## Never-throw
 /// Each submitted task handles its throwing steps internally (SPEC §3): a
@@ -32,6 +32,7 @@ final class FlowbizCore: @unchecked Sendable {
     private let enabledState: EnabledState
     private let pushTokenStore: PushTokenStore
     private let dedupStore: DedupStore
+    private let utmStore: UtmStore
     private let sender: any HttpSender
     private let scheduler: any TaskScheduler
     private let clock: any Clock
@@ -58,6 +59,15 @@ final class FlowbizCore: @unchecked Sendable {
     /// Foreground state (drives heartbeat resume on re-enable). Scheduler-confined.
     private var foregrounded = false
 
+    /// SPEC §11.1 `context.utm`: the rendered merged UTM set, or nil when
+    /// there is none. Recomputed only at evaluation points (link capture,
+    /// foreground, foreground re-enable) and by the read-only load (startup,
+    /// background re-enable). Between them it keeps riding even past the
+    /// stored expiry, like web's page-lifetime context pair. Stamped on
+    /// every envelope built after it was set; queued entries keep the value
+    /// they were built with. Never loaded while disabled. Scheduler-confined.
+    private var utmContext: String?
+
     init(
         config: FlowbizConfig,
         store: any KeyValueStore,
@@ -74,6 +84,7 @@ final class FlowbizCore: @unchecked Sendable {
         self.enabledState = EnabledState(store: store)
         self.pushTokenStore = PushTokenStore(store: store)
         self.dedupStore = DedupStore(store: store, clock: clock)
+        self.utmStore = UtmStore(store: store, clock: clock)
         self.queueFactory = queueFactory
         self.sender = sender
         self.scheduler = scheduler
@@ -86,6 +97,14 @@ final class FlowbizCore: @unchecked Sendable {
             guard let self, self.enabledState.isEnabled else { return }
             self.flushController.requestFlush(.networkRestored)
         }
+
+        // SPEC §11.1 item 4: startup only loads the stored UTMs. A process
+        // start is not a visit (a push or background job can wake the app
+        // without the user), so the expiry is not slid; the first foreground
+        // transition is the visit. Submitted at construction, ahead of any
+        // facade call's task, so the stored UTMs ride on the very first
+        // event; the store read stays off the caller's thread.
+        submit { core in core.loadUtmContext() }
     }
 
     // MARK: - Facade entry points (any thread, return immediately, never throw)
@@ -140,7 +159,8 @@ final class FlowbizCore: @unchecked Sendable {
                     sdkVersion: SDKVersion.current,
                     contextUrl: core.lastPage?.url,
                     baseUri: core.config.baseUriOrNil,
-                    recoveryUrl: core.config.recoveryUrl
+                    recoveryUrl: core.config.recoveryUrl,
+                    utm: core.utmContext
                 )
                 // 7. Durable queue + immediate flush attempt (SPEC §9).
                 core.queue.append(try CanonicalJSON.render(entry))
@@ -151,6 +171,15 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
+    /// SPEC §11.1 UTM capture for `Flowbiz.handleLink` and
+    /// `Flowbiz.handlePushOpened`: evaluates the link on the scheduler, FIFO
+    /// with `track` — a `track` issued afterwards from the same thread
+    /// carries the link's UTMs. Extraction runs inside the task, never on
+    /// the caller's thread.
+    func captureUtm(fromLink link: String) {
+        submit { core in core.evaluateUtm(link: link) }
+    }
+
     /// SPEC §6/§10.1 logout: emit `push.token.remove` (if a token is
     /// stored), then clear user identity, rotate the session and clear the
     /// token.
@@ -159,7 +188,9 @@ final class FlowbizCore: @unchecked Sendable {
     /// *before* the identity is cleared so it carries the outgoing
     /// `user_id` — the backend needs to know *whose* token to disassociate.
     /// While disabled the event is dropped (SPEC §12) but the local state
-    /// is still cleared so identity never outlives a logout.
+    /// is still cleared so identity never outlives a logout. Captured UTMs
+    /// are kept (SPEC §11.1): they describe the traffic source, not the
+    /// user, and web never clears them.
     func logout() {
         submit { core in
             if let token = core.pushTokenStore.token {
@@ -200,7 +231,10 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// SPEC §12 opt-out switch; persisted.
+    /// SPEC §12 opt-out switch; persisted. Disabling leaves the stored UTMs
+    /// alone (only expiry or corruption removes them). Re-enabling while
+    /// foregrounded is a SPEC §11.1 evaluation point; re-enabling in the
+    /// background only loads the stored set, like startup.
     func setEnabled(_ enabled: Bool) {
         submit { core in
             let wasEnabled = core.enabledState.isEnabled
@@ -211,6 +245,11 @@ final class FlowbizCore: @unchecked Sendable {
                 core.heartbeat.stop()
                 SdkLog.debug("SDK disabled: heartbeat stopped, events dropped, network gated")
             } else if !wasEnabled {
+                // SPEC §11.1 item 4 — before the token re-emit below so
+                // that event already carries `context.utm`. A foreground
+                // re-enable is a visit and slides the expiry; a background
+                // one only loads.
+                if core.foregrounded { core.evaluateUtm(link: nil) } else { core.loadUtmContext() }
                 if core.foregrounded {
                     core.heartbeat.start(intervalMillis: core.heartbeatIntervalMillis)
                 }
@@ -248,6 +287,10 @@ final class FlowbizCore: @unchecked Sendable {
             guard !core.foregrounded else { return }
             core.foregrounded = true
             core.sessionManager.onForeground()
+            // SPEC §11.1 evaluation point (web: a returning visit is a page
+            // load) — before the heartbeat starts so the first ping carries
+            // the refreshed context.
+            core.evaluateUtm(link: nil)
             if core.enabledState.isEnabled {
                 core.heartbeat.start(intervalMillis: core.heartbeatIntervalMillis)
                 core.flushController.requestFlush(.appForeground)
@@ -292,6 +335,7 @@ final class FlowbizCore: @unchecked Sendable {
             contextUrl: lastPage?.url,
             baseUri: config.baseUriOrNil,
             recoveryUrl: config.recoveryUrl,
+            utm: utmContext,
             dataJSON: pingDataJSON()
         )
         return try? CanonicalJSON.render(entry)
@@ -361,13 +405,73 @@ final class FlowbizCore: @unchecked Sendable {
                 sdkVersion: SDKVersion.current,
                 contextUrl: lastPage?.url,
                 baseUri: config.baseUriOrNil,
-                recoveryUrl: config.recoveryUrl
+                recoveryUrl: config.recoveryUrl,
+                utm: utmContext
             )
             queue.append(try CanonicalJSON.render(entry))
             flushController.requestFlush(.eventTracked)
         } catch {
             SdkLog.debug("\(wireName) dropped: serialization failed")
         }
+    }
+
+    // MARK: - UTM attribution (SPEC §11.1)
+
+    /// One UTM evaluation — the mobile equivalent of web
+    /// `setUtmNavigationContext` on a page load, run at the SPEC §11.1
+    /// item 4 evaluation points: a link capture (`handleLink` /
+    /// `handlePushOpened`), a foreground transition and a foreground
+    /// re-enable. It merges the link's UTMs (none for foreground/re-enable)
+    /// over the stored set. A non-empty result is persisted with a fresh
+    /// 30-day expiry and becomes `context.utm`; an empty one writes nothing
+    /// and clears it. Startup and a background re-enable only load
+    /// (`loadUtmContext`).
+    ///
+    /// While disabled nothing is captured, merged or written (SPEC §12: no
+    /// capture without consent), the values are not even read, and the
+    /// context is left as is (events are dropped anyway, and re-enabling
+    /// recomputes it). Only an expired set is removed (`purgeIfExpired`),
+    /// so an opted-out set goes at the next evaluation point after its 30
+    /// days rather than being kept indefinitely.
+    ///
+    /// Scheduler-confined. Never throws: parsing degrades to raw values or
+    /// an empty set, the store swallows corrupt state. Logs counts only —
+    /// never the link, a value or the rendered JSON (SPEC §12) — with the
+    /// same strings as Android; the skip and no-UTM messages only for a
+    /// link capture, so the link-less evaluation at every foreground stays
+    /// quiet.
+    private func evaluateUtm(link: String?) {
+        guard enabledState.isEnabled else {
+            if link != nil { SdkLog.debug("utm capture skipped: SDK disabled") }
+            utmStore.purgeIfExpired()
+            return
+        }
+        let current = link.map(UtmLinkParser.extract) ?? []
+        let merged = UtmLinkParser.merge(stored: utmStore.load(), current: current)
+        guard !merged.isEmpty else {
+            utmContext = nil
+            if link != nil { SdkLog.debug("utm capture: no campaign parameters in link") }
+            return
+        }
+        utmStore.save(merged)
+        utmContext = UtmLinkParser.render(merged)
+        SdkLog.debug("utm context set: \(current.count) captured, \(merged.count) active")
+    }
+
+    /// The read-only counterpart of `evaluateUtm` (SPEC §11.1 item 4), run
+    /// at startup and on a background re-enable. It sets `context.utm` from
+    /// the stored set without sliding its expiry: a process start is not a
+    /// visit. `load` still drops an expired or corrupt set. While disabled
+    /// it only removes an expired set (`purgeIfExpired`, which reads nothing
+    /// but the expiry) and leaves the context as is. Scheduler-confined;
+    /// never throws.
+    private func loadUtmContext() {
+        guard enabledState.isEnabled else {
+            utmStore.purgeIfExpired()
+            return
+        }
+        let stored = utmStore.load()
+        utmContext = stored.isEmpty ? nil : UtmLinkParser.render(stored)
     }
 
     // MARK: - Plumbing

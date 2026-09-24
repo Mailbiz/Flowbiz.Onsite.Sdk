@@ -44,6 +44,24 @@ enum CanonicalJSON {
         return out
     }
 
+    /// Renders an **ordered** flat string map as a compact JSON object, keys
+    /// in the given order (not sorted) — byte-identical to `JSON.stringify`
+    /// of a JS object built in that insertion order. Used for SPEC §11.1
+    /// `context.utm`, whose key order is web's merge order. Same string
+    /// escaping as `render`; never throws (strings only). Mirrored by the
+    /// Kotlin `CanonicalJson.renderStringPairs`.
+    static func renderStringPairs(_ pairs: [(key: String, value: String)]) -> String {
+        var out = "{"
+        for (index, pair) in pairs.enumerated() {
+            if index > 0 { out += "," }
+            writeString(pair.key, into: &out)
+            out += ":"
+            writeString(pair.value, into: &out)
+        }
+        out += "}"
+        return out
+    }
+
     private static func write(_ value: Any, into out: inout String) throws {
         switch value {
         case let string as String:

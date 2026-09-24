@@ -83,6 +83,28 @@ import Testing
         #expect(push?.deepLink == URL(string: "https://store.com/promo"))
     }
 
+    /// `deepLink` is for routing: plain `URL(string:)` over `deep_link`,
+    /// whatever this OS's Foundation makes of it (a raw `|` is nil on
+    /// iOS 13–16 and re-encoded on iOS 17+). The raw string is kept
+    /// alongside it for `recoveryPayload` and `Flowbiz.handlePushOpened`,
+    /// which read the link exactly as delivered (SPEC §10.2, §11.1). The
+    /// capture side is pinned in `FlowbizCoreUtmSuite`.
+    @Test func deepLinkIsPlainURLParsingOfTheRawString() throws {
+        for link in [
+            "https://store.com/carrinho?utm_campaign=jornadas|cart|carrinho-abandonado&utm_medium=e%20mail",
+            "myapp:cart?utm_source=flowbiz&utm_journey_type=1#promo",
+            "https://café.com/promo?utm_source=flowbiz",
+        ] {
+            let marker = try #require(String(
+                data: try JSONSerialization.data(withJSONObject: ["v": 1, "type": "promo", "deep_link": link] as [String: Any]),
+                encoding: .utf8
+            ))
+            let push = try #require(Flowbiz.handlePush(["flowbiz": marker]), "\(link)")
+            #expect(push.deepLinkString == link, "\(link)")
+            #expect(push.deepLink == URL(string: link), "\(link)")
+        }
+    }
+
     /// SPEC §3 purity: no initialize needed, nil/empty payloads are nil.
     @Test func nilAndEmptyPayloadsAreNil() {
         #expect(Flowbiz.handlePush(nil) == nil)

@@ -10,16 +10,19 @@ import UIKit
 /// SPEC §3 invariants enforced here:
 /// - **Never throws**: no public entry is throwing; internal failures
 ///   degrade to debug logs.
-/// - Any call before `initialize` is a no-op with a debug warning.
+/// - Any call before `initialize` is a no-op with a debug warning (the
+///   decoders `handlePush`/`handleLink`/`handlePushOpened` work and stay
+///   silent instead).
 /// - Double `initialize` is a no-op; the first config wins.
 /// - Every API is callable from any thread; work is handed to the SDK's
 ///   serial background queue and the caller returns immediately.
 ///
 /// The facade is deliberately too thin to need its own test suite — the
-/// behavioral tests live on `FlowbizCore` (constructed with fakes); the
-/// facade's production wiring (UserDefaults suite, queue file, UIKit
-/// lifecycle notifications, real clock/network) is exercised by the demo
-/// app (SPEC §14).
+/// behavioral tests live on `FlowbizCore` (constructed with fakes), plus
+/// `handleLink`'s and `handlePushOpened`'s capture rules through their
+/// seams; the facade's production wiring (UserDefaults suite, queue file,
+/// UIKit lifecycle notifications, real clock/network) is exercised by the
+/// demo app (SPEC §14).
 public enum Flowbiz {
 
     /// Lock-guarded singleton state (strict-concurrency-clean shared
@@ -202,7 +205,9 @@ public enum Flowbiz {
     /// Pure, synchronous, never throws; callable before `initialize`
     /// (SPEC §3) and from any thread — typically from the
     /// `UNUserNotificationCenter` delegate (`userInfo`) both on foreground
-    /// receipt and notification tap.
+    /// receipt and notification tap. It never captures UTMs — receiving a
+    /// push is not a click. On tap, also call `handlePushOpened(push)`
+    /// (SPEC §10.2, §10.3, §11.1); route with `deepLink` as usual.
     public static func handlePush(_ payload: [AnyHashable: Any]?) -> FlowbizPush? {
         guard let marker = payload?[PushPayloadParser.markerKey] else { return nil }
         if let string = marker as? String {
@@ -216,13 +221,71 @@ public enum Flowbiz {
 
     /// SPEC §11: decodes the `_mb_cr_` query parameter of an incoming
     /// deep link (Universal Link entry point) into a `RecoveryPayload`.
-    /// Returns null = no decodable `_mb_cr_` param, missing/invalid
+    /// Returns nil = no decodable `_mb_cr_` param, missing/invalid
     /// `utm_source`, or (once initialized) a tenant mismatch.
     ///
-    /// Pure, synchronous, never throws; callable before `initialize`
-    /// (SPEC §3). The SDK does not adopt the decoded user as its identity.
+    /// SPEC §11.1: once initialized, every non-nil link also has its
+    /// campaign UTMs captured — whatever the decode returns (no `_mb_cr_`,
+    /// a foreign `utm_source`, a tenant mismatch) — so forward *every*
+    /// incoming link. For a tapped push, call `handlePushOpened(push)`
+    /// instead of forwarding its `deepLink`: it reads the raw `deep_link`.
+    /// The capture is handed to the SDK's serial queue like `track`: a
+    /// `track` issued afterwards from the same thread carries the link's
+    /// UTMs.
+    ///
+    /// Synchronous and never throws; the decoding is pure. Callable before
+    /// `initialize` (SPEC §3): it then decodes without the tenant check,
+    /// captures nothing and logs nothing. The SDK does not adopt the
+    /// decoded user as its identity. The result is discardable for hosts
+    /// forwarding links only for attribution.
+    @discardableResult
     public static func handleLink(_ url: URL?) -> RecoveryPayload? {
-        RecoveryLinkParser.parse(url?.absoluteString, expectedAppId: state.currentCore?.config.appId)
+        handleLink(url?.absoluteString, core: state.currentCore)
+    }
+
+    /// `handleLink` over the link string, with the core read once and
+    /// passed in (nil = not initialized). Seam for the unit tests, which
+    /// must not install the singleton core (`initialize` writes the real
+    /// UserDefaults); production entries are `handleLink(_:)` and
+    /// `handlePushOpened(_:)`. Deliberately not `withCore`: before
+    /// initialize it captures nothing and stays silent (no "initialize was
+    /// not called" log), and still decodes.
+    static func handleLink(_ link: String?, core: FlowbizCore?) -> RecoveryPayload? {
+        guard let link else { return nil }
+        core?.captureUtm(fromLink: link)
+        return RecoveryLinkParser.parse(link, expectedAppId: core?.config.appId)
+    }
+
+    /// SPEC §10.2/§10.3/§11.1: the user opened this push (notification
+    /// tap). This is `handleLink` over the push's **raw** `deep_link`
+    /// string. Once initialized, it captures the deep link's campaign UTMs
+    /// whatever the decode returns, exactly as Android and web read them.
+    /// A `URL` round trip cannot guarantee that on iOS (see
+    /// `FlowbizPush.deepLink`). It returns the tenant-checked
+    /// `RecoveryPayload` (the same result as `handleLink`), or nil when the
+    /// push is nil, has no `deep_link` or carries no decodable `_mb_cr_`
+    /// link for this tenant.
+    ///
+    /// Call it once per tap, typically from the `UNUserNotificationCenter`
+    /// delegate's `didReceive response`, after `handlePush`. Receiving a
+    /// push is not a click, so `handlePush` alone captures nothing.
+    ///
+    /// Synchronous and never throws; the decoding is pure, and the capture
+    /// is handed to the SDK's serial queue like `track`. Callable before
+    /// `initialize` (SPEC §3): it then decodes without the tenant check,
+    /// captures nothing and logs nothing. The result is discardable for
+    /// hosts that route with `deepLink` themselves.
+    @discardableResult
+    public static func handlePushOpened(_ push: FlowbizPush?) -> RecoveryPayload? {
+        handlePushOpened(push, core: state.currentCore)
+    }
+
+    /// `handlePushOpened` with the core passed in — the `handleLink(_:core:)`
+    /// seam over the push's raw `deep_link`, for the unit tests. The public
+    /// entry's `state.currentCore` read is production wiring, exercised by
+    /// the demo app's "Abrir notificação" (SPEC §14).
+    static func handlePushOpened(_ push: FlowbizPush?, core: FlowbizCore?) -> RecoveryPayload? {
+        handleLink(push?.deepLinkString, core: core)
     }
 
     private static func withCore(_ name: String, _ action: (FlowbizCore) -> Void) {

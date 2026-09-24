@@ -2,7 +2,7 @@ import Foundation
 
 /// Thin abstraction over the platform key-value store (`UserDefaults` here,
 /// `SharedPreferences` on Android) — the SPEC §1 persistence layer for
-/// identity, session, the enabled switch and the push token.
+/// identity, session, the enabled switch, the push token and captured UTMs.
 ///
 /// Contract (SPEC §3): getters return `nil` for **missing or corrupt**
 /// (wrong-type / unreadable) values so callers degrade to their defaults
@@ -45,4 +45,10 @@ enum StorageKeys {
 
     /// Last registered push token, kept for logout removal (SPEC §10.1).
     static let pushToken = "push_token"
+
+    /// Captured campaign UTMs (SPEC §11.1): a JSON array of `[key, value]`
+    /// string pairs in merge order, plus its sliding 30-day wall-clock
+    /// expiry (epoch millis). See `UtmStore`.
+    static let utmData = "utm_data"
+    static let utmExpiresAtWallMs = "utm_expires_at_wall_ms"
 }

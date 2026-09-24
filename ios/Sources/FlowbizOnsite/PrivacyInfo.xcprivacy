@@ -31,10 +31,29 @@
     device/context metadata sent for rendering/diagnostics, not one of the
     enumerated user-data collection types requiring declaration. Legal
     review to confirm (same review bucket as the items above).
+  - context.utm (SPEC §11.1) carries campaign UTM parameters (utm_source,
+    utm_medium, utm_campaign, utm_journey*, step/instance) captured from
+    links the host app forwards to handleLink or handlePushOpened (a
+    notification tap), on every envelope. The merged set is kept in the
+    SDK's `flowbiz_onsite_<appId>` UserDefaults suite (`utm_data` +
+    `utm_expires_at_wall_ms`) until 30 days after the last link, push tap
+    (handlePushOpened), foreground or foreground re-enable that refreshed
+    it; a background launch (e.g. a silent push or background fetch) only
+    reads it. While opted out (setEnabled(false)) nothing is captured and
+    the stored set is neither read, refreshed nor sent; once expired it is
+    removed at the next launch, foreground or link. It survives logout (it
+    describes the campaign that brought the user, not the user);
+    uninstalling the app clears it. Not declared as a separate type: it
+    rides with the declared Analytics collection. Legal review to confirm
+    whether campaign attribution needs its own declaration (e.g. Other
+    Usage Data or Advertising Data, or the Developer's Advertising or
+    Marketing purpose) — same review bucket as the items above. Mirrors
+    android/DATA_DISCLOSURE.md.
 
   Accessed-API declaration: the SDK persists identity/session/opt-out state
-  in UserDefaults (SPEC §1/§6) — category User Defaults, reason CA92.1
-  ("access info from same app, per documentation").
+  and captured campaign UTMs in UserDefaults (SPEC §1/§6/§11.1) — category
+  User Defaults, reason CA92.1 ("access info from same app, per
+  documentation").
 -->
 <plist version="1.0">
 <dict>

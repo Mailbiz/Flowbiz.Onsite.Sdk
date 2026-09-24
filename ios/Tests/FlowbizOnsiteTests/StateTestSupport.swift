@@ -8,11 +8,28 @@ import Foundation
 /// In-memory `KeyValueStore` mimicking the hardened `UserDefaultsStore`
 /// semantics: a value read back as the wrong type degrades to nil, never a
 /// throw. `values` is exposed so tests can plant corrupt entries and inspect
-/// persistence directly.
+/// persistence directly; `reads` records every key the SDK reads so tests
+/// can pin that a key is never read.
 final class FakeKeyValueStore: KeyValueStore, @unchecked Sendable {
 
     private let lock = NSLock()
     private var storage: [String: Any] = [:]
+    private var readKeys: [String] = []
+
+    /// Keys passed to the `KeyValueStore` getters, in call order. The
+    /// tests' own `values`/`subscript` access is not recorded.
+    var reads: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return readKeys
+    }
+
+    private func read(_ key: String) -> Any? {
+        lock.lock()
+        defer { lock.unlock() }
+        readKeys.append(key)
+        return storage[key]
+    }
 
     var values: [String: Any] {
         get {
@@ -32,16 +49,16 @@ final class FakeKeyValueStore: KeyValueStore, @unchecked Sendable {
         set { values[key] = newValue }
     }
 
-    func string(forKey key: String) -> String? { self[key] as? String }
-    func int(forKey key: String) -> Int? { self[key] as? Int }
+    func string(forKey key: String) -> String? { read(key) as? String }
+    func int(forKey key: String) -> Int? { read(key) as? Int }
     func int64(forKey key: String) -> Int64? {
-        switch self[key] {
+        switch read(key) {
         case let value as Int64: return value
         case let value as Int: return Int64(value) // plist round-trip width erasure
         default: return nil
         }
     }
-    func bool(forKey key: String) -> Bool? { self[key] as? Bool }
+    func bool(forKey key: String) -> Bool? { read(key) as? Bool }
 
     func set(_ value: String, forKey key: String) { self[key] = value }
     func set(_ value: Int, forKey key: String) { self[key] = value }

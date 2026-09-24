@@ -28,8 +28,8 @@ final class OffsetBox: @unchecked Sendable {
 }
 
 /// A `FlowbizCore` with every dependency faked. The `FakeTaskScheduler`
-/// executes inline, so `core.track(...)` runs the whole pipeline (including
-/// the flush drain) synchronously on the test thread.
+/// executes inline by default, so `core.track(...)` runs the whole pipeline
+/// (including the flush drain) synchronously on the test thread.
 final class CoreHarness: @unchecked Sendable {
 
     let config: FlowbizConfig
@@ -45,10 +45,10 @@ final class CoreHarness: @unchecked Sendable {
     init(
         config: FlowbizConfig = FlowbizConfig(appId: "77777", baseUri: "https://store.com"),
         store: FakeKeyValueStore = FakeKeyValueStore(),
-        clock: FakeClock = FakeClock()
+        clock: FakeClock = FakeClock(),
+        scheduler: FakeTaskScheduler = FakeTaskScheduler()
     ) {
         let sender = FakeHttpSender()
-        let scheduler = FakeTaskScheduler()
         let reachability = FakeReachability()
         let offset = OffsetBox(-180)
         let queue = EventQueue(fileURL: temporaryQueueFile())

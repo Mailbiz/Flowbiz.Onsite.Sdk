@@ -50,8 +50,10 @@ enum EnvelopeBuilder {
     /// Builds one entry of the envelope `data` array (SPEC §4).
     ///
     /// - `identity.user_id` is omitted when `userId` is nil.
-    /// - `context.url` / `context.baseuri` / `context.recoveryUrl` are
-    ///   passed in by the core, spec §4; omitted when nil or empty.
+    /// - `context.url` / `context.baseuri` / `context.recoveryUrl` /
+    ///   `context.utm` are passed in by the core, spec §4; omitted when nil
+    ///   or empty. `utm` is the already-rendered SPEC §11.1 JSON string —
+    ///   it rides as a string value, never a nested object.
     /// - `data` is a JSON **string** (the payload serialized separately),
     ///   not a nested object.
     /// - Throws only for non-finite numbers in the payload (see
@@ -81,7 +83,8 @@ enum EnvelopeBuilder {
         sdkVersion: String,
         contextUrl: String? = nil,
         baseUri: String? = nil,
-        recoveryUrl: String? = nil
+        recoveryUrl: String? = nil,
+        utm: String? = nil
     ) throws -> [String: Any] {
         return buildEntry(
             wireName: EventSerializer.wireName(event),
@@ -89,6 +92,7 @@ enum EnvelopeBuilder {
             contextUrl: contextUrl,
             baseUri: baseUri,
             recoveryUrl: recoveryUrl,
+            utm: utm,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -111,7 +115,7 @@ enum EnvelopeBuilder {
     /// last-tracked page as `{"page":{"title":...,"url":...}}`
     /// (web semantics: pings describe the current page). Same shape rules
     /// as `build`, including `context.url` / `context.baseuri` /
-    /// `context.recoveryUrl` passed in by the caller.
+    /// `context.recoveryUrl` / `context.utm` passed in by the caller.
     static func buildPing(
         hash: String,
         createdAtMillis: Int64,
@@ -129,6 +133,7 @@ enum EnvelopeBuilder {
         contextUrl: String? = nil,
         baseUri: String? = nil,
         recoveryUrl: String? = nil,
+        utm: String? = nil,
         dataJSON: String = "{}"
     ) -> [String: Any] {
         buildEntry(
@@ -137,6 +142,7 @@ enum EnvelopeBuilder {
             contextUrl: contextUrl,
             baseUri: baseUri,
             recoveryUrl: recoveryUrl,
+            utm: utm,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -157,7 +163,7 @@ enum EnvelopeBuilder {
     /// public `Event` catalog with a pre-rendered `data` JSON string
     /// (SPEC §10.1 `push.token.sync` / `push.token.remove`). Same envelope
     /// shape as `build`, including `context.url` / `context.baseuri` /
-    /// `context.recoveryUrl` passed in by the caller.
+    /// `context.recoveryUrl` / `context.utm` passed in by the caller.
     static func buildRaw(
         wireName: String,
         dataJSON: String,
@@ -176,7 +182,8 @@ enum EnvelopeBuilder {
         sdkVersion: String,
         contextUrl: String? = nil,
         baseUri: String? = nil,
-        recoveryUrl: String? = nil
+        recoveryUrl: String? = nil,
+        utm: String? = nil
     ) -> [String: Any] {
         buildEntry(
             wireName: wireName,
@@ -184,6 +191,7 @@ enum EnvelopeBuilder {
             contextUrl: contextUrl,
             baseUri: baseUri,
             recoveryUrl: recoveryUrl,
+            utm: utm,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -206,6 +214,7 @@ enum EnvelopeBuilder {
         contextUrl: String?,
         baseUri: String?,
         recoveryUrl: String?,
+        utm: String?,
         hash: String,
         createdAtMillis: Int64,
         sentAtMillis: Int64,
@@ -247,6 +256,7 @@ enum EnvelopeBuilder {
         }
         if let baseUri, !baseUri.isEmpty { context["baseuri"] = baseUri }
         if let recoveryUrl, !recoveryUrl.isEmpty { context["recoveryUrl"] = recoveryUrl }
+        if let utm, !utm.isEmpty { context["utm"] = utm }
 
         return [
             "event": wireName,
