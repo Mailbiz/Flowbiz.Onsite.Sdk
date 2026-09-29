@@ -1,76 +1,75 @@
-// Regenerates vectors.json from the web tag's own code (SPEC §11.1, §14).
+// Regenerates vectors.json by running the web tag's own code (Node >= 22.18):
 //
-//   node shared/utm-links/generate.mts [path/to/onsite-core/src/url.ts]
+//   node shared/utm-links/generate.mts [path/to/Mailbiz.Onsite.Tag]
 //
-// Node >= 22.18 (type stripping on by default). The default path is the
-// sibling checkout ../Mailbiz.Onsite.Tag. `Url` is imported unchanged; the
-// body of `evaluate` below is a verbatim copy of `setUtmNavigationContext`
-// (onsite-core/src/tracker/tracker-core-invoker.ts), with the 30-day
-// StorageFactory replaced by an in-memory cell (expiry is SDK-tested, not
-// vector-tested). `expected` is exactly the string web hands to
-// `setUtmData` → `context.utm` (`JSON.stringify(finalUtms)`), or null when
-// web never calls `setUtmData` (no `utm` key in the envelope).
-import { writeFileSync } from 'node:fs';
+// `Url` is imported from onsite-core's url.ts; `setUtmNavigationContext` is read
+// from tracker-core-invoker.ts and run against an in-memory store instead of the
+// 30-day StorageFactory. `expected` is the string web passes to `setUtmData`
+// (context.utm), or null when web never calls it.
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const urlTs = resolve(process.argv[2] ?? resolve(here, '../../../Mailbiz.Onsite.Tag/libraries/onsite-core/src/url.ts'));
-const { Url } = await import(pathToFileURL(urlTs).href);
+const tag = resolve(process.argv[2] ?? resolve(here, '../../../Mailbiz.Onsite.Tag'));
+const urlTs = 'libraries/onsite-core/src/url.ts';
+const invokerTs = 'libraries/onsite-core/src/tracker/tracker-core-invoker.ts';
+const git = (...args: string[]) => execFileSync('git', ['-C', tag, ...args], { encoding: 'utf8' }).trim();
+const revision = git('log', '-1', '--format=%h', '--', urlTs, invokerTs)
+  + (git('status', '--porcelain', '--', urlTs, invokerTs) ? '+local-changes' : '');
 
-const g = globalThis as any;
-g.window = { location: { href: 'https://store.com/' } };
+const { Url } = await import(pathToFileURL(resolve(tag, urlTs)).href);
+const webSource = readFileSync(resolve(tag, invokerTs), 'utf8').match(/^function setUtmNavigationContext\([\s\S]*?^\}$/m)?.[0];
+if (!webSource) throw new Error(`setUtmNavigationContext not found in ${invokerTs}`);
 
-type Stored = { utmData?: Record<string, string> } | undefined;
-let cell: Stored;
-const utmStateManager = {
-  get: (fallback: Record<string, any>) => (cell ? JSON.parse(JSON.stringify(cell)) : { ...fallback }),
-  set: (data: Record<string, any>) => { cell = JSON.parse(JSON.stringify(data)); },
-};
 let sent: string | null = null;
-const track = (name: string, data: Record<string, string>) => {
+const track = (name: string, data: unknown) => {
   if (name === 'setUtmData') sent = JSON.stringify(data);
 };
+const setUtmNavigationContext = new Function('Url', 'track', `${stripTypeScriptTypes(webSource)}\nreturn setUtmNavigationContext;`)(Url, track);
 
-/** One web page load on `href`; returns the `context.utm` string or null. */
+// JSON round trips, like StorageFactory's serialization.
+let cell: string | undefined;
+const store = {
+  get: (fallback: object) => (cell ? JSON.parse(cell) : { ...fallback }),
+  set: (data: object) => { cell = JSON.stringify(data); },
+};
+
+const g = globalThis as any;
+g.window = { location: { href: '' } };
+
+/** One web page load on `href` (null = a load with no query); returns context.utm or null. */
 function evaluate(href: string | null): string | null {
   g.window.location.href = href ?? 'https://store.com/';
   sent = null;
-  // ---- verbatim: tracker-core-invoker.ts setUtmNavigationContext ----
-  const storedUtms = utmStateManager.get({})?.utmData || {};
-  const queryParams = Url.getQueryParameters();
-  const currentUtms: Record<string, string> = {};
-
-  Object.keys(Url.UtmParameters).forEach((utmName) => {
-    const currentUtm = queryParams[utmName];
-    if (currentUtm) {
-      currentUtms[utmName] = currentUtm;
-    }
-  });
-
-  const finalUtms = {
-    ...storedUtms,
-    ...currentUtms,
-  };
-  if (!(Object.keys(finalUtms).length > 0)) {
-    return sent;
-  }
-
-  utmStateManager.set({ utmData: finalUtms });
-  track('setUtmData', finalUtms);
-  // ---- end verbatim ----
+  setUtmNavigationContext(store);
   return sent;
 }
 
 const MB_CR = 'eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19';
+const FLOW = 'AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10|3|a1b2c3d4-inst';
+const pipesEncoded = (link: string) => link.replaceAll('|', '%7C');
+const journeyLink = (channel: string) => `https://store.com/carrinho?_mb_cr_=${MB_CR}&utm_journey=16&utm_journey_channel=${channel}&utm_source=flowbiz&utm_medium=${channel}&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1`;
+const flowLink = (channel: string) => `https://store.com/carrinho?_mb_cr_=${MB_CR}&utm_flow_params=${FLOW}&utm_journey=123&utm_journey_channel=${channel}&utm_source=flowbiz&utm_medium=${channel}&utm_campaign=jornadas|flow|recuperacao-de-carrinho|${channel}-4&utm_journey_type=4`;
 
 // [name, link] — each evaluated as the first page load of a fresh store.
 const extract: Array<[string, string]> = [
-  // Link shapes the backend emits (MessageBuilder HtmlParseHelper.GetUtmFilledLink: raw, unencoded values).
-  ['messagebuilder_flow_cart_recovery', `https://store.com/carrinho?_mb_cr_=${MB_CR}&utm_flow_params=AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10|3|a1b2c3d4-inst&utm_journey=123&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas|flow|recuperacao-de-carrinho|email-4&utm_journey_type=4`],
-  ['messagebuilder_journey_cart_recovery', `https://store.com/carrinho?_mb_cr_=${MB_CR}&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1`],
-  ['messagebuilder_whatsapp_cta', `https://store.com/carrinho?_mb_cr_=${MB_CR}&utm_journey=16&utm_journey_channel=whatsapp&utm_source=flowbiz&utm_medium=whatsapp&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1`],
+  // Links as MessageBuilder builds them (HtmlParseHelper.GetUtmFilledLink: raw, unencoded values).
+  ['messagebuilder_flow_cart_recovery', flowLink('email')],
+  ['messagebuilder_journey_cart_recovery', journeyLink('email')],
+  ['messagebuilder_whatsapp_cta', journeyLink('whatsapp')],
   ['messagebuilder_legacy_tenant_source', `https://store.com/carrinho?utm_journey=7&utm_journey_channel=email&utm_source=MailBiz&utm_medium=Email_I&utm_campaign=jornadas|cart|volte&utm_journey_type=1&_mb_cr_=${MB_CR}`],
+  // The same links as the app receives them after the collector's 302: the query is kept
+  // byte for byte and the browser hands each '|' over as %7C.
+  ['delivered_email_journey', pipesEncoded(journeyLink('email'))],
+  ['delivered_whatsapp_journey', pipesEncoded(journeyLink('whatsapp'))],
+  ['delivered_email_flow', pipesEncoded(flowLink('email'))],
+  ['delivered_whatsapp_flow', pipesEncoded(flowLink('whatsapp'))],
+  // A push deep_link reaches the SDK as the raw string, '|' included.
+  ['push_deep_link_raw_pipes', flowLink('push')],
+  ['encoded_pipes_either_case', 'https://store.com/?utm_flow_params=AE-1%7c3%7Cinst-9&utm_campaign=jornadas%7ccart%7Cvolte'],
   ['recovery_hash_generator_form_encoded', 'https://store.com/carrinho?utm_source=mailbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidSJ9%3D%3D'],
   ['legacy_newsletter_term_content_dropped', 'https://store.com/?utm_source=flowbiz&utm_medium=email&utm_term=newsletter&utm_content=Subscriber%23123&utm_campaign=Black%20Friday'],
   ['third_party_campaign', 'https://store.com/produto/camisa?utm_source=google&utm_medium=cpc&utm_campaign=spring_sale&gclid=Cj0KCQjw'],
@@ -117,8 +116,8 @@ const extract: Array<[string, string]> = [
   ['utf8_bad_continuation_kept_raw', 'https://store.com/?utm_source=%C2%41&utm_medium=%80'],
   ['utf8_lone_continuation_a0_bf_kept_raw', 'https://store.com/?utm_source=%A9&utm_medium=%BF&utm_campaign=%C2%A9'],
   ['utf8_mixed_raw_and_escape_fail_whole_value', 'https://store.com/?utm_campaign=ok%20then%C3'],
-  ['combining_mark_after_separators', 'https://store.com/?utm_source≠a&̸utm_medium=b&utm_campaign=c#̸'],
-  ['combining_mark_after_question_mark', 'https://store.com/?̸&utm_source=a'],
+  ['combining_mark_after_separators', 'https://store.com/?utm_source=\u0338a&\u0338utm_medium=b&utm_campaign=c#\u0338'],
+  ['combining_mark_after_question_mark', 'https://store.com/?\u0338&utm_source=a'],
   // Escaping of the inner JSON (JSON.stringify).
   ['nul_char', 'https://store.com/?utm_source=%00'],
   ['control_chars_lowercase_hex', 'https://store.com/?utm_source=%1F%7F%1B'],
@@ -128,6 +127,7 @@ const extract: Array<[string, string]> = [
   ['flow_params_encoded_pipes', 'https://store.com/?utm_flow_params=AE-1%7C3%7Cinst-9'],
   ['flow_params_extra_segments_ignored', 'https://store.com/?utm_flow_params=A|B|C|D'],
   ['flow_params_fewer_segments', 'https://store.com/?utm_flow_params=A|1'],
+  ['flow_params_fewer_segments_keep_direct', 'https://store.com/?utm_journey_instance=Z&utm_flow_params=A|B'],
   ['flow_params_undecodable_split_raw', 'https://store.com/?utm_flow_params=A|%E0%A4%A|C'],
   ['flow_params_double_encoded_pipe', 'https://store.com/?utm_flow_params=A%257CB'],
   ['flow_params_after_direct_wins', 'https://store.com/?utm_step_id=X&utm_flow_params=A|B|C'],
@@ -162,26 +162,31 @@ const sequences: Array<[string, Array<string | null>]> = [
     null,
     'https://store.com/?foo=bar',
   ]],
+  ['email_journey_then_whatsapp_flow', [
+    pipesEncoded(journeyLink('email')),
+    null,
+    pipesEncoded(flowLink('whatsapp')),
+  ]],
 ];
 
-const round = (steps: Array<string | null>) => steps.map((url) => ({ url, expected: evaluate(url) }));
-
+const fresh = <T,>(run: () => T): T => { cell = undefined; return run(); };
 const out = {
-  source: 'Mailbiz.Onsite.Tag onsite-core url.ts + tracker-core-invoker.ts setUtmNavigationContext (691c2237)',
-  extract: extract.map(([name, url]) => {
-    cell = undefined;
-    return { name, url, expected: evaluate(url) };
+  source: `Mailbiz.Onsite.Tag onsite-core url.ts + tracker-core-invoker.ts setUtmNavigationContext (${revision})`,
+  extract: extract.map(([name, url]) => fresh(() => ({ name, url, expected: evaluate(url) }))),
+  sequences: sequences.map(([name, steps]) => fresh(() => ({ name, steps: steps.map((url) => ({ url, expected: evaluate(url) })) }))),
+  envelope: fresh(() => {
+    const url = 'https://store.com/?utm_campaign=a/b%20%22%C3%A7%22%0A&utm_source=x';
+    const utm = evaluate(url) as string;
+    return { url, utm, context_canonical: JSON.stringify({ utm }) };
   }),
-  sequences: sequences.map(([name, steps]) => {
-    cell = undefined;
-    return { name, steps: round(steps) };
-  }),
-  envelope: (() => {
-    cell = undefined;
-    const utm = evaluate('https://store.com/?utm_campaign=a/b%20%22%C3%A7%22%0A&utm_source=x') as string;
-    return { utm, context_canonical: JSON.stringify({ utm }) };
-  })(),
 };
 
-writeFileSync(resolve(here, 'vectors.json'), JSON.stringify(out, null, 2) + '\n');
-console.log(`wrote ${out.extract.length} extract vectors, ${out.sequences.length} sequences`);
+// One vector per line.
+const j = JSON.stringify;
+writeFileSync(resolve(here, 'vectors.json'), [
+  `{"source": ${j(out.source)},`,
+  `"extract": [\n${out.extract.map((v) => `  ${j(v)}`).join(',\n')}\n],`,
+  `"sequences": [\n${out.sequences.map((s) => `  {"name": ${j(s.name)}, "steps": [\n${s.steps.map((step) => `    ${j(step)}`).join(',\n')}\n  ]}`).join(',\n')}\n],`,
+  `"envelope": ${j(out.envelope)}}`,
+].join('\n') + '\n');
+console.log(`wrote ${out.extract.length} extract vectors, ${out.sequences.length} sequences (web ${revision})`);

@@ -48,8 +48,8 @@ Flowbiz.setEnabled(enabled: Boolean)    // opt-out switch, see SPEC §12; persis
 Flowbiz.setPushToken(token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(payload: Map<String, String>): FlowbizPush?   // null = not ours
-Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch); captures the link's UTMs whatever it returns
-Flowbiz.handlePushOpened(push: FlowbizPush): RecoveryPayload?    // the user opened this push: handleLink over its raw deep_link
+Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch); once initialized, UTMs are captured either way
+Flowbiz.handlePushOpened(push: FlowbizPush): RecoveryPayload?    // on notification tap: handleLink over the push's deep link
 Flowbiz.flush()                         // force queue flush (optional nicety, fire-and-forget)
 ```
 
@@ -112,26 +112,18 @@ override fun onNewToken(token: String) {
     Flowbiz.setPushToken(token)
 }
 
-// Push receipt — from onMessageReceived. Never call handlePushOpened here:
-// receiving a push is not a click
+// Push receipt — from onMessageReceived
 val push: FlowbizPush? = Flowbiz.handlePush(message.data)
 if (push != null) {
     // push.type, push.title, push.body, push.deepLink, push.data — display/route as you wish
 }
 
-// Notification tap — in the Activity the notification opens, from its intent
-// extras: captures the deep link's UTMs (from the raw deep_link) and decodes its
-// recovery link, tenant-checked; route with tappedPush.deepLink as usual
-// (extrasAsMap: your own helper reading back the data map the notification's
-// PendingIntent carried)
+// Notification tap — in the Activity it opens (extrasAsMap: your helper reading the
+// data map its PendingIntent carried); route with tappedPush?.deepLink as usual
 val tappedPush: FlowbizPush? = Flowbiz.handlePush(extrasAsMap(intent.extras))
 val tapped: RecoveryPayload? = Flowbiz.handlePushOpened(tappedPush)
 
-// Deep links — from your launcher/deep-link Activity intent. Forward every
-// link (not only recovery links): its UTMs are captured and reported (SPEC §11.1).
-// Forward each link once: in onCreate only when savedInstanceState == null and the
-// intent lacks FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY, and call setIntent(intent) in
-// onNewIntent — otherwise a rotation re-captures an older link's UTMs.
+// Deep links — every link, recovery or not (see Campaign attribution below)
 val recovery: RecoveryPayload? = Flowbiz.handleLink(intent.data)
 if (recovery != null) {
     // recovery.cartId, recovery.userId, recovery.products[{productId, sku, quantity, recoveryProperties?}]
@@ -162,15 +154,13 @@ if let push = Flowbiz.handlePush(notification.request.content.userInfo) {
     // push.type, push.title, push.body, push.deepLink, push.data
 }
 
-// Notification tap (didReceive response) — captures the deep link's UTMs from the
-// raw deep_link (a URL round-trip can alter them) and decodes its recovery link
+// Notification tap — from didReceive response; route with push.deepLink as usual
 if let push = Flowbiz.handlePush(response.notification.request.content.userInfo),
    let recovery = Flowbiz.handlePushOpened(push) {
-    // restore the cart; route with push.deepLink as usual
+    // restore the cart
 }
 
-// Universal Links — from scene(_:continue:) / onOpenURL. Forward every link
-// (not only recovery links): its UTMs are captured and reported (SPEC §11.1)
+// Links — every link, recovery or not (entry points under Campaign attribution below)
 if let recovery = Flowbiz.handleLink(url) {
     // recovery.cartId, recovery.userId, recovery.products — restore the cart
 }
@@ -191,31 +181,37 @@ and `https://<domain>/.well-known/assetlinks.json`.
 
 ### Campaign attribution (UTMs)
 
-Every link forwarded to `handleLink` is also read for UTMs, exactly as the
-web tag reads the page URL (SPEC §11.1): `utm_source`, `utm_medium`,
-`utm_campaign`, `utm_journey`, `utm_journey_channel`, `utm_journey_type`
-and `utm_flow_params` (expanded into `utm_step_id`, `utm_journey_version`,
-`utm_journey_instance`). They are merged per key into what earlier links
-left, kept on the device for 30 days after the last visit that refreshed
-them (a link, a push tap or the app coming to the foreground — like a web
-page load; a background launch only reads them), and sent as `context.utm`
-on every event — the backend attributes a recovered cart to its journey
-from the `utm` on `cart.sync`. This works whatever `handleLink` returns, so
-forward campaign links that are not recovery links too, and call
-`handlePushOpened(push)` when a notification is tapped (`handlePush` alone
-captures nothing: a received notification is not a click). Nothing is
-captured before `initialize` or while disabled; while disabled, stored
-UTMs are only removed once expired.
+The campaign UTMs of every link forwarded to `handleLink`, and of a tapped
+push via `handlePushOpened`, ride as `context.utm` on every event, as the web
+tag reports them; they are kept 30 days, renewed on each app open or new link.
+Forward every link the app is opened with, recovery link or not:
+
+- **Android**: the deep-link Activity's `onCreate` and `onNewIntent`, once per
+  intent (in `onCreate` only when `savedInstanceState == null` and the intent
+  lacks `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, so a rotation or a relaunch
+  from Recents does not forward an old link again).
+- **iOS**: SwiftUI `onOpenURL`. UIKit scenes: `scene(_:willConnectTo:options:)`
+  for a cold launch (`connectionOptions.userActivities`' `webpageURL` and
+  `connectionOptions.urlContexts`), then `scene(_:continue:)` and
+  `scene(_:openURLContexts:)`. App-delegate-only apps:
+  `application(_:continue:restorationHandler:)` and `application(_:open:options:)`.
+- **Push tap**: `handlePushOpened(push)`; `handlePush` never captures.
+
+Call `initialize` at launch, before forwarding links: links forwarded before
+it are not captured. Forward the launch link before tracking the landing
+screen's `PageView`, so that page view carries the new campaign. Links are
+still captured while the SDK is disabled and ride on the events after
+`setEnabled(true)`; `logout()` keeps them.
 
 ### Consent / opt-out
 
 `Flowbiz.setEnabled(false)` is the LGPD/GDPR consent hook: persisted across
-launches; while disabled the SDK drops new events, stops the heartbeat,
-makes no network calls and captures no UTMs (stored ones are only removed
-once expired). Re-enabling resumes normal operation and re-syncs a push
-token registered while disabled (SPEC §12). The consent UI/decision is the
-host app's responsibility — the SDK collects by default until told
-otherwise.
+launches; while disabled the SDK drops new events, stops the heartbeat and
+makes no network calls. Re-enabling resumes normal operation and re-syncs a
+push token registered while disabled (SPEC §12). The consent UI/decision is
+the host app's responsibility — the SDK collects by default until told
+otherwise. UTMs of links forwarded while disabled are still stored on the
+device, and sent only after re-enabling.
 
 ## Demo apps
 
@@ -245,10 +241,8 @@ exponential backoff on network restore, app foreground, the next track, or
 20 minutes. A `page.ping` heartbeat (default 60 s, configurable ≥ 15 s)
 runs while foregrounded. Sessions rotate after 30 min of inactivity. All
 public APIs are callable from any thread, and — with the exception of
-`handlePush`/`handleLink`/`handlePushOpened`, whose decoding works even
-before `initialize` (SPEC §3/§10/§11) — they are no-ops before `initialize`.
-`handleLink` and `handlePushOpened` also capture the link's UTMs for
-`context.utm` (SPEC §11.1) once initialized.
+`handlePush`/`handleLink`/`handlePushOpened`, which still decode — they are
+no-ops before `initialize`.
 `debug = true` logs diagnostics but never PII.
 
 ## Development
@@ -269,7 +263,7 @@ the [SPEC.md](SPEC.md) section it implements. Change both sides together.
 | Dedup, heartbeat, opt-out (SPEC §7/§8/§12) | `DedupStore`, `HeartbeatScheduler`, `EnabledState` |
 | Offline queue & transport (SPEC §9) | `EventQueue`, `FlushController`, `HttpSender`, `Reachability` |
 | Push & recovery links (SPEC §10/§11) | `PushTokenStore`, `FlowbizPush`, `RecoveryLinkParser`, `RecoveryPayload` |
-| UTM attribution (SPEC §11.1) | `UtmLinkParser`, `UtmStore` |
+| UTM attribution | `UtmLinkParser`, `UtmStore` |
 | Persistence | `KeyValueStore` + `SharedPreferencesStore`/`UserDefaultsStore` |
 | Version stamped into envelopes | `SdkVersion.kt` / `SDKVersion.swift` |
 
@@ -303,10 +297,12 @@ Around the SDK sources:
 cd android
 ./gradlew :sdk:testDebugUnitTest                                   # full suite, incl. shared-fixture tests
 ./gradlew :sdk:testDebugUnitTest --tests 'br.com.flowbiz.onsite.SessionManagerTest'
-./gradlew :sdk:testDebugUnitTest :sdk:assembleRelease :sdk:lint    # exactly what CI runs
+./gradlew :sdk:testDebugUnitTest --rerun :demo:testDebugUnitTest :sdk:assembleRelease :sdk:lint   # exactly what CI runs
 ```
 
 `:sdk:test --rerun` does not re-run the suite; use `:sdk:testDebugUnitTest --rerun`.
+Gradle does not track the `shared/` files the suites read, so after changing
+only those, add `--rerun` or it reuses the previous result.
 The HTML report lands in `android/sdk/build/reports/tests/testDebugUnitTest/`.
 
 **iOS** — needs Xcode 16.4 or newer (Swift 6 toolchain). Older Xcodes

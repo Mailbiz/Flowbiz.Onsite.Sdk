@@ -1,401 +1,103 @@
-{
-  "source": "Mailbiz.Onsite.Tag onsite-core url.ts + tracker-core-invoker.ts setUtmNavigationContext (691c2237)",
-  "extract": [
-    {
-      "name": "messagebuilder_flow_cart_recovery",
-      "url": "https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_flow_params=AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10|3|a1b2c3d4-inst&utm_journey=123&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas|flow|recuperacao-de-carrinho|email-4&utm_journey_type=4",
-      "expected": "{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"jornadas|flow|recuperacao-de-carrinho|email-4\",\"utm_journey\":\"123\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"4\",\"utm_step_id\":\"AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"a1b2c3d4-inst\"}"
-    },
-    {
-      "name": "messagebuilder_journey_cart_recovery",
-      "url": "https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1",
-      "expected": "{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"jornadas|cart|carrinho-abandonado\",\"utm_journey\":\"16\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"1\"}"
-    },
-    {
-      "name": "messagebuilder_whatsapp_cta",
-      "url": "https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_journey=16&utm_journey_channel=whatsapp&utm_source=flowbiz&utm_medium=whatsapp&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1",
-      "expected": "{\"utm_source\":\"flowbiz\",\"utm_medium\":\"whatsapp\",\"utm_campaign\":\"jornadas|cart|carrinho-abandonado\",\"utm_journey\":\"16\",\"utm_journey_channel\":\"whatsapp\",\"utm_journey_type\":\"1\"}"
-    },
-    {
-      "name": "messagebuilder_legacy_tenant_source",
-      "url": "https://store.com/carrinho?utm_journey=7&utm_journey_channel=email&utm_source=MailBiz&utm_medium=Email_I&utm_campaign=jornadas|cart|volte&utm_journey_type=1&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19",
-      "expected": "{\"utm_source\":\"MailBiz\",\"utm_medium\":\"Email_I\",\"utm_campaign\":\"jornadas|cart|volte\",\"utm_journey\":\"7\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"1\"}"
-    },
-    {
-      "name": "recovery_hash_generator_form_encoded",
-      "url": "https://store.com/carrinho?utm_source=mailbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidSJ9%3D%3D",
-      "expected": "{\"utm_source\":\"mailbiz\"}"
-    },
-    {
-      "name": "legacy_newsletter_term_content_dropped",
-      "url": "https://store.com/?utm_source=flowbiz&utm_medium=email&utm_term=newsletter&utm_content=Subscriber%23123&utm_campaign=Black%20Friday",
-      "expected": "{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"Black Friday\"}"
-    },
-    {
-      "name": "third_party_campaign",
-      "url": "https://store.com/produto/camisa?utm_source=google&utm_medium=cpc&utm_campaign=spring_sale&gclid=Cj0KCQjw",
-      "expected": "{\"utm_source\":\"google\",\"utm_medium\":\"cpc\",\"utm_campaign\":\"spring_sale\"}"
-    },
-    {
-      "name": "custom_scheme_link",
-      "url": "myapp://produto/123?utm_source=push&utm_campaign=lancamento",
-      "expected": "{\"utm_source\":\"push\",\"utm_campaign\":\"lancamento\"}"
-    },
-    {
-      "name": "universal_link_with_fragment",
-      "url": "https://store.com/carrinho?utm_source=flowbiz&utm_medium=email&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19#topo",
-      "expected": "{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\"}"
-    },
-    {
-      "name": "allowlist_order_not_query_order",
-      "url": "https://store.com/?utm_journey_type=1&utm_campaign=c&utm_medium=m&utm_source=s",
-      "expected": "{\"utm_source\":\"s\",\"utm_medium\":\"m\",\"utm_campaign\":\"c\",\"utm_journey_type\":\"1\"}"
-    },
-    {
-      "name": "no_host_slash",
-      "url": "https://store.com?utm_source=a",
-      "expected": "{\"utm_source\":\"a\"}"
-    },
-    {
-      "name": "no_query",
-      "url": "https://store.com/carrinho",
-      "expected": null
-    },
-    {
-      "name": "empty_query",
-      "url": "https://store.com/?",
-      "expected": null
-    },
-    {
-      "name": "no_allowlisted_keys",
-      "url": "https://store.com/?foo=1&bar=2",
-      "expected": null
-    },
-    {
-      "name": "non_allowlisted_utms_dropped",
-      "url": "https://store.com/?utm_term=t&utm_content=c&gclid=g&utm_flow_params=",
-      "expected": null
-    },
-    {
-      "name": "hash_route_query_is_read",
-      "url": "https://store.com/#/cart?utm_source=x",
-      "expected": "{\"utm_source\":\"x\"}"
-    },
-    {
-      "name": "query_before_hash_route_wins",
-      "url": "https://store.com/?a=1#/p?utm_source=x",
-      "expected": null
-    },
-    {
-      "name": "second_question_mark_truncates",
-      "url": "https://store.com/?utm_source=a?utm_medium=b",
-      "expected": "{\"utm_source\":\"a\"}"
-    },
-    {
-      "name": "slash_hash_cut",
-      "url": "https://store.com/?utm_source=a/#/cart",
-      "expected": "{\"utm_source\":\"a\"}"
-    },
-    {
-      "name": "fragment_cut",
-      "url": "https://store.com/?utm_source=a#utm_medium=b",
-      "expected": "{\"utm_source\":\"a\"}"
-    },
-    {
-      "name": "empty_segments_skipped",
-      "url": "https://store.com/?&&utm_source=a&&",
-      "expected": "{\"utm_source\":\"a\"}"
-    },
-    {
-      "name": "semicolon_is_not_a_separator",
-      "url": "https://store.com/?utm_source=a;utm_medium=b",
-      "expected": "{\"utm_source\":\"a;utm_medium\"}"
-    },
-    {
-      "name": "value_truncated_at_second_equals",
-      "url": "https://store.com/?utm_campaign=a=b",
-      "expected": "{\"utm_campaign\":\"a\"}"
-    },
-    {
-      "name": "missing_equals_is_undefined",
-      "url": "https://store.com/?utm_source",
-      "expected": "{\"utm_source\":\"undefined\"}"
-    },
-    {
-      "name": "flow_params_missing_equals",
-      "url": "https://store.com/?utm_flow_params",
-      "expected": "{\"utm_step_id\":\"undefined\"}"
-    },
-    {
-      "name": "empty_key_skipped",
-      "url": "https://store.com/?=utm_source",
-      "expected": null
-    },
-    {
-      "name": "double_equals_empty_value",
-      "url": "https://store.com/?utm_source==x",
-      "expected": null
-    },
-    {
-      "name": "keys_case_sensitive_and_not_decoded",
-      "url": "https://store.com/?UTM_SOURCE=a&utm%5Fsource=b",
-      "expected": null
-    },
-    {
-      "name": "last_duplicate_wins",
-      "url": "https://store.com/?utm_source=a&utm_source=b",
-      "expected": "{\"utm_source\":\"b\"}"
-    },
-    {
-      "name": "empty_duplicate_erases",
-      "url": "https://store.com/?utm_source=a&utm_source=&utm_medium=m",
-      "expected": "{\"utm_medium\":\"m\"}"
-    },
-    {
-      "name": "plus_is_not_space",
-      "url": "https://store.com/?utm_campaign=a+b%20c",
-      "expected": "{\"utm_campaign\":\"a+b c\"}"
-    },
-    {
-      "name": "malformed_percent_kept_raw",
-      "url": "https://store.com/?utm_source=%C3&utm_medium=100%",
-      "expected": "{\"utm_source\":\"%C3\",\"utm_medium\":\"100%\"}"
-    },
-    {
-      "name": "invalid_hex_kept_raw",
-      "url": "https://store.com/?utm_source=%zz",
-      "expected": "{\"utm_source\":\"%zz\"}"
-    },
-    {
-      "name": "surrogate_kept_raw_emoji_decoded",
-      "url": "myapp://open?utm_medium=%F0%9F%98%80&utm_source=%ED%A0%80",
-      "expected": "{\"utm_source\":\"%ED%A0%80\",\"utm_medium\":\"😀\"}"
-    },
-    {
-      "name": "overlong_utf8_kept_raw",
-      "url": "https://store.com/?utm_source=%C0%AF",
-      "expected": "{\"utm_source\":\"%C0%AF\"}"
-    },
-    {
-      "name": "lowercase_hex_decoded",
-      "url": "https://store.com/?utm_campaign=promo%c3%a7%C3%A3o",
-      "expected": "{\"utm_campaign\":\"promoção\"}"
-    },
-    {
-      "name": "encoded_ampersand_equals_hash",
-      "url": "https://store.com/?utm_campaign=a%26b%3Dc%23d",
-      "expected": "{\"utm_campaign\":\"a&b=c#d\"}"
-    },
-    {
-      "name": "whitespace_preserved",
-      "url": "https://store.com/?utm_source=%20a%20",
-      "expected": "{\"utm_source\":\" a \"}"
-    },
-    {
-      "name": "raw_non_ascii",
-      "url": "https://store.com/?utm_campaign=promoção",
-      "expected": "{\"utm_campaign\":\"promoção\"}"
-    },
-    {
-      "name": "utf8_boundaries_decoded",
-      "url": "https://store.com/?utm_source=%F4%8F%BF%BF&utm_medium=%EF%BF%BE&utm_campaign=%EF%BB%BFbom",
-      "expected": "{\"utm_source\":\"􏿿\",\"utm_medium\":\"￾\",\"utm_campaign\":\"﻿bom\"}"
-    },
-    {
-      "name": "utf8_above_max_kept_raw",
-      "url": "https://store.com/?utm_source=%F4%90%80%80",
-      "expected": "{\"utm_source\":\"%F4%90%80%80\"}"
-    },
-    {
-      "name": "utf8_overlong_3_and_4_byte_kept_raw",
-      "url": "https://store.com/?utm_source=%E0%80%80&utm_medium=%F0%80%80%80",
-      "expected": "{\"utm_source\":\"%E0%80%80\",\"utm_medium\":\"%F0%80%80%80\"}"
-    },
-    {
-      "name": "utf8_truncated_sequence_kept_raw",
-      "url": "https://store.com/?utm_source=%C2&utm_medium=%E2%9C",
-      "expected": "{\"utm_source\":\"%C2\",\"utm_medium\":\"%E2%9C\"}"
-    },
-    {
-      "name": "utf8_bad_continuation_kept_raw",
-      "url": "https://store.com/?utm_source=%C2%41&utm_medium=%80",
-      "expected": "{\"utm_source\":\"%C2%41\",\"utm_medium\":\"%80\"}"
-    },
-    {
-      "name": "utf8_lone_continuation_a0_bf_kept_raw",
-      "url": "https://store.com/?utm_source=%A9&utm_medium=%BF&utm_campaign=%C2%A9",
-      "expected": "{\"utm_source\":\"%A9\",\"utm_medium\":\"%BF\",\"utm_campaign\":\"©\"}"
-    },
-    {
-      "name": "utf8_mixed_raw_and_escape_fail_whole_value",
-      "url": "https://store.com/?utm_campaign=ok%20then%C3",
-      "expected": "{\"utm_campaign\":\"ok%20then%C3\"}"
-    },
-    {
-      "name": "combining_mark_after_separators",
-      "url": "https://store.com/?utm_source≠a&̸utm_medium=b&utm_campaign=c#̸",
-      "expected": "{\"utm_source\":\"̸a\",\"utm_campaign\":\"c\"}"
-    },
-    {
-      "name": "combining_mark_after_question_mark",
-      "url": "https://store.com/?̸&utm_source=a",
-      "expected": "{\"utm_source\":\"a\"}"
-    },
-    {
-      "name": "nul_char",
-      "url": "https://store.com/?utm_source=%00",
-      "expected": "{\"utm_source\":\"\\u0000\"}"
-    },
-    {
-      "name": "control_chars_lowercase_hex",
-      "url": "https://store.com/?utm_source=%1F%7F%1B",
-      "expected": "{\"utm_source\":\"\\u001f\\u001b\"}"
-    },
-    {
-      "name": "quotes_backslash_newline_tab",
-      "url": "https://store.com/?utm_campaign=a/b%20%22%C3%A7%22%0A%09%5C&utm_source=x",
-      "expected": "{\"utm_source\":\"x\",\"utm_campaign\":\"a/b \\\"ç\\\"\\n\\t\\\\\"}"
-    },
-    {
-      "name": "line_separators_raw",
-      "url": "https://store.com/?utm_campaign=%E2%80%A8%E2%80%A9",
-      "expected": "{\"utm_campaign\":\"  \"}"
-    },
-    {
-      "name": "flow_params_encoded_pipes",
-      "url": "https://store.com/?utm_flow_params=AE-1%7C3%7Cinst-9",
-      "expected": "{\"utm_step_id\":\"AE-1\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"inst-9\"}"
-    },
-    {
-      "name": "flow_params_extra_segments_ignored",
-      "url": "https://store.com/?utm_flow_params=A|B|C|D",
-      "expected": "{\"utm_step_id\":\"A\",\"utm_journey_version\":\"B\",\"utm_journey_instance\":\"C\"}"
-    },
-    {
-      "name": "flow_params_fewer_segments",
-      "url": "https://store.com/?utm_flow_params=A|1",
-      "expected": "{\"utm_step_id\":\"A\",\"utm_journey_version\":\"1\"}"
-    },
-    {
-      "name": "flow_params_undecodable_split_raw",
-      "url": "https://store.com/?utm_flow_params=A|%E0%A4%A|C",
-      "expected": "{\"utm_step_id\":\"A\",\"utm_journey_version\":\"%E0%A4%A\",\"utm_journey_instance\":\"C\"}"
-    },
-    {
-      "name": "flow_params_double_encoded_pipe",
-      "url": "https://store.com/?utm_flow_params=A%257CB",
-      "expected": "{\"utm_step_id\":\"A%7CB\"}"
-    },
-    {
-      "name": "flow_params_after_direct_wins",
-      "url": "https://store.com/?utm_step_id=X&utm_flow_params=A|B|C",
-      "expected": "{\"utm_step_id\":\"A\",\"utm_journey_version\":\"B\",\"utm_journey_instance\":\"C\"}"
-    },
-    {
-      "name": "direct_after_flow_params_wins",
-      "url": "https://store.com/?utm_flow_params=A|B|C&utm_step_id=X",
-      "expected": "{\"utm_step_id\":\"X\",\"utm_journey_version\":\"B\",\"utm_journey_instance\":\"C\"}"
-    },
-    {
-      "name": "empty_flow_segment_erases_direct",
-      "url": "https://store.com/?utm_journey_instance=Z&utm_flow_params=A%7CB%7C",
-      "expected": "{\"utm_step_id\":\"A\",\"utm_journey_version\":\"B\"}"
-    },
-    {
-      "name": "flow_params_empty_first_segment",
-      "url": "https://store.com/?utm_flow_params=|3|I",
-      "expected": "{\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"I\"}"
-    },
-    {
-      "name": "flow_params_empty_value",
-      "url": "https://store.com/?utm_flow_params=",
-      "expected": null
-    }
-  ],
-  "sequences": [
-    {
-      "name": "merge_per_key_across_links",
-      "steps": [
-        {
-          "url": "https://store.com/",
-          "expected": null
-        },
-        {
-          "url": "https://store.com/?utm_campaign=c1&utm_source=mailbiz&utm_journey=9&foo=1",
-          "expected": "{\"utm_source\":\"mailbiz\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\"}"
-        },
-        {
-          "url": "https://store.com/?utm_medium=cpc&utm_source=google&utm_campaign=",
-          "expected": "{\"utm_source\":\"google\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\",\"utm_medium\":\"cpc\"}"
-        },
-        {
-          "url": "https://store.com/?utm_flow_params=S|2|I&utm_source",
-          "expected": "{\"utm_source\":\"undefined\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\",\"utm_medium\":\"cpc\",\"utm_step_id\":\"S\",\"utm_journey_version\":\"2\",\"utm_journey_instance\":\"I\"}"
-        },
-        {
-          "url": "https://store.com/?utm_flow_params=|3|",
-          "expected": "{\"utm_source\":\"undefined\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\",\"utm_medium\":\"cpc\",\"utm_step_id\":\"S\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"I\"}"
-        },
-        {
-          "url": null,
-          "expected": "{\"utm_source\":\"undefined\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\",\"utm_medium\":\"cpc\",\"utm_step_id\":\"S\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"I\"}"
-        }
-      ]
-    },
-    {
-      "name": "stored_keys_keep_first_position",
-      "steps": [
-        {
-          "url": "https://store.com/?utm_campaign=c",
-          "expected": "{\"utm_campaign\":\"c\"}"
-        },
-        {
-          "url": "https://store.com/?utm_source=s&utm_campaign=d",
-          "expected": "{\"utm_campaign\":\"d\",\"utm_source\":\"s\"}"
-        },
-        {
-          "url": "https://store.com/?utm_medium=m",
-          "expected": "{\"utm_campaign\":\"d\",\"utm_source\":\"s\",\"utm_medium\":\"m\"}"
-        }
-      ]
-    },
-    {
-      "name": "bare_loads_keep_stored",
-      "steps": [
-        {
-          "url": "https://store.com/?utm_source=flowbiz&utm_journey=16",
-          "expected": "{\"utm_source\":\"flowbiz\",\"utm_journey\":\"16\"}"
-        },
-        {
-          "url": null,
-          "expected": "{\"utm_source\":\"flowbiz\",\"utm_journey\":\"16\"}"
-        },
-        {
-          "url": "https://store.com/produto/1",
-          "expected": "{\"utm_source\":\"flowbiz\",\"utm_journey\":\"16\"}"
-        },
-        {
-          "url": "https://store.com/?utm_source=",
-          "expected": "{\"utm_source\":\"flowbiz\",\"utm_journey\":\"16\"}"
-        }
-      ]
-    },
-    {
-      "name": "empty_store_bare_load_sends_nothing",
-      "steps": [
-        {
-          "url": null,
-          "expected": null
-        },
-        {
-          "url": "https://store.com/?foo=bar",
-          "expected": null
-        }
-      ]
-    }
-  ],
-  "envelope": {
-    "utm": "{\"utm_source\":\"x\",\"utm_campaign\":\"a/b \\\"ç\\\"\\n\"}",
-    "context_canonical": "{\"utm\":\"{\\\"utm_source\\\":\\\"x\\\",\\\"utm_campaign\\\":\\\"a/b \\\\\\\"ç\\\\\\\"\\\\n\\\"}\"}"
-  }
-}
+{"source": "Mailbiz.Onsite.Tag onsite-core url.ts + tracker-core-invoker.ts setUtmNavigationContext (691c2237)",
+"extract": [
+  {"name":"messagebuilder_flow_cart_recovery","url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_flow_params=AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10|3|a1b2c3d4-inst&utm_journey=123&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas|flow|recuperacao-de-carrinho|email-4&utm_journey_type=4","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"jornadas|flow|recuperacao-de-carrinho|email-4\",\"utm_journey\":\"123\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"4\",\"utm_step_id\":\"AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"a1b2c3d4-inst\"}"},
+  {"name":"messagebuilder_journey_cart_recovery","url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"jornadas|cart|carrinho-abandonado\",\"utm_journey\":\"16\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"1\"}"},
+  {"name":"messagebuilder_whatsapp_cta","url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_journey=16&utm_journey_channel=whatsapp&utm_source=flowbiz&utm_medium=whatsapp&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"whatsapp\",\"utm_campaign\":\"jornadas|cart|carrinho-abandonado\",\"utm_journey\":\"16\",\"utm_journey_channel\":\"whatsapp\",\"utm_journey_type\":\"1\"}"},
+  {"name":"messagebuilder_legacy_tenant_source","url":"https://store.com/carrinho?utm_journey=7&utm_journey_channel=email&utm_source=MailBiz&utm_medium=Email_I&utm_campaign=jornadas|cart|volte&utm_journey_type=1&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19","expected":"{\"utm_source\":\"MailBiz\",\"utm_medium\":\"Email_I\",\"utm_campaign\":\"jornadas|cart|volte\",\"utm_journey\":\"7\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"1\"}"},
+  {"name":"delivered_email_journey","url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas%7Ccart%7Ccarrinho-abandonado&utm_journey_type=1","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"jornadas|cart|carrinho-abandonado\",\"utm_journey\":\"16\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"1\"}"},
+  {"name":"delivered_whatsapp_journey","url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_journey=16&utm_journey_channel=whatsapp&utm_source=flowbiz&utm_medium=whatsapp&utm_campaign=jornadas%7Ccart%7Ccarrinho-abandonado&utm_journey_type=1","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"whatsapp\",\"utm_campaign\":\"jornadas|cart|carrinho-abandonado\",\"utm_journey\":\"16\",\"utm_journey_channel\":\"whatsapp\",\"utm_journey_type\":\"1\"}"},
+  {"name":"delivered_email_flow","url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_flow_params=AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10%7C3%7Ca1b2c3d4-inst&utm_journey=123&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas%7Cflow%7Crecuperacao-de-carrinho%7Cemail-4&utm_journey_type=4","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"jornadas|flow|recuperacao-de-carrinho|email-4\",\"utm_journey\":\"123\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"4\",\"utm_step_id\":\"AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"a1b2c3d4-inst\"}"},
+  {"name":"delivered_whatsapp_flow","url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_flow_params=AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10%7C3%7Ca1b2c3d4-inst&utm_journey=123&utm_journey_channel=whatsapp&utm_source=flowbiz&utm_medium=whatsapp&utm_campaign=jornadas%7Cflow%7Crecuperacao-de-carrinho%7Cwhatsapp-4&utm_journey_type=4","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"whatsapp\",\"utm_campaign\":\"jornadas|flow|recuperacao-de-carrinho|whatsapp-4\",\"utm_journey\":\"123\",\"utm_journey_channel\":\"whatsapp\",\"utm_journey_type\":\"4\",\"utm_step_id\":\"AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"a1b2c3d4-inst\"}"},
+  {"name":"push_deep_link_raw_pipes","url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_flow_params=AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10|3|a1b2c3d4-inst&utm_journey=123&utm_journey_channel=push&utm_source=flowbiz&utm_medium=push&utm_campaign=jornadas|flow|recuperacao-de-carrinho|push-4&utm_journey_type=4","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"push\",\"utm_campaign\":\"jornadas|flow|recuperacao-de-carrinho|push-4\",\"utm_journey\":\"123\",\"utm_journey_channel\":\"push\",\"utm_journey_type\":\"4\",\"utm_step_id\":\"AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"a1b2c3d4-inst\"}"},
+  {"name":"encoded_pipes_either_case","url":"https://store.com/?utm_flow_params=AE-1%7c3%7Cinst-9&utm_campaign=jornadas%7ccart%7Cvolte","expected":"{\"utm_campaign\":\"jornadas|cart|volte\",\"utm_step_id\":\"AE-1\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"inst-9\"}"},
+  {"name":"recovery_hash_generator_form_encoded","url":"https://store.com/carrinho?utm_source=mailbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidSJ9%3D%3D","expected":"{\"utm_source\":\"mailbiz\"}"},
+  {"name":"legacy_newsletter_term_content_dropped","url":"https://store.com/?utm_source=flowbiz&utm_medium=email&utm_term=newsletter&utm_content=Subscriber%23123&utm_campaign=Black%20Friday","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"Black Friday\"}"},
+  {"name":"third_party_campaign","url":"https://store.com/produto/camisa?utm_source=google&utm_medium=cpc&utm_campaign=spring_sale&gclid=Cj0KCQjw","expected":"{\"utm_source\":\"google\",\"utm_medium\":\"cpc\",\"utm_campaign\":\"spring_sale\"}"},
+  {"name":"custom_scheme_link","url":"myapp://produto/123?utm_source=push&utm_campaign=lancamento","expected":"{\"utm_source\":\"push\",\"utm_campaign\":\"lancamento\"}"},
+  {"name":"universal_link_with_fragment","url":"https://store.com/carrinho?utm_source=flowbiz&utm_medium=email&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19#topo","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\"}"},
+  {"name":"allowlist_order_not_query_order","url":"https://store.com/?utm_journey_type=1&utm_campaign=c&utm_medium=m&utm_source=s","expected":"{\"utm_source\":\"s\",\"utm_medium\":\"m\",\"utm_campaign\":\"c\",\"utm_journey_type\":\"1\"}"},
+  {"name":"no_host_slash","url":"https://store.com?utm_source=a","expected":"{\"utm_source\":\"a\"}"},
+  {"name":"no_query","url":"https://store.com/carrinho","expected":null},
+  {"name":"empty_query","url":"https://store.com/?","expected":null},
+  {"name":"no_allowlisted_keys","url":"https://store.com/?foo=1&bar=2","expected":null},
+  {"name":"non_allowlisted_utms_dropped","url":"https://store.com/?utm_term=t&utm_content=c&gclid=g&utm_flow_params=","expected":null},
+  {"name":"hash_route_query_is_read","url":"https://store.com/#/cart?utm_source=x","expected":"{\"utm_source\":\"x\"}"},
+  {"name":"query_before_hash_route_wins","url":"https://store.com/?a=1#/p?utm_source=x","expected":null},
+  {"name":"second_question_mark_truncates","url":"https://store.com/?utm_source=a?utm_medium=b","expected":"{\"utm_source\":\"a\"}"},
+  {"name":"slash_hash_cut","url":"https://store.com/?utm_source=a/#/cart","expected":"{\"utm_source\":\"a\"}"},
+  {"name":"fragment_cut","url":"https://store.com/?utm_source=a#utm_medium=b","expected":"{\"utm_source\":\"a\"}"},
+  {"name":"empty_segments_skipped","url":"https://store.com/?&&utm_source=a&&","expected":"{\"utm_source\":\"a\"}"},
+  {"name":"semicolon_is_not_a_separator","url":"https://store.com/?utm_source=a;utm_medium=b","expected":"{\"utm_source\":\"a;utm_medium\"}"},
+  {"name":"value_truncated_at_second_equals","url":"https://store.com/?utm_campaign=a=b","expected":"{\"utm_campaign\":\"a\"}"},
+  {"name":"missing_equals_is_undefined","url":"https://store.com/?utm_source","expected":"{\"utm_source\":\"undefined\"}"},
+  {"name":"flow_params_missing_equals","url":"https://store.com/?utm_flow_params","expected":"{\"utm_step_id\":\"undefined\"}"},
+  {"name":"empty_key_skipped","url":"https://store.com/?=utm_source","expected":null},
+  {"name":"double_equals_empty_value","url":"https://store.com/?utm_source==x","expected":null},
+  {"name":"keys_case_sensitive_and_not_decoded","url":"https://store.com/?UTM_SOURCE=a&utm%5Fsource=b","expected":null},
+  {"name":"last_duplicate_wins","url":"https://store.com/?utm_source=a&utm_source=b","expected":"{\"utm_source\":\"b\"}"},
+  {"name":"empty_duplicate_erases","url":"https://store.com/?utm_source=a&utm_source=&utm_medium=m","expected":"{\"utm_medium\":\"m\"}"},
+  {"name":"plus_is_not_space","url":"https://store.com/?utm_campaign=a+b%20c","expected":"{\"utm_campaign\":\"a+b c\"}"},
+  {"name":"malformed_percent_kept_raw","url":"https://store.com/?utm_source=%C3&utm_medium=100%","expected":"{\"utm_source\":\"%C3\",\"utm_medium\":\"100%\"}"},
+  {"name":"invalid_hex_kept_raw","url":"https://store.com/?utm_source=%zz","expected":"{\"utm_source\":\"%zz\"}"},
+  {"name":"surrogate_kept_raw_emoji_decoded","url":"myapp://open?utm_medium=%F0%9F%98%80&utm_source=%ED%A0%80","expected":"{\"utm_source\":\"%ED%A0%80\",\"utm_medium\":\"😀\"}"},
+  {"name":"overlong_utf8_kept_raw","url":"https://store.com/?utm_source=%C0%AF","expected":"{\"utm_source\":\"%C0%AF\"}"},
+  {"name":"lowercase_hex_decoded","url":"https://store.com/?utm_campaign=promo%c3%a7%C3%A3o","expected":"{\"utm_campaign\":\"promoção\"}"},
+  {"name":"encoded_ampersand_equals_hash","url":"https://store.com/?utm_campaign=a%26b%3Dc%23d","expected":"{\"utm_campaign\":\"a&b=c#d\"}"},
+  {"name":"whitespace_preserved","url":"https://store.com/?utm_source=%20a%20","expected":"{\"utm_source\":\" a \"}"},
+  {"name":"raw_non_ascii","url":"https://store.com/?utm_campaign=promoção","expected":"{\"utm_campaign\":\"promoção\"}"},
+  {"name":"utf8_boundaries_decoded","url":"https://store.com/?utm_source=%F4%8F%BF%BF&utm_medium=%EF%BF%BE&utm_campaign=%EF%BB%BFbom","expected":"{\"utm_source\":\"􏿿\",\"utm_medium\":\"￾\",\"utm_campaign\":\"﻿bom\"}"},
+  {"name":"utf8_above_max_kept_raw","url":"https://store.com/?utm_source=%F4%90%80%80","expected":"{\"utm_source\":\"%F4%90%80%80\"}"},
+  {"name":"utf8_overlong_3_and_4_byte_kept_raw","url":"https://store.com/?utm_source=%E0%80%80&utm_medium=%F0%80%80%80","expected":"{\"utm_source\":\"%E0%80%80\",\"utm_medium\":\"%F0%80%80%80\"}"},
+  {"name":"utf8_truncated_sequence_kept_raw","url":"https://store.com/?utm_source=%C2&utm_medium=%E2%9C","expected":"{\"utm_source\":\"%C2\",\"utm_medium\":\"%E2%9C\"}"},
+  {"name":"utf8_bad_continuation_kept_raw","url":"https://store.com/?utm_source=%C2%41&utm_medium=%80","expected":"{\"utm_source\":\"%C2%41\",\"utm_medium\":\"%80\"}"},
+  {"name":"utf8_lone_continuation_a0_bf_kept_raw","url":"https://store.com/?utm_source=%A9&utm_medium=%BF&utm_campaign=%C2%A9","expected":"{\"utm_source\":\"%A9\",\"utm_medium\":\"%BF\",\"utm_campaign\":\"©\"}"},
+  {"name":"utf8_mixed_raw_and_escape_fail_whole_value","url":"https://store.com/?utm_campaign=ok%20then%C3","expected":"{\"utm_campaign\":\"ok%20then%C3\"}"},
+  {"name":"combining_mark_after_separators","url":"https://store.com/?utm_source≠a&̸utm_medium=b&utm_campaign=c#̸","expected":"{\"utm_source\":\"̸a\",\"utm_campaign\":\"c\"}"},
+  {"name":"combining_mark_after_question_mark","url":"https://store.com/?̸&utm_source=a","expected":"{\"utm_source\":\"a\"}"},
+  {"name":"nul_char","url":"https://store.com/?utm_source=%00","expected":"{\"utm_source\":\"\\u0000\"}"},
+  {"name":"control_chars_lowercase_hex","url":"https://store.com/?utm_source=%1F%7F%1B","expected":"{\"utm_source\":\"\\u001f\\u001b\"}"},
+  {"name":"quotes_backslash_newline_tab","url":"https://store.com/?utm_campaign=a/b%20%22%C3%A7%22%0A%09%5C&utm_source=x","expected":"{\"utm_source\":\"x\",\"utm_campaign\":\"a/b \\\"ç\\\"\\n\\t\\\\\"}"},
+  {"name":"line_separators_raw","url":"https://store.com/?utm_campaign=%E2%80%A8%E2%80%A9","expected":"{\"utm_campaign\":\"  \"}"},
+  {"name":"flow_params_encoded_pipes","url":"https://store.com/?utm_flow_params=AE-1%7C3%7Cinst-9","expected":"{\"utm_step_id\":\"AE-1\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"inst-9\"}"},
+  {"name":"flow_params_extra_segments_ignored","url":"https://store.com/?utm_flow_params=A|B|C|D","expected":"{\"utm_step_id\":\"A\",\"utm_journey_version\":\"B\",\"utm_journey_instance\":\"C\"}"},
+  {"name":"flow_params_fewer_segments","url":"https://store.com/?utm_flow_params=A|1","expected":"{\"utm_step_id\":\"A\",\"utm_journey_version\":\"1\"}"},
+  {"name":"flow_params_fewer_segments_keep_direct","url":"https://store.com/?utm_journey_instance=Z&utm_flow_params=A|B","expected":"{\"utm_step_id\":\"A\",\"utm_journey_version\":\"B\",\"utm_journey_instance\":\"Z\"}"},
+  {"name":"flow_params_undecodable_split_raw","url":"https://store.com/?utm_flow_params=A|%E0%A4%A|C","expected":"{\"utm_step_id\":\"A\",\"utm_journey_version\":\"%E0%A4%A\",\"utm_journey_instance\":\"C\"}"},
+  {"name":"flow_params_double_encoded_pipe","url":"https://store.com/?utm_flow_params=A%257CB","expected":"{\"utm_step_id\":\"A%7CB\"}"},
+  {"name":"flow_params_after_direct_wins","url":"https://store.com/?utm_step_id=X&utm_flow_params=A|B|C","expected":"{\"utm_step_id\":\"A\",\"utm_journey_version\":\"B\",\"utm_journey_instance\":\"C\"}"},
+  {"name":"direct_after_flow_params_wins","url":"https://store.com/?utm_flow_params=A|B|C&utm_step_id=X","expected":"{\"utm_step_id\":\"X\",\"utm_journey_version\":\"B\",\"utm_journey_instance\":\"C\"}"},
+  {"name":"empty_flow_segment_erases_direct","url":"https://store.com/?utm_journey_instance=Z&utm_flow_params=A%7CB%7C","expected":"{\"utm_step_id\":\"A\",\"utm_journey_version\":\"B\"}"},
+  {"name":"flow_params_empty_first_segment","url":"https://store.com/?utm_flow_params=|3|I","expected":"{\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"I\"}"},
+  {"name":"flow_params_empty_value","url":"https://store.com/?utm_flow_params=","expected":null}
+],
+"sequences": [
+  {"name": "merge_per_key_across_links", "steps": [
+    {"url":"https://store.com/","expected":null},
+    {"url":"https://store.com/?utm_campaign=c1&utm_source=mailbiz&utm_journey=9&foo=1","expected":"{\"utm_source\":\"mailbiz\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\"}"},
+    {"url":"https://store.com/?utm_medium=cpc&utm_source=google&utm_campaign=","expected":"{\"utm_source\":\"google\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\",\"utm_medium\":\"cpc\"}"},
+    {"url":"https://store.com/?utm_flow_params=S|2|I&utm_source","expected":"{\"utm_source\":\"undefined\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\",\"utm_medium\":\"cpc\",\"utm_step_id\":\"S\",\"utm_journey_version\":\"2\",\"utm_journey_instance\":\"I\"}"},
+    {"url":"https://store.com/?utm_flow_params=|3|","expected":"{\"utm_source\":\"undefined\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\",\"utm_medium\":\"cpc\",\"utm_step_id\":\"S\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"I\"}"},
+    {"url":null,"expected":"{\"utm_source\":\"undefined\",\"utm_campaign\":\"c1\",\"utm_journey\":\"9\",\"utm_medium\":\"cpc\",\"utm_step_id\":\"S\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"I\"}"}
+  ]},
+  {"name": "stored_keys_keep_first_position", "steps": [
+    {"url":"https://store.com/?utm_campaign=c","expected":"{\"utm_campaign\":\"c\"}"},
+    {"url":"https://store.com/?utm_source=s&utm_campaign=d","expected":"{\"utm_campaign\":\"d\",\"utm_source\":\"s\"}"},
+    {"url":"https://store.com/?utm_medium=m","expected":"{\"utm_campaign\":\"d\",\"utm_source\":\"s\",\"utm_medium\":\"m\"}"}
+  ]},
+  {"name": "bare_loads_keep_stored", "steps": [
+    {"url":"https://store.com/?utm_source=flowbiz&utm_journey=16","expected":"{\"utm_source\":\"flowbiz\",\"utm_journey\":\"16\"}"},
+    {"url":null,"expected":"{\"utm_source\":\"flowbiz\",\"utm_journey\":\"16\"}"},
+    {"url":"https://store.com/produto/1","expected":"{\"utm_source\":\"flowbiz\",\"utm_journey\":\"16\"}"},
+    {"url":"https://store.com/?utm_source=","expected":"{\"utm_source\":\"flowbiz\",\"utm_journey\":\"16\"}"}
+  ]},
+  {"name": "empty_store_bare_load_sends_nothing", "steps": [
+    {"url":null,"expected":null},
+    {"url":"https://store.com/?foo=bar","expected":null}
+  ]},
+  {"name": "email_journey_then_whatsapp_flow", "steps": [
+    {"url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas%7Ccart%7Ccarrinho-abandonado&utm_journey_type=1","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"jornadas|cart|carrinho-abandonado\",\"utm_journey\":\"16\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"1\"}"},
+    {"url":null,"expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"jornadas|cart|carrinho-abandonado\",\"utm_journey\":\"16\",\"utm_journey_channel\":\"email\",\"utm_journey_type\":\"1\"}"},
+    {"url":"https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_flow_params=AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10%7C3%7Ca1b2c3d4-inst&utm_journey=123&utm_journey_channel=whatsapp&utm_source=flowbiz&utm_medium=whatsapp&utm_campaign=jornadas%7Cflow%7Crecuperacao-de-carrinho%7Cwhatsapp-4&utm_journey_type=4","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"whatsapp\",\"utm_campaign\":\"jornadas|flow|recuperacao-de-carrinho|whatsapp-4\",\"utm_journey\":\"123\",\"utm_journey_channel\":\"whatsapp\",\"utm_journey_type\":\"4\",\"utm_step_id\":\"AE-0c3bf2fb-9d1e-4f55-8d0e-3a1c9b7e2f10\",\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"a1b2c3d4-inst\"}"}
+  ]}
+],
+"envelope": {"url":"https://store.com/?utm_campaign=a/b%20%22%C3%A7%22%0A&utm_source=x","utm":"{\"utm_source\":\"x\",\"utm_campaign\":\"a/b \\\"ç\\\"\\n\"}","context_canonical":"{\"utm\":\"{\\\"utm_source\\\":\\\"x\\\",\\\"utm_campaign\\\":\\\"a/b \\\\\\\"ç\\\\\\\"\\\\n\\\"}\"}"}}
