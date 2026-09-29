@@ -1,11 +1,9 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
-// SPEC §3: warning-clean under strict concurrency checking. Expressed as an
-// upcoming-feature flag (no `unsafeFlags`, which would make the package
-// ineligible as a downstream dependency); on Swift 6 toolchains this enables
-// complete checking while staying in the Swift 5 language mode of
-// tools-version 5.9.
+// An upcoming-feature flag, not `unsafeFlags` (which would make the package
+// unusable as a dependency): complete checking on Swift 6 toolchains, still in
+// the Swift 5 language mode.
 let strictConcurrency: [SwiftSetting] = [
     .enableUpcomingFeature("StrictConcurrency")
 ]
@@ -13,6 +11,7 @@ let strictConcurrency: [SwiftSetting] = [
 let package = Package(
     name: "FlowbizOnsite",
     platforms: [
+        // Kept pending merchant device-share data; revisit iOS 15 before 1.0.
         .iOS(.v13),
         // macOS entry exists only so the package builds/tests on macOS hosts
         // (CI, local dev); the shipped product targets iOS 13+.
@@ -28,11 +27,8 @@ let package = Package(
         .target(
             name: "FlowbizOnsite",
             path: "ios/Sources/FlowbizOnsite",
-            // SPEC §12: the privacy manifest ships inside the target's
-            // resource bundle so host apps' privacy reports aggregate the
-            // SDK's declarations. `.copy` keeps the file verbatim (no plist
-            // processing); no code reads it, so `Bundle.module` availability
-            // is irrelevant beyond the bundle existing.
+            // In the resource bundle so host apps' privacy reports aggregate
+            // it; `.copy` keeps the file verbatim.
             resources: [
                 .copy("PrivacyInfo.xcprivacy")
             ],

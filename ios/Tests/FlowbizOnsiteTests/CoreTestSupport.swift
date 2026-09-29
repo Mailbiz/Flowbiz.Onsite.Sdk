@@ -1,6 +1,3 @@
-// Test doubles and harness for the Slice 4 core (`FlowbizCore` with every
-// seam faked): the tests drive the serial scheduler inline and observe the
-// wire through `FakeHttpSender` bodies.
 import Foundation
 @testable import FlowbizOnsite
 

@@ -6,42 +6,28 @@ import java.util.Locale
 import kotlin.math.abs
 
 /**
- * Canonical JSON writer for the wire `data` payload strings (SPEC §4/§5).
+ * Canonical JSON writer for the wire payload strings. org.json's own
+ * `toString()` diverges from the web tracker's `JSON.stringify`:
+ * `1.0E7`-style exponents for large doubles (JVM), `-0` for negative zero,
+ * `\u2014`-style escaping of U+2000–U+20FF characters, and `<\/` slash
+ * escaping. This writer emits the canonical cross-platform form instead:
  *
- * org.json's own `toString()` diverges from the web tracker's
- * `JSON.stringify` (the reference implementation): `1.0E7`-style exponents
- * for large doubles (JVM), `-0` for negative zero, `\u2014`-style escaping
- * of U+2000–U+20FF characters, and `<\/` slash escaping. This writer emits
- * the canonical cross-platform form instead:
- *
- * - **numbers**: `Double.toString` digits formatted with the ECMAScript
- *   `Number::toString` layout rules — `19.99`, `0.1`, whole doubles without
- *   a fraction part (`19.0` → `19`), fixed notation up to 21 digits
- *   (`10000000`, not `1.0E7`), exponent form beyond (`1e+21`), `-0.0` → `0`.
- *   Caveat: on JDK ≤ 18 (Android included) `Double.toString` is *not*
- *   guaranteed shortest-round-trip (JDK-4511638, fixed in JDK 19), so a few
- *   extreme magnitudes carry extra digits vs JS/Swift — e.g. `1e23` renders
- *   `9.999999999999999e+22` (JS: `1e+23`) and `5e-324` renders `4.9e-324`
- *   (JS: `5e-324`). Both parse back to the identical double; realistic
- *   payload values (prices, quantities) are unaffected. Pinned by
+ * - **numbers**: the ECMAScript `Number::toString` layout (`19.0` → `19`,
+ *   `10000000` not `1.0E7`, `1e+21`, `-0.0` → `0`). On JDK ≤ 18 (Android
+ *   included) `Double.toString` is *not* always shortest-round-trip
+ *   (JDK-4511638), so a few extreme magnitudes carry extra digits vs
+ *   JS/Swift (`1e23` → `9.999999999999999e+22`); both parse back to the
+ *   same double, and prices/quantities are unaffected. Pinned by
  *   `CanonicalJsonNumberTest`.
- * - **strings**: minimal escaping — only `"` `\` and control characters;
- *   raw slashes, raw unicode
  * - **objects**: keys sorted by UTF-16 code units (deterministic output;
  *   matches Swift's UTF-16 sort and JS `Array.prototype.sort`)
  *
  * Mirrored by the Swift `CanonicalJSON`; both are pinned byte-for-byte by
- * `expected.data_canonical` in `shared/fixtures/`.
- *
- * **Throws** on non-finite numbers (NaN/±Infinity) — the same contract as
- * the Swift serializer (org.json already rejects non-finite doubles with a
- * `JSONException` at tree-build time; [numberToJson] re-checks). The SPEC §3
- * never-throw guarantee is applied at the public API boundary (Slice 4),
- * not here.
+ * `expected.data_canonical` in `shared/fixtures/`. **Throws** on non-finite
+ * numbers, like the Swift serializer.
  */
 internal object CanonicalJson {
 
-    /** Renders an org.json tree as a compact canonical string. */
     fun render(value: Any?): String = buildString { appendValue(this, value) }
 
     /**
@@ -94,8 +80,6 @@ internal object CanonicalJson {
         }
     }
 
-    // --- Strings ---
-
     /**
      * Minimal escaping, matching `JSON.stringify`: `"` and `\` plus control
      * characters (and lone surrogates, per well-formed `JSON.stringify`);
@@ -127,13 +111,7 @@ internal object CanonicalJson {
         out.append('"')
     }
 
-    // --- Numbers ---
-
-    /**
-     * ECMAScript `Number::toString(10)` rendering of a finite double, built
-     * from Java's `Double.toString` digits (shortest round-trip only from
-     * JDK 19; see the class doc for the JDK-4511638 caveat).
-     */
+    /** ECMAScript `Number::toString(10)` of a finite double, built from `Double.toString`'s digits. */
     fun numberToJson(value: Double): String {
         require(!value.isNaN() && !value.isInfinite()) {
             "JSON does not allow non-finite numbers ($value)"

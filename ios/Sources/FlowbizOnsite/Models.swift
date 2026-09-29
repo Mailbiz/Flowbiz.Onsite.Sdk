@@ -1,12 +1,5 @@
 import Foundation
 
-/// Payload value types for the typed event catalog (SPEC §5).
-///
-/// Properties are camelCase; serialization emits snake_case wire keys (see
-/// `EventSerializer`). Optional (`nil`) fields are omitted from the wire
-/// entirely — `"key": null` never appears. All types are `Sendable` value
-/// types (SPEC §3); free-form maps use ``JSONValue``.
-
 /// User payload for `accountLogin` / `accountSync`.
 public struct User: Sendable, Equatable {
     public let userId: String
@@ -170,7 +163,8 @@ public struct Address: Sendable, Equatable {
     }
 }
 
-/// Cart payload for `cartSync`. An empty-items cart is valid and always sent (SPEC §7).
+/// Cart payload for `cartSync`. A cart without items is still sent: emptying a
+/// cart is signal (the web tag suppresses it).
 public struct Cart: Sendable, Equatable {
     public let cartId: String
     public let subtotal: Double

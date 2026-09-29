@@ -1,22 +1,21 @@
 import Foundation
 
-/// Typed event catalog — the single typed entry point of SPEC §5.
-///
-/// Compile-time typing replaces the web Yup layer: there is no runtime schema
-/// validation and no field enrichment. Integrators build complete typed
-/// payloads; the SDK serializes them verbatim (snake_case wire keys, optional
-/// fields omitted when nil). All cases carry `Sendable` value types (SPEC §3).
+/// An event for `Flowbiz.track`. Payloads are sent as given, with nil fields
+/// omitted: types replace the web tag's runtime validation, and nothing is
+/// enriched.
 public enum Event: Sendable, Equatable {
 
     /// `page.view` — `path` is resolved against `FlowbizConfig.baseUri`
-    /// (spec §5) into `page.url` and the remembered `context.url`;
+    /// into `page.url` and the remembered `context.url`;
     /// `title` ships as `page.title`. Both optional.
     case pageView(path: String? = nil, title: String? = nil)
 
-    /// `account.login`.
+    /// `account.login`; this and later events carry `user.userId` as
+    /// `identity.user_id` until logout.
     case accountLogin(user: User)
 
-    /// `account.sync`.
+    /// `account.sync`; this and later events carry `user.userId` as
+    /// `identity.user_id` until logout.
     case accountSync(user: User)
 
     /// `product.view`.

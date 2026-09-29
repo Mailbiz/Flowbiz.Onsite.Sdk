@@ -3,11 +3,7 @@ package br.com.flowbiz.onsite
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * Table-driven pinning of [CanonicalJson.numberToJson] against JS
- * `String(x)` / `JSON.stringify(x)` reference output — the web tracker is
- * the reference implementation. Mirrored by the Swift `CanonicalNumberSuite`.
- */
+/** Expected strings are JS `JSON.stringify(x)` output (the web tracker is the reference), as in Swift. */
 class CanonicalJsonNumberTest {
 
     @Test
@@ -44,7 +40,6 @@ class CanonicalJsonNumberTest {
         // (prices, quantities) never hit this region.
         assertEquals("9.999999999999999e+22", CanonicalJson.numberToJson(1e23))
         assertEquals("4.9e-324", CanonicalJson.numberToJson(java.lang.Double.MIN_VALUE)) // 5e-324
-        // Round-trip equality proof for the pinned divergences:
         assertEquals(1e23, "9.999999999999999e+22".toDouble(), 0.0)
         assertEquals(java.lang.Double.MIN_VALUE, "4.9e-324".toDouble(), 0.0)
     }

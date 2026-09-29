@@ -1,26 +1,23 @@
 package br.com.flowbiz.onsite
 
 /**
- * Typed event catalog — the single typed entry point of SPEC §5.
- *
- * Compile-time typing replaces the web Yup layer: there is no runtime schema
- * validation and no field enrichment. Integrators build complete typed
- * payloads; the SDK serializes them verbatim (snake_case wire keys, optional
- * fields omitted when null).
+ * An event for [Flowbiz.track]. Payloads are sent as given: unlike the web
+ * tag there is no runtime schema validation and no field enrichment, and
+ * null optional fields are omitted from the wire.
  */
 sealed class Event {
 
     /**
-     * `page.view` — [path] is resolved against `FlowbizConfig.baseUri`
-     * (spec §5) into `page.url` and the remembered `context.url`; [title]
-     * ships as `page.title`. Both optional.
+     * `page.view` — [path] is resolved against `FlowbizConfig.baseUri` into
+     * `page.url` and the remembered `context.url`; [title] ships as
+     * `page.title`. Both optional.
      */
     data class PageView(val path: String? = null, val title: String? = null) : Event()
 
-    /** `account.login`. */
+    /** `account.login`; this and later events carry [User.userId] as `identity.user_id` until logout. */
     data class AccountLogin(val user: User) : Event()
 
-    /** `account.sync`. */
+    /** `account.sync`; this and later events carry [User.userId] as `identity.user_id` until logout. */
     data class AccountSync(val user: User) : Event()
 
     /** `product.view`. */

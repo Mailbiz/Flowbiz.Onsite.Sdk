@@ -1,8 +1,5 @@
-// Drift-guard tests: every fixture in `shared/fixtures/` is mapped onto the
-// typed constructors, serialized, and the produced `data` JSON string is
-// structurally compared against `expected.data`. The Kotlin test suite runs
-// the exact same fixtures — if the two SDKs disagree, the code is wrong,
-// never the fixture.
+// The Kotlin suite runs the same `shared/fixtures/`: if the two SDKs
+// disagree, the code is wrong, never the fixture.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -90,8 +87,7 @@ import Testing
         }
     }
 
-    /// Garbage-input contract, aligned with Kotlin: serialization throws on
-    /// non-finite numbers (SPEC §3's never-throw boundary lands in Slice 4).
+    /// The serializer throws, as on Kotlin; `FlowbizCore` is the never-throw boundary.
     @Test func nonFiniteNumbersThrow() {
         for garbage in [Double.nan, .infinity, -.infinity] {
             let event = Event.cartSync(

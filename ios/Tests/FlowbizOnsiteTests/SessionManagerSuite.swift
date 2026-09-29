@@ -1,5 +1,3 @@
-// SPEC §6 session mechanics: 30-min sliding window on the monotonic clock,
-// wall clock only as the cross-restart fallback.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -50,8 +48,7 @@ import Testing
     }
 
     @Test func touchAtExactlyThirtyMinutesRotates() {
-        // Boundary is inclusive: elapsed >= 30:00.000 rotates ("after >= 30
-        // min of inactivity", SPEC §6).
+        // Boundary is inclusive: elapsed >= 30:00.000 rotates.
         let original = manager.currentSession()
         clock.advance(timeout)
         manager.touch()
@@ -189,7 +186,7 @@ import Testing
         #expect(next.currentSession() == original)
     }
 
-    // MARK: Corrupt persisted state (SPEC §3: silent defaults, no throw)
+    // MARK: Corrupt persisted state (silent defaults, no throw)
 
     @Test func corruptPersistedValuesStartAFreshSessionSilently() {
         store[StorageKeys.sessionId] = 42 // wrong type
@@ -227,7 +224,7 @@ import Testing
         #expect(fresh[StorageKeys.visitCount] as? Int == 1)
     }
 
-    // MARK: Forced rotation (logout support, Slice 4)
+    // MARK: Forced rotation (logout)
 
     @Test func rotateForcesANewSessionAndIncrementsVisitCount() {
         let original = manager.currentSession()
@@ -235,7 +232,6 @@ import Testing
         let rotated = manager.currentSession()
         #expect(rotated.sessionId != original.sessionId)
         #expect(rotated.visitCount == original.visitCount + 1)
-        // Persisted immediately.
         #expect(store[StorageKeys.sessionId] as? String == rotated.sessionId)
         #expect(store[StorageKeys.visitCount] as? Int == rotated.visitCount)
     }

@@ -9,19 +9,12 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 
-/**
- * SPEC §9 response classification through a real socket plus the pure
- * [HttpUrlSender.classify] table. Also pins the wire mechanics: POST to
- * `/collect`, JSON content type, `platform` header, body passthrough,
- * redirects not followed.
- *
- * Uses a minimal [ServerSocket]-based HTTP stub: `com.sun.net.httpserver`
- * is not on the Android unit-test compile classpath (tests compile against
- * `android.jar`, same reason org.json is a test dependency).
- */
 class HttpUrlSenderTest {
 
-    /** One-shot loopback HTTP server answering every request with [status]. */
+    /**
+     * Loopback stub on a raw [ServerSocket]: `com.sun.net.httpserver` is not on
+     * the Android unit-test classpath (tests compile against `android.jar`).
+     */
     private class StubServer(
         private val status: Int,
         private val delayMillis: Long = 0,
@@ -123,8 +116,6 @@ class HttpUrlSenderTest {
     private fun sendTo(baseUrl: String): SendResult =
         HttpUrlSender(baseUrl, "android").send("""{"data":[]}""")
 
-    // --- Wire mechanics ---
-
     @Test
     fun postsJsonBodyWithPlatformHeaderToCollectPath() {
         val stub = startServer(200)
@@ -137,8 +128,6 @@ class HttpUrlSenderTest {
         assertEquals("android", stub.platform)
         assertEquals("""{"data":[{"event":"e1"}]}""", stub.body)
     }
-
-    // --- Real-socket classification ---
 
     @Test
     fun http200IsSuccess() {
@@ -203,8 +192,6 @@ class HttpUrlSenderTest {
     fun malformedCollectorUrlIsPermanent() {
         assertEquals(SendResult.PERMANENT_ERROR, HttpUrlSender("nonsense://::bad::", "android").send("{}"))
     }
-
-    // --- Pure classification table (SPEC §9) ---
 
     @Test
     fun classificationTable() {

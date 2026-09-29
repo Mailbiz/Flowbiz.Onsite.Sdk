@@ -9,12 +9,8 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 /**
- * SPEC §12: `debug` logging never prints PII. Pins the invariant end-to-end:
- * a full pipeline scenario (account login with email/phone/name, push token
- * relay, dedup suppression, disabled drops, a serialization failure) is run
- * with the debug sink captured, and none of the captured lines may contain
- * any of the PII values — logs carry wire event names, counts, codes and
- * exception class names only, never `data` payload strings or tokens.
+ * Debug logs carry wire event names, counts, codes and exception class names
+ * only: never PII, `data` payloads or tokens.
  */
 class DebugLogRedactionTest {
 

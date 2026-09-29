@@ -166,6 +166,6 @@
       "deepLink": null,
       "data": {}
     },
-    "note": "SPEC 10.2: the contract is a JSON-encoded STRING on both platforms. FCM data payloads are Map<String,String>, so a dict value cannot occur on Android (-> null). APNs userInfo CAN nest a dictionary; iOS tolerates it leniently."
+    "note": "The contract is a JSON-encoded STRING on both platforms. FCM data payloads are Map<String,String>, so a dict value cannot occur on Android (-> null). APNs userInfo CAN nest a dictionary; iOS tolerates it leniently."
   }
 ]

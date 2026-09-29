@@ -1,9 +1,8 @@
 package br.com.flowbiz.onsite
 
 /**
- * Manually-driven [TaskScheduler]: `execute` runs inline (the tests *are*
- * the serial thread), delayed/repeating tasks are recorded for the test to
- * fire explicitly. [allScheduleDelays] is the backoff-sequence probe.
+ * `execute` runs inline (the test *is* the serial thread); delayed and
+ * repeating tasks wait for the test to fire them.
  */
 internal class FakeTaskScheduler : TaskScheduler {
 
@@ -37,21 +36,15 @@ internal class FakeTaskScheduler : TaskScheduler {
         scheduled.last { !it.repeating && !it.cancelled }.task.run()
     }
 
-    /** The live repeating task (heartbeat), or null. */
     fun activeRepeating(): FakeHandle? = scheduled.lastOrNull { it.repeating && !it.cancelled }
 
-    /** Fires the live repeating task [times] beats. */
     fun tickRepeating(times: Int = 1) {
         val handle = activeRepeating() ?: error("no active repeating task")
         repeat(times) { handle.task.run() }
     }
 }
 
-/**
- * Scripted [HttpSender]: captures every body, answers from [results] (then
- * [defaultResult]), or via [resultFor] when set. [maxDepth] detects
- * nested/concurrent sends; [onSend] lets tests trigger re-entrancy.
- */
+/** Scripted [HttpSender]; [maxDepth] above 1 means a send ran inside another. */
 internal class FakeHttpSender : HttpSender {
 
     val bodies = mutableListOf<String>()

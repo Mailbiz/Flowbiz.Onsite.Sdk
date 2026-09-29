@@ -1,4 +1,3 @@
-// SPEC §12 enabled switch + SPEC §10.1 push token cell persistence.
 #if canImport(Testing)
 import Foundation
 import Testing

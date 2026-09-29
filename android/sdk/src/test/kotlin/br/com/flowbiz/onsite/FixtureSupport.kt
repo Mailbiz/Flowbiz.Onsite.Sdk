@@ -4,11 +4,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/**
- * Test-side helpers for the shared drift-guard fixtures (`shared/fixtures/`):
- * locating the fixture directory, mapping fixture `input` JSON onto the typed
- * constructors, and structural JSON comparison.
- */
 object FixtureSupport {
 
     /** Walks up from the working directory until `shared/<name>` is found. */
@@ -42,7 +37,6 @@ object FixtureSupport {
 
     fun utmEnvelopeVector(): JSONObject = utmVectors.getJSONObject("envelope")
 
-    /** Maps a fixture (`event` name + camelCase `input`) onto the typed constructors. */
     fun buildEvent(eventName: String, input: JSONObject): Event = when (eventName) {
         "pageView" -> Event.PageView(path = input.stringOrNull("path"), title = input.stringOrNull("title"))
         "accountLogin" -> Event.AccountLogin(user(input.getJSONObject("user")))
@@ -172,9 +166,8 @@ object FixtureSupport {
     )
 
     /**
-     * Structural comparison — key order irrelevant, numbers compared by double
-     * value (`0` == `0.0`). Returns a description of the first difference, or
-     * null when equivalent.
+     * First structural difference, or null. Key order is ignored and numbers
+     * compare as doubles (`0` == `0.0`).
      */
     fun diff(expected: Any?, actual: Any?, path: String): String? {
         val exp = if (expected == JSONObject.NULL) null else expected

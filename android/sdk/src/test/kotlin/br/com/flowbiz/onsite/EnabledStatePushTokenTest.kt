@@ -6,12 +6,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** SPEC §12 enabled switch + SPEC §10.1 push token cell persistence. */
 class EnabledStatePushTokenTest {
 
     private val store = FakeKeyValueStore()
-
-    // --- EnabledState ---
 
     @Test
     fun enabledDefaultsToTrue() {
@@ -34,11 +31,9 @@ class EnabledStatePushTokenTest {
 
     @Test
     fun corruptEnabledValueReadsAsEnabled() {
-        store.values[StorageKeys.ENABLED] = "yes" // wrong type -> silent default
+        store.values[StorageKeys.ENABLED] = "yes"
         assertTrue(EnabledState(store).isEnabled)
     }
-
-    // --- PushTokenStore ---
 
     @Test
     fun pushTokenDefaultsToNull() {

@@ -3,10 +3,7 @@ package br.com.flowbiz.onsite
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * Outcome of one `POST /collect` attempt, per the SPEC §9 response table.
- * Batch-level: the collector accepts or rejects the whole request.
- */
+/** Outcome of one `POST /collect` attempt; the collector accepts or rejects the whole batch. */
 internal enum class SendResult {
     /** 2xx — the batch was ingested; dequeue it. */
     SUCCESS,
@@ -22,35 +19,20 @@ internal enum class SendResult {
 }
 
 /**
- * Transport seam: posts one already-serialized `{"data":[...]}` body.
- * Implementations never throw; every failure maps to a [SendResult]
- * (SPEC §3). Blocking by design — always called on the SDK's serial
- * scheduler thread, never the caller's (SPEC §3).
+ * Posts one serialized `{"data":[...]}` body. Blocking by design: always
+ * called on the SDK's scheduler thread. Never throws; every failure maps to
+ * a [SendResult].
  */
 internal interface HttpSender {
     fun send(body: String): SendResult
 }
 
 /**
- * Production [HttpSender] over [HttpURLConnection] (SPEC §1): POST
- * `{collectorUrl}/collect`, `Content-Type: application/json`, `platform`
- * header, 5 s connect / 10 s read timeout.
- *
- * Classification (SPEC §9), see [classify]:
- * - 2xx → [SendResult.SUCCESS]
- * - **3xx → [SendResult.PERMANENT_ERROR]** — SPEC only says 3xx is "not
- *   success". Redirects are disabled (`instanceFollowRedirects = false`) so
- *   3xx is observed honestly; a redirecting collector URL is a
- *   misconfiguration that retrying can never fix, so treating it as
- *   retriable would loop the batch forever. Deliberate, flagged for review.
- * - 413 → [SendResult.PAYLOAD_TOO_LARGE]
- * - 408/429 → [SendResult.RETRIABLE_ERROR]
- * - other 4xx → [SendResult.PERMANENT_ERROR]
- * - 5xx, unrecognized codes, timeouts, I/O errors → [SendResult.RETRIABLE_ERROR]
- *
- * A malformed [collectorUrl] makes every send a [SendResult.PERMANENT_ERROR]
- * (nothing can ever be delivered; the queue must not grow forever). Config
- * validation proper happens in Slice 4.
+ * `POST {collectorUrl}/collect` with the `platform` header. Redirects are not
+ * followed and a 3xx is permanent: a redirect means the batch was not
+ * ingested, and a redirecting collector URL is a misconfiguration that
+ * retrying can never fix, so a retriable 3xx would loop the batch forever.
+ * A malformed [collectorUrl] makes every send permanent for the same reason.
  */
 internal class HttpUrlSender(
     collectorUrl: String,
@@ -100,13 +82,11 @@ internal class HttpUrlSender(
     }
 
     companion object {
-        /** SPEC §2/§9: 5 s connection timeout — internal constant. */
         const val CONNECT_TIMEOUT_MS = 5_000
 
         /** Read timeout; the collector answers small JSON bodies fast. */
         const val READ_TIMEOUT_MS = 10_000
 
-        /** Status-code → [SendResult] mapping (SPEC §9 table); pure, test-pinned. */
         fun classify(code: Int): SendResult = when {
             code in 200..299 -> SendResult.SUCCESS
             code in 300..399 -> SendResult.PERMANENT_ERROR // misconfig; see class doc

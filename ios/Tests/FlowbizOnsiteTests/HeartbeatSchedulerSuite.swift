@@ -1,5 +1,3 @@
-// SPEC §8 heartbeat: repeating beats while started, stop halts, and the
-// fire-and-forget contract — failures drop, nothing ever touches the queue.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -59,8 +57,7 @@ import Testing
     }
 
     @Test func sendFailureIsDroppedAndNeverEnqueued() {
-        // A durable queue co-exists; a failing heartbeat must never reach it
-        // (SPEC §8: dropped on failure, never persisted, no retry).
+        // A durable queue co-exists; a failing heartbeat must never reach it.
         let queueFile = temporaryQueueFile()
         let queue = EventQueue(fileURL: queueFile)
         sender.defaultResult = .retriableError
@@ -69,7 +66,6 @@ import Testing
         #expect(sender.bodies.count == 2)
         #expect(queue.size == 0)
         #expect(!FileManager.default.fileExists(atPath: queueFile.path))
-        // No retry machinery engaged either.
         #expect(scheduler.allScheduleDelays.isEmpty)
     }
 
@@ -80,7 +76,7 @@ import Testing
         #expect(sender.bodies.isEmpty)
     }
 
-    // MARK: page.ping envelope shape (SPEC §8: not part of the Event catalog)
+    // MARK: page.ping envelope shape (not part of the Event catalog)
 
     @Test func buildPingProducesAPingEnvelopeWithEmptyPayload() throws {
         let entry = EnvelopeBuilder.buildPing(
@@ -111,7 +107,6 @@ import Testing
         let identity = entry["identity"] as? [String: Any]
         #expect(identity?["user_id"] as? String == "u1")
         #expect(identity?["visit_count"] as? Int == 3)
-        // Round-trips through the canonical renderer like any queued entry.
         let rendered = try CanonicalJSON.render(entry)
         #expect(try JSONSerialization.jsonObject(with: Data(rendered.utf8)) is [String: Any])
     }

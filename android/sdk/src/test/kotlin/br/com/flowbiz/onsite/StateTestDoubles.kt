@@ -1,11 +1,8 @@
 package br.com.flowbiz.onsite
 
 /**
- * In-memory [KeyValueStore] for unit tests (real SharedPreferences needs a
- * device/Robolectric — deliberately not used). Mimics the hardened
- * [SharedPreferencesStore] semantics: a value read back as the wrong type
- * degrades to null, never a throw. [values] is exposed so tests can plant
- * corrupt entries and inspect persistence directly.
+ * In-memory [KeyValueStore] (the project runs without Robolectric). Like the
+ * hardened [SharedPreferencesStore], a wrong-typed value reads as null.
  */
 internal class FakeKeyValueStore : KeyValueStore {
 

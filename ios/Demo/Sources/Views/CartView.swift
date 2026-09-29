@@ -2,7 +2,7 @@ import SwiftUI
 import FlowbizOnsite
 
 /// Cart screen: quantity updates, coupon, postal code, explicit sync and
-/// the checkout entry point. Mirrors the Android demo 1:1.
+/// the checkout entry point.
 struct CartView: View {
 
     @EnvironmentObject var store: DemoStore
@@ -22,7 +22,7 @@ struct CartView: View {
                             get: { line.quantity },
                             set: { newValue in
                                 store.setQuantity(sku: line.product.sku, quantity: newValue)
-                                // SPEC §5 `cart.item.update`: quantity change for one line (0 removes it store-side).
+                                // Quantity 0 removes the line store-side.
                                 Flowbiz.track(.cartItemUpdate(
                                     cartId: DemoStore.cartId,
                                     productId: line.product.productId,
@@ -41,7 +41,6 @@ struct CartView: View {
                     let coupon = couponText.trimmingCharacters(in: .whitespaces)
                     guard !coupon.isEmpty else { return }
                     store.coupon = coupon
-                    // SPEC §5 `cart.setcoupon`.
                     Flowbiz.track(.cartSetCoupon(cartId: DemoStore.cartId, coupon: coupon))
                 }
                 TextField("CEP (ex.: 01310-100)", text: $cepText)
@@ -49,7 +48,6 @@ struct CartView: View {
                     let cep = cepText.trimmingCharacters(in: .whitespaces)
                     guard !cep.isEmpty else { return }
                     store.postalCode = cep
-                    // SPEC §5 `cart.setpostalcode`.
                     Flowbiz.track(.cartSetPostalCode(cartId: DemoStore.cartId, postalCode: cep))
                 }
             }
@@ -61,7 +59,7 @@ struct CartView: View {
             }
             Section {
                 Button("Sincronizar carrinho (cart.sync)") {
-                    // SPEC §5 `cart.sync` — an empty cart still sends (SPEC §7: emptying is signal).
+                    // An empty cart is still sent: emptying it is signal.
                     Flowbiz.track(.cartSync(cart: store.cart()))
                 }
                 NavigationLink("Finalizar compra", destination: CheckoutView())
@@ -71,7 +69,6 @@ struct CartView: View {
         .onAppear {
             couponText = store.coupon ?? ""
             cepText = store.postalCode ?? ""
-            // SPEC §5 `page.view`: tracked on every screen change.
             Flowbiz.track(.pageView(path: "/carrinho", title: "Carrinho"))
         }
     }

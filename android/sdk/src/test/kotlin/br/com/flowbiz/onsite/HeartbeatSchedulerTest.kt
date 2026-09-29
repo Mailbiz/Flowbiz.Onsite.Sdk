@@ -10,10 +10,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/**
- * SPEC §8 heartbeat: repeating beats while started, stop halts, and the
- * fire-and-forget contract — failures drop, nothing ever touches the queue.
- */
 class HeartbeatSchedulerTest {
 
     @get:Rule
@@ -70,8 +66,7 @@ class HeartbeatSchedulerTest {
 
     @Test
     fun sendFailureIsDroppedAndNeverEnqueued() {
-        // A durable queue co-exists; a failing heartbeat must never reach it
-        // (SPEC §8: dropped on failure, never persisted, no retry).
+        // Fire-and-forget: a failed beat is dropped, never queued or retried.
         val queueFile = File(temp.newFolder(), "queue.jsonl")
         val queue = EventQueue(queueFile)
         sender.defaultResult = SendResult.RETRIABLE_ERROR
@@ -80,7 +75,6 @@ class HeartbeatSchedulerTest {
         assertEquals(2, sender.bodies.size)
         assertEquals(0, queue.size)
         assertFalse(queueFile.exists())
-        // No retry machinery engaged either.
         assertTrue(scheduler.allScheduleDelays.isEmpty())
     }
 
@@ -91,8 +85,6 @@ class HeartbeatSchedulerTest {
         scheduler.tickRepeating(2)
         assertEquals(0, sender.bodies.size)
     }
-
-    // --- page.ping envelope shape (SPEC §8: not part of the Event catalog) ---
 
     @Test
     fun buildPingProducesAPingEnvelopeWithEmptyPayload() {

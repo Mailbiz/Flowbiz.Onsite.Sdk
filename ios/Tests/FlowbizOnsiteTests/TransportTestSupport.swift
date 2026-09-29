@@ -1,5 +1,3 @@
-// Test doubles for the Slice 3 transport components: a manually-driven
-// TaskScheduler (the test *is* the serial queue) and a scripted HttpSender.
 import Foundation
 @testable import FlowbizOnsite
 
@@ -56,7 +54,6 @@ final class FakeTaskScheduler: TaskScheduler, @unchecked Sendable {
         scheduled.last { $0.repeating && !$0.cancelled }
     }
 
-    /// Fires the live repeating task `times` beats.
     func tickRepeating(_ times: Int = 1) {
         let handle = activeRepeating()!
         for _ in 0..<times { handle.task() }

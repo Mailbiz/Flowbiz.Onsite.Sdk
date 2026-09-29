@@ -1,19 +1,9 @@
 import Foundation
 
-/// Pure builder for a single SPEC §4 envelope entry.
-///
-/// No storage and no statics-derived state: every runtime value (hash,
-/// timestamps, identity, context) is injected by the caller — later slices
-/// provide the real identity store, clock and device info. This keeps the
-/// wire shape deterministic and unit-testable.
 enum EnvelopeBuilder {
 
-    /// Formats epoch milliseconds as ISO-8601 UTC with milliseconds,
-    /// e.g. `2026-07-21T10:00:00.123Z`.
-    ///
-    /// Pure integer epoch-millis math (Howard Hinnant's civil-from-days
-    /// algorithm) — no `DateFormatter` allocation, no Double seconds
-    /// round-trip, thread-safe and locale/timezone independent.
+    /// `2026-07-21T10:00:00.123Z`, by integer math (Hinnant's civil-from-days):
+    /// no `DateFormatter`, no Double rounding, locale-independent.
     static func isoMillis(_ epochMillis: Int64) -> String {
         let days = floorDiv(epochMillis, 86_400_000)
         let msOfDay = Int(epochMillis - days * 86_400_000)
@@ -47,24 +37,7 @@ enum EnvelopeBuilder {
         return (Int(year + (month <= 2 ? 1 : 0)), Int(month), Int(day))
     }
 
-    /// Builds one entry of the envelope `data` array (SPEC §4).
-    ///
-    /// - `identity.user_id` is omitted when `userId` is nil.
-    /// - `context.url` / `context.baseuri` / `context.recoveryUrl` are
-    ///   passed in by the core, spec §4; omitted when nil or empty.
-    /// - `context.utm` likewise, as the rendered JSON string (not an object).
-    /// - `data` is a JSON **string** (the payload serialized separately),
-    ///   not a nested object.
-    /// - Throws only for non-finite numbers in the payload (see
-    ///   ``EventSerializer``); the SPEC §3 never-throw boundary is applied
-    ///   at the public API in Slice 4.
-    ///
-    /// - Parameters:
-    ///   - createdAtMillis: wall-clock epoch millis captured at `track()` time
-    ///   - sentAtMillis: wall-clock epoch millis of the transmission attempt
-    ///   - timezone: UTC offset of the device, e.g. `-03:00`
-    ///   - screen: device screen size, e.g. `1170x2532`
-    ///   - platform: `android` or `ios` (drives `context.vendor`, `v_tracker`, `v_version`)
+    /// Throws only for non-finite numbers in the payload.
     static func build(
         event: Event,
         hash: String,
@@ -108,13 +81,6 @@ enum EnvelopeBuilder {
         )
     }
 
-    /// Builds a SPEC §8 `page.ping` heartbeat entry. Not part of the `Event`
-    /// catalog (the heartbeat is automatic, never tracked by the host app).
-    /// `dataJSON` defaults to an empty object; the facade passes the
-    /// last-tracked page as `{"page":{"title":...,"url":...}}`
-    /// (web semantics: pings describe the current page). Same shape rules
-    /// as `build`, including `context.url` / `context.baseuri` /
-    /// `context.recoveryUrl` / `context.utm` passed in by the caller.
     static func buildPing(
         hash: String,
         createdAtMillis: Int64,
@@ -158,11 +124,7 @@ enum EnvelopeBuilder {
         )
     }
 
-    /// Builds an entry for an *internal* raw event — a wire name outside the
-    /// public `Event` catalog with a pre-rendered `data` JSON string
-    /// (SPEC §10.1 `push.token.sync` / `push.token.remove`). Same envelope
-    /// shape as `build`, including `context.url` / `context.baseuri` /
-    /// `context.recoveryUrl` / `context.utm` passed in by the caller.
+    /// For wire names outside `Event`, such as `push.token.sync`.
     static func buildRaw(
         wireName: String,
         dataJSON: String,
@@ -207,6 +169,7 @@ enum EnvelopeBuilder {
         )
     }
 
+    /// `data` and `context.utm` are JSON strings, not nested objects.
     private static func buildEntry(
         wireName: String,
         dataJSON: String,

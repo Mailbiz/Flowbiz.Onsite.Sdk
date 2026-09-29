@@ -1,14 +1,10 @@
 package br.com.flowbiz.onsite
 
 /**
- * Thin abstraction over the platform key-value store (`SharedPreferences`
- * here, `UserDefaults` on iOS) — the SPEC §1 persistence layer for identity,
- * session, the enabled switch and the push token.
- *
- * Contract (SPEC §3): getters return `null` for **missing or corrupt**
- * (wrong-type / unreadable) values so callers degrade to their defaults
- * silently; implementations never throw and writes never block the caller.
- * Implementations must be safe to call from any thread.
+ * Platform key-value store seam. Getters return `null` for **missing or
+ * corrupt** (wrong-type / unreadable) values so callers degrade to their
+ * defaults silently; implementations never throw, writes never block the
+ * caller, and every call is safe from any thread.
  */
 internal interface KeyValueStore {
     fun getString(key: String): String?
@@ -23,33 +19,26 @@ internal interface KeyValueStore {
 }
 
 /**
- * Persistent storage schema. Key names are shared verbatim with the iOS SDK
- * (the containers differ — `flowbiz_onsite_<appId>` preferences file here,
- * same-named `UserDefaults` suite there — but the keys inside are one
- * contract).
+ * Key names are one contract with the iOS SDK; only the container differs
+ * (`flowbiz_onsite_<appId>` preferences here, a same-named `UserDefaults`
+ * suite there).
  */
 internal object StorageKeys {
-    /** UUID v4 lowercase, generated on first access, kept forever (SPEC §6). */
     const val ANONYMOUS_ID = "anonymous_id"
 
-    /** Set by accountLogin/accountSync, cleared by logout (SPEC §6). */
     const val USER_ID = "user_id"
     const val EMAIL = "email"
 
-    /** Current session UUID v4 + visit counter (SPEC §6). */
     const val SESSION_ID = "session_id"
     const val VISIT_COUNT = "visit_count"
 
-    /**
-     * Wall-clock epoch millis of the last session activity — the restart
-     * fallback only; in-process expiry is monotonic (SPEC §6).
-     */
+    /** Restart fallback only: in-process session expiry is monotonic. */
     const val LAST_ACTIVITY_WALL_MS = "last_activity_wall_ms"
 
-    /** Opt-out switch (SPEC §12); absent means enabled. */
+    /** Absent means enabled. */
     const val ENABLED = "enabled"
 
-    /** Last registered push token, kept for logout removal (SPEC §10.1). */
+    /** Kept so logout can emit its removal. */
     const val PUSH_TOKEN = "push_token"
 
     /** Captured campaign UTMs and their wall-clock expiry ([UtmStore]). */

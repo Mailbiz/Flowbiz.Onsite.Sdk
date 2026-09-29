@@ -2,7 +2,7 @@
 
 This document discloses every data type the SDK collects, transmits and
 stores, so integrators can complete Google Play's **Data safety** form
-accurately (SPEC §12). It is written against the actual implementation
+accurately. It is written against the actual implementation
 (`br.com.flowbiz:onsite-sdk` 0.1.0); the iOS equivalent is the bundled
 `PrivacyInfo.xcprivacy` privacy manifest.
 

@@ -1,6 +1,3 @@
-// `FlowbizCore` track pipeline (SPEC §5/§4/§6): envelope contents, identity
-// side effects, session sliding/rotation, timezone rendering, logout, the
-// never-throw boundary, and explicit flush.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -116,7 +113,7 @@ import Testing
         #expect(h.sender.bodies.count == 1)
     }
 
-    // MARK: Identity side effects (SPEC §5/§6)
+    // MARK: Identity side effects
 
     @Test func accountLoginSetsUserIdOnItselfAndSubsequentEvents() throws {
         let h = CoreHarness()
@@ -142,21 +139,19 @@ import Testing
         let before = object(try h.lastEntry(), "identity")
 
         h.core.logout()
-        // Slice 5 will emit push.token.remove here; for now only state changes.
         h.core.track(.pageView(path: "home"))
         let after = object(try h.lastEntry(), "identity")
 
         #expect(after["user_id"] == nil)
         #expect(after["session_id"] as? String != before["session_id"] as? String)
         #expect(after["visit_count"] as? Int == (before["visit_count"] as? Int ?? 0) + 1)
-        // anonymous_id survives logout
         #expect(after["anonymous_id"] as? String == before["anonymous_id"] as? String)
         #expect(h.store[StorageKeys.pushToken] == nil)
         #expect(h.store[StorageKeys.userId] == nil)
         #expect(h.store[StorageKeys.email] == nil)
     }
 
-    // MARK: Session semantics (SPEC §6)
+    // MARK: Session semantics
 
     @Test func everyTrackSlidesTheSessionWindow() throws {
         let h = CoreHarness()
@@ -186,7 +181,7 @@ import Testing
         #expect(second["visit_count"] as? Int == (first["visit_count"] as? Int ?? 0) + 1)
     }
 
-    // MARK: Timezone (SPEC §4, first real use of the timezone param)
+    // MARK: Timezone
 
     @Test(arguments: [
         (0, "+00:00"),      // UTC
@@ -204,14 +199,14 @@ import Testing
         #expect(FlowbizCore.formatTimezoneOffset(minutes: minutes) == expected)
     }
 
-    // MARK: Never-throw boundary (SPEC §3)
+    // MARK: Never-throw boundary
 
     @Test func nanPriceEventIsDroppedAndNextEventIsFine() throws {
         let h = CoreHarness()
         let poison = Event.productView(
             product: Product(productId: "P1", variants: [ProductVariant(sku: "S1", price: .nan)])
         )
-        h.core.track(poison) // must not throw / crash
+        h.core.track(poison)
         #expect(h.sender.bodies.isEmpty)
         #expect(h.queue.size == 0)
 
@@ -220,7 +215,7 @@ import Testing
         #expect(try h.lastEntry()["event"] as? String == "page.view")
     }
 
-    // MARK: Explicit flush (SPEC §2)
+    // MARK: Explicit flush
 
     @Test func explicitFlushDrainsARetriableBacklog() throws {
         let h = CoreHarness()

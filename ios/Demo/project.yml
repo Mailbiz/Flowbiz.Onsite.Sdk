@@ -1,4 +1,4 @@
-# XcodeGen spec for the Flowbiz demo app (SPEC §14).
+# XcodeGen spec for the Flowbiz demo app.
 # Generate the project with:  cd ios/Demo && xcodegen generate
 # The generated FlowbizDemo.xcodeproj and Sources/Info.plist are gitignored.
 name: FlowbizDemo
@@ -27,7 +27,7 @@ targets:
       properties:
         CFBundleDisplayName: Flowbiz Demo
         UILaunchScreen: {}
-        # SPEC §11 deep-link entry point. A custom scheme keeps the demo
+        # Deep-link entry point. A custom scheme keeps the demo
         # self-contained (a real integration uses Universal Links, which
         # require an entitlement + apple-app-site-association). Try it with:
         #   xcrun simctl openurl booted "flowbizdemo://recover?_mb_cr_=<hash>&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas%7Ccart%7Ccarrinho-abandonado"

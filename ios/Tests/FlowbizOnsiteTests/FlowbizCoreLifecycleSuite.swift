@@ -1,7 +1,3 @@
-// `FlowbizCore` lifecycle wiring: heartbeat start/stop on
-// foreground/background (SPEC §8), ping contents and session keepalive
-// (SPEC §6), and the SPEC §12 `setEnabled` behavior (drop, stop, gate,
-// resume).
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -13,7 +9,7 @@ import Testing
         try h.sentEntries().filter { $0["event"] as? String == "page.ping" }
     }
 
-    // MARK: Heartbeat lifecycle (SPEC §8)
+    // MARK: Heartbeat lifecycle
 
     @Test func foregroundStartsHeartbeatWithConfiguredInterval() {
         let h = CoreHarness()
@@ -49,7 +45,7 @@ import Testing
 
         let pings = try pingEntries(h)
         #expect(pings.count == 2)
-        #expect(h.queue.size == 0) // never persisted (SPEC §8)
+        #expect(h.queue.size == 0)
 
         let ping = try #require(pings.first)
         #expect(ping["data"] as? String == "{}") // no named pageView yet
@@ -92,10 +88,8 @@ import Testing
         #expect(context["baseuri"] as? String == "https://store.com")
         #expect(context["recoveryUrl"] as? String == "https://store.com/carrinho")
 
-        // I2: raw (non-ping) events — e.g. the `push.token.sync` relay —
-        // go through `emitInternal`, a separate path from both `track`'s
-        // envelope build and the ping build above; pin that it carries the
-        // same context fields rather than only ever exercising ping/track.
+        // push.token.sync goes through `emitInternal`, a third envelope path
+        // besides track and the ping.
         h.core.setPushToken("tok")
         let entries = try h.sentEntries()
         let sync = try #require(entries.last { $0["event"] as? String == "push.token.sync" })
@@ -105,10 +99,6 @@ import Testing
         #expect(syncContext["recoveryUrl"] as? String == "https://store.com/carrinho")
     }
 
-    /// I2: a title-only `pageView` (no path) resolves no URL (`UrlResolver`
-    /// on a nil path is nil), so it must not leak a stale/placeholder URL
-    /// into `context.url` — and the ping's `page` data carries the title
-    /// alone, no `url` key.
     @Test func titleOnlyPageViewOmitsContextUrlButKeepsPingTitle() throws {
         let h = CoreHarness()
         h.core.onForeground()
@@ -129,12 +119,10 @@ import Testing
         h.sender.defaultResult = .retriableError
         h.scheduler.tickRepeating(3)
         #expect(h.queue.size == 0)
-        #expect(try pingEntries(h).count == 3) // attempted, dropped, no retry state
+        #expect(try pingEntries(h).count == 3)
     }
 
     @Test func pingKeepsSessionAliveAsActivity() throws {
-        // SPEC §6: page.ping counts as activity — a foregrounded idle app
-        // keeps its session.
         let h = CoreHarness()
         h.core.track(.pageView(path: "home"))
         let sessionBefore = object(try h.lastEntry(), "identity")["session_id"] as? String
@@ -157,7 +145,7 @@ import Testing
         #expect(h.queue.size == 0)
     }
 
-    // MARK: setEnabled (SPEC §12)
+    // MARK: setEnabled
 
     @Test func setEnabledFalseStopsHeartbeatDropsEventsAndGatesNetwork() {
         let h = CoreHarness()
@@ -169,15 +157,15 @@ import Testing
         let sendsBefore = h.sender.bodies.count
 
         h.core.setEnabled(false)
-        #expect(h.store[StorageKeys.enabled] as? Bool == false) // persisted
-        #expect(h.scheduler.activeRepeating() == nil) // heartbeat stopped
+        #expect(h.store[StorageKeys.enabled] as? Bool == false)
+        #expect(h.scheduler.activeRepeating() == nil)
 
-        h.core.track(.pageView(path: "dropped")) // dropped, not queued
+        h.core.track(.pageView(path: "dropped"))
         #expect(h.queue.size == 1)
 
-        h.core.flush() // ignored while disabled
+        h.core.flush()
         h.scheduler.runLastScheduled() // pending backoff retry fires → gated
-        #expect(h.sender.bodies.count == sendsBefore) // zero network while disabled
+        #expect(h.sender.bodies.count == sendsBefore)
     }
 
     @Test func reachabilityWhileDisabledDoesNotTouchNetwork() {
@@ -200,8 +188,8 @@ import Testing
 
         h.sender.defaultResult = .success
         h.core.setEnabled(true)
-        #expect(h.queue.size == 0) // backlog flushed
-        #expect(h.scheduler.activeRepeating() != nil) // heartbeat resumed (foregrounded)
+        #expect(h.queue.size == 0)
+        #expect(h.scheduler.activeRepeating() != nil)
         #expect(h.store[StorageKeys.enabled] as? Bool == true)
     }
 

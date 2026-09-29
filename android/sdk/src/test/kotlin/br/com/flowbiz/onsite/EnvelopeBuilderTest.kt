@@ -6,7 +6,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Envelope shape tests for the SPEC §4 entry produced by [EnvelopeBuilder]. */
 class EnvelopeBuilderTest {
 
     // 2023-11-14T22:13:20 UTC
@@ -64,7 +63,6 @@ class EnvelopeBuilderTest {
         val envelope = build()
         val data = envelope.get("data")
         assertTrue("data must be a String on the wire", data is String)
-        // ... and it must parse back to the payload object.
         val parsed = JSONObject(data as String)
         assertEquals("c-9f81b2e0", parsed.getJSONObject("cart").getString("cart_id"))
     }
@@ -126,7 +124,6 @@ class EnvelopeBuilderTest {
         assertFalse(buildWithContext(baseUri = "").getJSONObject("context").has("baseuri"))
     }
 
-    /** M4: `context.url` uses the same non-empty guard as `baseuri` / `recoveryUrl`. */
     @Test
     fun emptyContextUrlIsOmitted() {
         assertFalse(buildWithContext(contextUrl = "").getJSONObject("context").has("url"))

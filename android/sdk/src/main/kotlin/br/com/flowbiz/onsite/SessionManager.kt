@@ -3,45 +3,25 @@ package br.com.flowbiz.onsite
 import java.util.UUID
 
 /**
- * Session state (SPEC §6): `session_id` + `visit_count` with a 30-minute
- * sliding inactivity window.
+ * `session_id` + `visit_count` with a 30-minute sliding inactivity window;
+ * expiry is inclusive (≥ 30:00.000 rotates). Thread-safe.
  *
- * ## Clocking
- * In-process, expiry is decided **only** by [Clock.monotonicMillis]: wall
- * clock jumps (user settings, NTP corrections, timezone travel) can neither
- * rotate nor immortalize a session. A wall-clock timestamp of the last
- * activity is persisted purely as the **restart fallback** — monotonic time
- * resets across process restarts, so on construction the persisted wall
- * timestamp decides whether the previous session is still live:
- *
- * - missing, ≥ 30 min in the past, or further than
- *   [WALL_FUTURE_TOLERANCE_MS] in the future (clock rolled back since the
- *   last run — untrusted) → rotate;
- * - otherwise the session is adopted and the wall-clock idle time is carried
- *   into the monotonic anchor, so a session idle 20 min before a restart has
- *   10 min left, not a fresh 30.
- *
- * ## Boundary
- * Expiry is **inclusive**: elapsed ≥ 30:00.000 rotates (SPEC §6 reads "after
- * ≥ 30 min of inactivity"); 29:59.999 slides.
- *
- * Thread-safe. Rotation increments `visit_count` exactly once per expiry —
- * after an expired window, the first touch rotates and re-anchors, so
- * further touches slide the fresh window instead of rotating again.
+ * In-process, expiry uses **only** [Clock.monotonicMillis], so wall-clock
+ * jumps (user settings, NTP, timezone travel) can neither rotate nor
+ * immortalize a session. Monotonic time resets across process restarts, so
+ * a persisted wall timestamp decides after a restart, carrying idle time
+ * over (idle 20 min before a restart leaves 10, not a fresh 30).
  */
 internal class SessionManager(
     private val store: KeyValueStore,
     private val clock: Clock,
 ) {
 
-    /** Immutable snapshot for envelope building. */
     data class Session(val sessionId: String, val visitCount: Int)
 
     private val lock = Any()
     private var sessionId: String
     private var visitCount: Int
-
-    /** Monotonic instant of the last activity — the sole in-process expiry input. */
     private var lastActivityMonotonic: Long
 
     init {
@@ -75,11 +55,6 @@ internal class SessionManager(
     /** Snapshot of the current session identifiers (no expiry check, no side effects). */
     fun currentSession(): Session = synchronized(lock) { Session(sessionId, visitCount) }
 
-    /**
-     * Records activity — every tracked event and heartbeat (Slice 4 wires
-     * the callers): rotates first if the window already expired, then slides
-     * it and persists the wall-clock fallback timestamp.
-     */
     fun touch() {
         synchronized(lock) {
             val now = clock.monotonicMillis()
@@ -89,18 +64,10 @@ internal class SessionManager(
         }
     }
 
-    /**
-     * Foreground transition — SPEC §6: new session when the app foregrounds
-     * after ≥ 30 min of inactivity. Foregrounding is user activity, so it
-     * performs the same expire-then-slide as [touch].
-     */
+    /** Foregrounding is user activity: the same expire-then-slide as [touch]. */
     fun onForeground() = touch()
 
-    /**
-     * Forced rotation regardless of the inactivity window — `logout()`
-     * support (SPEC §6, wired in Slice 4). Increments `visit_count` and
-     * re-anchors the activity window.
-     */
+    /** Forced rotation for `logout()`, regardless of the inactivity window. */
     fun rotate() {
         synchronized(lock) {
             rotateLocked()
@@ -121,7 +88,6 @@ internal class SessionManager(
     }
 
     companion object {
-        /** 30 min — internal constant, not a config knob (SPEC §2). */
         const val SESSION_TIMEOUT_MS: Long = 30L * 60L * 1000L
 
         /**

@@ -1,6 +1,5 @@
-// SPEC §12: `debug` logging never prints PII. Pins the invariant end-to-end
-// with the debug sink captured — logs carry wire event names, counts, codes
-// and reasons only, never `data` payload strings or tokens.
+// `debug` logging never prints PII: logs carry wire event names, counts,
+// codes and reasons only, never `data` payload strings or tokens.
 //
 // This suite is `.serialized` and deliberately hosts *every* test that
 // installs the process-global `SdkLog.sink` (the redaction pin and the
@@ -96,11 +95,7 @@ final class LogCapture: @unchecked Sendable {
         #expect(!capture.messages.contains { $0.contains("Q7x") || $0.contains("eyJ0") || $0.contains("utm_") })
     }
 
-    /// `handlePush`/`handleLink` decode before initialize (real result, no
-    /// "initialize was not called" warning), unlike the pipeline entry
-    /// points. Mirrors the Android facade smoke test; the assertion targets
-    /// the pure handlers' names so parallel suites logging through the sink
-    /// cannot produce false failures.
+    /// Only the handlers' own warnings count: parallel suites share the sink.
     @Test func pureHandlersWorkBeforeInitializeWithoutWarnings() {
         let capture = LogCapture()
         SdkLog.sink = { capture.append($0) }
@@ -132,17 +127,9 @@ final class LogCapture: @unchecked Sendable {
         #expect(!capture.messages.contains { $0.contains("handleLink") || $0.contains("handlePushOpened") })
     }
 
-    /// I1 regression: `ConfigSanitizer` warnings must reach the debug sink
-    /// on the very first `initialize` call, not just on later ones. Starts
-    /// with `SdkLog.sink == nil` — the real first-call state — and
-    /// substitutes what `Flowbiz.initialize` installs *as* the debug sink
-    /// (`Flowbiz.debugSink`) rather than pre-installing `SdkLog.sink`
-    /// itself: pre-installing it would make the warning reach the capture
-    /// regardless of ordering (it doesn't get displaced), masking the bug
-    /// this pins. This is the one real `Flowbiz.initialize` call in the
-    /// test suite (the facade's singleton is "first config wins forever",
-    /// see `FlowbizFacadeSmokeSuite`), so it must run before any other test
-    /// initializes the facade with a non-blank appId.
+    /// The tests' only real `initialize` (first config wins forever). The sink
+    /// starts nil and the capture replaces `Flowbiz.debugSink`: pre-installing
+    /// `SdkLog.sink` would catch the warnings whatever the ordering.
     @Test func initializeLogsConfigSanitizerWarningsToSink() {
         #expect(SdkLog.sink == nil, "precondition: no other test may have installed a sink yet")
         let capture = LogCapture()

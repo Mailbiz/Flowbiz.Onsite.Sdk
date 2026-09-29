@@ -1,4 +1,4 @@
-# SPEC §13: one pipeline releases both platforms from a single vX.Y.Z tag —
+# One pipeline releases both platforms from a single vX.Y.Z tag —
 # the AAR is published to Maven Central; the iOS release is the git tag
 # itself (SPM resolves it, source-distributed package).
 #
@@ -28,7 +28,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
-      # The two SDKs version in lockstep (SPEC §13); a tag that does not
+      # The two SDKs version in lockstep; a tag that does not
       # match every version constant must never publish anything.
       # Extract the actual version value from each file and string-compare
       # against the tag (rather than grepping for a whole expected line, which
@@ -117,8 +117,7 @@ jobs:
   #   runs-on: blacksmith-4vcpu-ubuntu-2404
   #   steps:
   #     # Swift Package Manager consumes the git tag directly — there is no
-  #     # artifact to build or upload for iOS (SPEC §13 source-distributed
-  #     # decision; this job would become an XCFramework build + upload if
-  #     # the closed-source option is chosen before 1.0).
+  #     # artifact to build or upload for iOS (source-distributed; this job
+  #     # would become an XCFramework build + upload if that ever changes).
   #     - name: Nothing to upload
   #       run: echo "The vX.Y.Z git tag itself is the iOS release — SPM resolves it."

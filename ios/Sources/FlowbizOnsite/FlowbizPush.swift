@@ -1,9 +1,7 @@
 import Foundation
 
-/// Result of `Flowbiz.handlePush` (SPEC §10.2/§10.3): a decoded Flowbiz
-/// push payload. `type` is free-form — new push kinds require no SDK
-/// update; the SDK parses best-effort regardless of `version` (forward
-/// compatibility).
+/// A decoded Flowbiz push, from `Flowbiz.handlePush`. `type` is free-form and
+/// any `version` parses, so new push kinds need no SDK update.
 public struct FlowbizPush: Sendable {
 
     /// Contract version (`v`); absent/malformed defaults to 1.
@@ -20,30 +18,19 @@ public struct FlowbizPush: Sendable {
     /// `data` object of the decoded payload; empty when absent.
     public let data: [String: JSONValue]
 
-    /// The raw `deep_link`, read by `recoveryPayload` and
-    /// `Flowbiz.handlePushOpened`.
+    /// The raw `deep_link`, unaltered by a `URL` round trip.
     let deepLinkString: String?
 
-    /// Convenience for cart-recovery pushes (SPEC §10.2: the `_mb_cr_`
-    /// link rides in `deep_link`): the raw deep link run through the
-    /// `Flowbiz.handleLink` decoder. Nil when there is no deep link or it
-    /// carries no decodable `_mb_cr_` value. Pure: no tenant check, no UTM
-    /// capture.
+    /// The cart of a cart-recovery push: `deep_link` decoded like
+    /// `Flowbiz.handleLink`, nil when it carries no decodable `_mb_cr_`.
+    /// Pure: no tenant check, no UTM capture.
     public var recoveryPayload: RecoveryPayload? {
         RecoveryLinkParser.parse(deepLinkString)
     }
 }
 
-/// Pure parser behind `Flowbiz.handlePush` (SPEC §10.2): the value of the
-/// `"flowbiz"` marker key — a JSON-encoded *string* (the cross-platform
-/// contract; FCM data messages are flat maps) — decoded into a
-/// `FlowbizPush`. APNs payloads are nested JSON, so an iOS sender *could*
-/// put an object there; that is tolerated leniently (`parse(object:)`),
-/// documented in `shared/push-samples/samples.json`.
-///
-/// Tolerant by design: unknown `v` values and unknown fields parse
-/// best-effort (forward compatibility). Nil only for undecodable JSON, a
-/// non-object root, or a missing/empty `type`. Never throws.
+/// The `"flowbiz"` marker value is a JSON string, as FCM data messages are
+/// flat maps; APNs allows a nested object, tolerated by `parse(object:)`.
 enum PushPayloadParser {
 
     static let markerKey = "flowbiz"

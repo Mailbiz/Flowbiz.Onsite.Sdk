@@ -5,7 +5,6 @@ plugins {
     signing
 }
 
-// SPEC §13 distribution coordinates (Maven Central: br.com.flowbiz:onsite-sdk).
 // The version is kept in lockstep with SdkVersion.CURRENT and the iOS
 // SDKVersion.current; the release workflow asserts all of them match the
 // vX.Y.Z tag before publishing.
@@ -38,16 +37,14 @@ kotlin {
 }
 
 dependencies {
-    // Zero runtime dependencies by design (SPEC §1) — Kotlin stdlib + platform APIs only.
+    // Zero runtime dependencies by design — Kotlin stdlib + platform APIs only.
     testImplementation(libs.junit)
     // Real org.json for local unit tests (the android.jar stub throws); test-only, not shipped.
     testImplementation(libs.json)
 }
 
 // Maven Central requires a javadoc artifact; an empty javadoc jar is the
-// accepted pattern for Kotlin artifacts published without Dokka (adding
-// Dokka would violate the zero-dependency build minimalism; revisit if
-// rendered API docs are ever wanted).
+// accepted pattern for Kotlin artifacts published without Dokka.
 val emptyJavadocJar = tasks.register<Jar>("emptyJavadocJar") {
     archiveClassifier.set("javadoc")
 }
@@ -55,10 +52,8 @@ val emptyJavadocJar = tasks.register<Jar>("emptyJavadocJar") {
 publishing {
     repositories {
         // Maven Central via the Sonatype Central Portal's OSSRH-compatible
-        // staging API. TODO(SPEC §13): br.com.flowbiz namespace registration in
-        // the Central Portal is pending; credentials arrive via CI secrets
-        // (CENTRAL_USERNAME / CENTRAL_PASSWORD) — absent locally, which is
-        // fine: publishToMavenLocal never touches this repository.
+        // staging API. Credentials arrive via CI secrets — absent locally,
+        // which is fine: publishToMavenLocal never touches this repository.
         maven {
             name = "central"
             url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
@@ -121,11 +116,9 @@ afterEvaluate {
         }
     }
 
-    // GPG signing for Central (SPEC §13). Activates only when a key is
-    // provided — via the signingInMemoryKey/signingInMemoryKeyPassword
-    // Gradle properties (CI sets them as ORG_GRADLE_PROJECT_* env vars) —
-    // so local builds and :sdk:publishToMavenLocal succeed with no signing
-    // setup present.
+    // GPG signing for Central, only when a key is provided (CI sets these
+    // Gradle properties as ORG_GRADLE_PROJECT_* env vars), so local builds
+    // and :sdk:publishToMavenLocal succeed with no signing setup present.
     val signingKey = providers.gradleProperty("signingInMemoryKey").orNull
     val signingPassword = providers.gradleProperty("signingInMemoryKeyPassword").orNull
     if (signingKey != null) {

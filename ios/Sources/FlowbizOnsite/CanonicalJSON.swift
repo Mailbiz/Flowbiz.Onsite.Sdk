@@ -1,34 +1,10 @@
 import Foundation
 
-/// Canonical JSON writer for the wire `data` payload strings (SPEC §4/§5).
-///
-/// `JSONSerialization` renders doubles with up-to-17-digit decimal expansions
-/// (`19.99` → `19.989999999999998`, `0.1` → `0.10000000000000001`) and escapes
-/// forward slashes (`\/`); Android's org.json and the web tracker's
-/// `JSON.stringify` do neither, so the produced wire strings diverge
-/// byte-for-byte. This writer emits the canonical cross-platform form —
-/// pinned to web `JSON.stringify` (the reference implementation):
-///
-/// - **numbers**: shortest round-trip digits, formatted with the ECMAScript
-///   `Number::toString` layout rules — `19.99`, `0.1`, whole doubles without
-///   a fraction part (`19.0` → `19`), fixed notation up to 21 digits
-///   (`10000000`, not `1.0E7`), exponent form beyond (`1e+21`), `-0.0` → `0`.
-///   Swift's `"\(Double)"` is genuinely shortest-round-trip, so this side
-///   matches JS everywhere; Kotlin on JDK ≤ 18 diverges at a few extreme
-///   magnitudes (JDK-4511638 — see `CanonicalJson.kt`), pinned by
-///   `CanonicalNumberSuite` / `CanonicalJsonNumberTest`.
-/// - **strings**: minimal escaping — only `"` `\` and control characters;
-///   raw slashes, raw unicode
-/// - **objects**: keys sorted by UTF-16 code units (deterministic output;
-///   matches Kotlin `sorted()` and JS `Array.prototype.sort`)
-///
-/// Mirrored by the Kotlin `CanonicalJson`; both are pinned byte-for-byte by
-/// `expected.data_canonical` in `shared/fixtures/`.
-///
-/// **Throws** on non-finite numbers (NaN/±Infinity) — the same contract as
-/// the Kotlin serializer (org.json rejects non-finite doubles at tree-build
-/// time). The SPEC §3 never-throw guarantee is applied at the public API
-/// boundary (Slice 4), not here.
+/// The web `JSON.stringify` form: `JSONSerialization` would render `19.99` as
+/// `19.989999999999998` and escape `/`. Keys sort by UTF-16 code units, like
+/// JS `sort`. Pinned with the Kotlin `CanonicalJson` by `shared/fixtures/`;
+/// Kotlin differs only at extreme magnitudes on JDK ≤ 18 (JDK-4511638).
+/// Throws on non-finite numbers, like org.json.
 enum CanonicalJSON {
 
     struct WriteError: Error, CustomStringConvertible {
@@ -36,8 +12,6 @@ enum CanonicalJSON {
         init(_ description: String) { self.description = description }
     }
 
-    /// Renders a JSON tree (`String` / `NSNumber` / `Bool` / `Int` / `Double`
-    /// / `NSNull` / `[Any]` / `[String: Any]`) as a compact canonical string.
     static func render(_ value: Any) throws -> String {
         var out = ""
         try write(value, into: &out)

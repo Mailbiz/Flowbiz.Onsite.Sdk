@@ -1,5 +1,5 @@
-# SPEC §14: the shared-fixture drift guard only guards if it is enforced —
-# both platform jobs run on every PR and push to main. The shared-fixture
+# The shared-fixture drift guard only guards if it is enforced, so both
+# platform jobs run on every PR and push to main. The shared-fixture
 # suites (wire fixtures, recovery links, UTM links, push samples) are part
 # of each platform's regular unit-test task, so running the unit tests IS
 # running the drift guard; no separate step is needed.
@@ -73,8 +73,7 @@ jobs:
             echo "::error::swift test ran ${COUNT:-0} tests (< ${FLOOR}) — Swift Testing suites were not executed (toolchain too old?)"
             exit 1
           fi
-      # 2) Simulator build + test — this closes the UIKit-compile gate
-      #    deferred from Slice 4: the UIKit-conditional code (lifecycle
+      # 2) Simulator build + test: the UIKit-conditional code (lifecycle
       #    observers, UIScreen, canImport(UIKit) branches) only compiles in
       #    an iOS build, which no macOS host run exercises.
       #    The destination resolves to the image's iOS runtime for

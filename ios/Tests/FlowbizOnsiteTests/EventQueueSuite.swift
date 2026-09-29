@@ -1,5 +1,3 @@
-// SPEC §9 durable queue: JSONL round-trip, truncation tolerance, drop-oldest
-// cap, compaction (threshold + atomic replace), order preservation.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -24,7 +22,6 @@ import Testing
         (1...5).forEach { queue.append(entry($0)) }
         #expect(queue.size == 5)
         #expect(queue.peek(10) == (1...5).map { entry($0) })
-        // peek does not consume
         #expect(queue.size == 5)
         #expect(queue.peek(2) == [entry(1), entry(2)])
     }
@@ -43,7 +40,7 @@ import Testing
         #expect(queue.peek(10) == [entry(3), entry(4)])
     }
 
-    // MARK: Corruption tolerance (SPEC §3/§9)
+    // MARK: Corruption tolerance
 
     @Test func truncatedAndGarbageLinesAreSkippedNotFatal() throws {
         try FileManager.default.createDirectory(
@@ -70,7 +67,7 @@ import Testing
         #expect(queue.size == 0)
     }
 
-    // MARK: Capacity (SPEC §9: 1000 drop-oldest; capacity injected for tests)
+    // MARK: Capacity
 
     @Test func capacityDropsOldestOnAppend() {
         let queue = EventQueue(fileURL: file, capacity: 5)
@@ -93,7 +90,6 @@ import Testing
         let total = EventQueue.compactStaleThreshold + 6
         (1...total).forEach { queue.append(entry($0)) }
         queue.removeOldest(EventQueue.compactStaleThreshold)
-        // Threshold reached → file rewritten to exactly the pending suffix.
         let expected = ((EventQueue.compactStaleThreshold + 1)...total).map { entry($0) }
         #expect(queue.peek(100) == expected)
         #expect(try fileText() == expected.map { $0 + "\n" }.joined())
@@ -163,7 +159,7 @@ import Testing
         try manager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
         queue.append(entry(2)) // append fails → dirty; compaction fails too
         queue.append(entry(3)) // still dirty → rewrite attempt, fails again
-        #expect(queue.size == 3) // in-memory queue is intact regardless
+        #expect(queue.size == 3)
         #expect(try fileText() == entry(1) + "\n") // no torn/merged writes
 
         // Filesystem healed: the next write must REWRITE the whole pending
@@ -175,7 +171,7 @@ import Testing
         #expect(EventQueue(fileURL: file).peek(10) == (1...4).map { entry($0) })
     }
 
-    // MARK: Production location (Slice 3 warm-up; macOS-runnable)
+    // MARK: Production location
 
     @Test func defaultQueueDirectoryIsExcludedFromBackup() throws {
         let appId = "backup-test-\(UUID().uuidString)"

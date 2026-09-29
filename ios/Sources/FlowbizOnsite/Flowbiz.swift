@@ -4,29 +4,11 @@ import os.log
 import UIKit
 #endif
 
-/// Public entry point (SPEC §2) — a thin static facade (namespace enum)
-/// over one `FlowbizCore` instance created at `initialize`.
-///
-/// SPEC §3 invariants enforced here:
-/// - **Never throws**: no public entry is throwing; internal failures
-///   degrade to debug logs.
-/// - Any call before `initialize` is a no-op with a debug warning; the
-///   decoders (`handlePush`, `handleLink`, `handlePushOpened`) still decode,
-///   silently.
-/// - Double `initialize` is a no-op; the first config wins.
-/// - Every API is callable from any thread; work is handed to the SDK's
-///   serial background queue and the caller returns immediately.
-///
-/// The facade is deliberately too thin to need its own test suite — the
-/// behavioral tests live on `FlowbizCore` (constructed with fakes); the
-/// facade's production wiring (UserDefaults suite, queue file, UIKit
-/// lifecycle notifications, real clock/network) is exercised by the demo
-/// app (SPEC §14).
+/// The SDK entry point. Every call is safe from any thread, returns
+/// immediately and never throws. Before `initialize`, calls are no-ops,
+/// except that `handlePush`, `handleLink` and `handlePushOpened` still decode.
 public enum Flowbiz {
 
-    /// Lock-guarded singleton state (strict-concurrency-clean shared
-    /// mutable state). Also retains the NotificationCenter observer tokens
-    /// for the SDK's lifetime.
     private final class State: @unchecked Sendable {
         private let lock = NSLock()
         private var core: FlowbizCore?
@@ -38,15 +20,9 @@ public enum Flowbiz {
             return core
         }
 
-        /// Constructs and installs the core under the lock when none is
-        /// set; returns nil when already initialized (first config wins,
-        /// SPEC §3). Construction happens *after* winning the install slot
-        /// so a losing concurrent `initialize` never builds a core — the
-        /// core's init starts reachability monitoring, and a discarded
-        /// loser must not leave a started `NWPathMonitor` behind. The
-        /// factory is cheap and non-blocking (all component inits are
-        /// in-memory; queue-file I/O is deferred to first use), so holding
-        /// the lock across it is safe.
+        /// Builds the core only after winning the slot: a losing concurrent
+        /// `initialize` must not leave a started `NWPathMonitor` behind. The
+        /// factory does no I/O, so holding the lock across it is safe.
         func installIfAbsent(_ makeCore: () -> FlowbizCore) -> FlowbizCore? {
             lock.lock()
             defer { lock.unlock() }
@@ -71,8 +47,6 @@ public enum Flowbiz {
 
     private static let state = State()
 
-    /// Lock-guarded holder mirroring `SdkLog`'s `SinkBox` (warning-clean
-    /// under strict concurrency) for the testable `debugSink` seam below.
     private final class DebugSinkBox: @unchecked Sendable {
         private let lock = NSLock()
         private var value: @Sendable (String) -> Void = { message in
@@ -95,24 +69,15 @@ public enum Flowbiz {
 
     private static let debugSinkBox = DebugSinkBox()
 
-    /// Testable seam for the sink installed when `debug` is enabled.
-    /// Production default writes through `os_log`; tests substitute a
-    /// capture so `ConfigSanitizer` warnings (I1: emitted during
-    /// `initialize`, before any test could otherwise observe them) can be
-    /// asserted without reading the system log.
+    /// The `debug` log sink; tests swap it to capture what `initialize` logs.
     static var debugSink: @Sendable (String) -> Void {
         get { debugSinkBox.current }
         set { debugSinkBox.current = newValue }
     }
 
-    /// Initializes the SDK. Call once, ideally from
-    /// `application(_:didFinishLaunchingWithOptions:)` on the main thread.
-    /// Initializing while the app is already foregrounded is handled: the
-    /// current application state is probed on the main actor and the
-    /// heartbeat starts immediately when the app is active.
-    ///
-    /// A blank `appId` makes this a complete no-op (SPEC §2); other invalid
-    /// config values are replaced/clamped with debug warnings.
+    /// Starts the SDK. Call once, ideally from
+    /// `application(_:didFinishLaunchingWithOptions:)` on the main thread;
+    /// later calls are ignored. A blank `appId` makes it a no-op.
     public static func initialize(_ config: FlowbizConfig) {
         guard !state.isInitialized else {
             SdkLog.debug("initialize ignored: already initialized (first config wins)")
@@ -123,17 +88,8 @@ public enum Flowbiz {
             return
         }
         let serialQueue = DispatchQueue(label: "br.com.flowbiz.onsite")
-        // The core is constructed inside the install lock: a concurrent
-        // initialize that loses the race must return before building a
-        // core at all (its init starts reachability monitoring). The debug
-        // log sink is installed inside the same closure — only the *winning*
-        // initialize may set it (a losing concurrent call must leave no
-        // trace) — and *before* `ConfigSanitizer.sanitize` runs (I1), so its
-        // warnings (invalid baseUri/recoveryUrl/collectorUrl, clamped
-        // heartbeat) land in the sink instead of being dropped on the first
-        // ever `initialize` call. `config.debug` gates this (not
-        // `sanitized.debug`, which isn't known yet — sanitize doesn't touch
-        // the flag itself, so the raw value is equivalent).
+        // Only the winning initialize may set the sink, and before
+        // `sanitize` so its warnings are logged.
         guard let core = state.installIfAbsent({
             if config.debug {
                 SdkLog.sink = Flowbiz.debugSink
@@ -158,29 +114,30 @@ public enum Flowbiz {
         SdkLog.debug("initialized (appId=\(config.appId))")
     }
 
-    /// Tracks a typed event (SPEC §5). Enqueues and returns immediately.
+    /// Queues a typed event for delivery.
     public static func track(_ event: Event) {
         withCore("track") { $0.track(event) }
     }
 
-    /// Clears user identity, rotates the session (SPEC §6).
+    /// Unregisters the stored push token, clears the user identity and starts
+    /// a new session.
     public static func logout() {
         withCore("logout") { $0.logout() }
     }
 
-    /// Opt-out switch (SPEC §12); persisted across launches.
+    /// Opt-out switch, persisted across launches: while disabled nothing is
+    /// tracked or sent.
     public static func setEnabled(_ enabled: Bool) {
         withCore("setEnabled") { $0.setEnabled(enabled) }
     }
 
-    /// Forces a queue flush (SPEC §2). Fire-and-forget.
+    /// Sends queued events now. Fire-and-forget.
     public static func flush() {
         withCore("flush") { $0.flush() }
     }
 
-    /// SPEC §10.1 token relay: persists the token and emits
-    /// `push.token.sync` through the normal pipeline. Requires
-    /// `initialize`; a blank token is a no-op with a debug warning.
+    /// Registers the device's push token (`push.token.sync`). Requires
+    /// `initialize`; a blank token is ignored.
     public static func setPushToken(_ token: String) {
         guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             SdkLog.debug("Flowbiz.setPushToken ignored: blank token")
@@ -189,23 +146,16 @@ public enum Flowbiz {
         withCore("setPushToken") { $0.setPushToken(token) }
     }
 
-    /// SPEC §10.1: emits `push.token.remove` with the stored token and
-    /// forgets it. No stored token → no-op. Requires `initialize`.
+    /// Unregisters the stored push token (`push.token.remove`) and forgets
+    /// it; a no-op without one. Requires `initialize`.
     public static func removePushToken() {
         withCore("removePushToken") { $0.removePushToken() }
     }
 
-    /// SPEC §10.3: parses a push payload carrying the `"flowbiz"` marker
-    /// key — per contract a JSON-encoded string (SPEC §10.2); a nested
-    /// dictionary (possible in APNs userInfo) is tolerated leniently.
-    /// Returns nil when the payload is not ours (marker absent or
-    /// undecodable).
-    ///
-    /// Pure, synchronous, never throws; callable before `initialize`
-    /// (SPEC §3) and from any thread — typically from the
-    /// `UNUserNotificationCenter` delegate (`userInfo`) both on foreground
-    /// receipt and notification tap. Receiving a push is not a click, so it
-    /// captures no UTMs: on tap, also call `handlePushOpened(push)`.
+    /// Decodes a Flowbiz push from its `userInfo`, or nil when the push is not
+    /// Flowbiz's. Pure; callable before `initialize`. Receiving a push is not
+    /// a click, so it captures no UTMs: on tap, also call
+    /// `handlePushOpened(push)`.
     public static func handlePush(_ payload: [AnyHashable: Any]?) -> FlowbizPush? {
         guard let marker = payload?[PushPayloadParser.markerKey] else { return nil }
         if let string = marker as? String {
@@ -217,16 +167,13 @@ public enum Flowbiz {
         return nil
     }
 
-    /// SPEC §11: decodes the `_mb_cr_` query parameter of an incoming
-    /// deep link (Universal Link entry point) into a `RecoveryPayload`.
-    /// Returns nil = no decodable `_mb_cr_` param, missing/invalid
-    /// `utm_source`, or (once initialized) a tenant mismatch.
+    /// Decodes the cart-recovery payload of an incoming link; nil when it has
+    /// none, its `utm_source` is not a Flowbiz one, or (once initialized) it
+    /// belongs to another `appId`.
     ///
     /// Once initialized it also captures the link's campaign UTMs, whatever
     /// the decode returns, so forward every incoming link; a `track` issued
-    /// afterwards from the same thread carries them. Before `initialize` it
-    /// only decodes (without the tenant check). Never throws; the SDK does
-    /// not adopt the decoded user as its identity.
+    /// afterwards from the same thread carries them.
     @discardableResult
     public static func handleLink(_ url: URL?) -> RecoveryPayload? {
         handleLink(url?.absoluteString, core: currentCore)
@@ -278,11 +225,8 @@ public enum Flowbiz {
                 .appendingPathComponent("queue.jsonl")
     }
 
-    /// Language and timezone come from Foundation (thread-safe); the screen
-    /// size must be read on the main actor (`UIScreen`), so it is captured
-    /// into a box — synchronously when initialize runs on the main thread
-    /// (the documented call site), otherwise via a main-actor hop, during
-    /// which the placeholder `0x0` may appear on the first envelopes.
+    /// `UIScreen` is main-actor only: read synchronously when initialize runs
+    /// on the main thread, else after a hop, meanwhile reporting `0x0`.
     private static func makeDeviceContext() -> DeviceContext {
         let language = Locale.preferredLanguages.first ?? "en"
         #if canImport(UIKit)
@@ -339,10 +283,9 @@ public enum Flowbiz {
         return "\(Int(bounds.width))x\(Int(bounds.height))"
     }
 
-    /// SPEC §1 lifecycle source: `UIApplication` notifications.
-    /// `didBecomeActive` complements `willEnterForeground` for the cold
-    /// launch (no foreground transition happens then); `FlowbizCore`'s
-    /// foreground handling is idempotent so overlapping signals are safe.
+    /// `didBecomeActive` covers the cold launch, which has no foreground
+    /// transition; `FlowbizCore`'s foreground handling is idempotent, so
+    /// overlapping signals are safe.
     private static func startLifecycleTracking(_ core: FlowbizCore) {
         let center = NotificationCenter.default
         var tokens: [NSObjectProtocol] = []

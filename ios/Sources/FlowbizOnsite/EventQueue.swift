@@ -1,48 +1,13 @@
 import Foundation
 
-/// Durable event queue (SPEC §9): JSON Lines file, one serialized envelope
-/// entry per line, append-only.
-///
-/// ## Model
-/// An in-memory array of pending lines mirrors the file; the file may
-/// additionally contain **stale** lines (consumed after a successful flush,
-/// dropped at the capacity cap, or unparseable garbage) that are purged only
-/// at compaction. Appends are O(1) (open-append-close via `OutputStream`);
-/// consumption is logical (head of the array) until compaction rewrites the
-/// file.
-///
-/// ## Durability & crash behavior
-/// - A crash mid-append costs one truncated line; unparseable/blank lines
-///   are skipped (and counted stale) at load, never fatal (SPEC §3/§9).
-/// - Compaction writes `queue.jsonl.tmp` then atomically replaces the
-///   original (`FileManager.replaceItemAt`) — a crash between write and
-///   replace leaves the original intact; the leftover tmp is deleted at next
-///   load.
-/// - Delivery is at-least-once: consumed-but-not-yet-compacted lines (and,
-///   rarely, capacity-dropped ones) resend after a process death. `hash` is
-///   the collector-side idempotency key (SPEC §9).
-///
-/// ## Compaction trigger
-/// Compacts when the stale-line count reaches `compactStaleThreshold`, and
-/// eagerly whenever the queue drains empty (a cheap truncate — the common
-/// "successful flush" case, per SPEC §9), and at load when any stale line
-/// was found.
-///
-/// ## Concurrency
-/// **Thread-confined** to the SDK's serial `TaskScheduler` queue — no
-/// internal locking, no file locking. Single-process access is a SPEC §9
-/// assumption. Never throws: I/O failures log and degrade to memory-only
-/// behavior for the session.
-///
-/// The backing `fileURL` is injected (tests use temp dirs);
-/// `defaultFileURL(appId:)` provides the production location in Application
-/// Support, excluded from iCloud backup.
+/// JSON Lines, one envelope per line, mirrored in memory. Appends are O(1);
+/// consumed and dropped lines stay in the file until compaction, so delivery
+/// is at-least-once (they resend after a crash) and `hash` is the collector's
+/// idempotency key. Confined to the SDK's serial queue, single process; I/O
+/// failures degrade to memory-only.
 final class EventQueue {
 
-    /// SPEC §9: 1000 events, drop-oldest. Internal constant, not a knob.
     static let defaultCapacity = 1000
-
-    /// Stale lines tolerated in the file before a rewrite is forced.
     static let compactStaleThreshold = 64
 
     private let fileURL: URL
@@ -67,18 +32,13 @@ final class EventQueue {
         load()
     }
 
-    /// Number of pending (not yet delivered) entries.
     var size: Int { pending.count }
 
-    /// Oldest-first snapshot of up to `max` pending entries; the queue is unchanged.
     func peek(_ max: Int) -> [String] {
         guard max > 0, !pending.isEmpty else { return [] }
         return Array(pending.prefix(max))
     }
 
-    /// Appends one serialized envelope entry. At capacity the oldest pending
-    /// entry is dropped first (SPEC §9 drop-oldest). Entries containing raw
-    /// newlines are rejected (canonical JSON never has them — defensive only).
     func append(_ entry: String) {
         guard !entry.contains("\n"), !entry.contains("\r"),
               !entry.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -101,7 +61,6 @@ final class EventQueue {
         compactIfNeeded()
     }
 
-    /// Removes the `count` oldest pending entries (a delivered or poison batch).
     func removeOldest(_ count: Int) {
         let removable = min(count, pending.count)
         if removable > 0 {
@@ -150,7 +109,7 @@ final class EventQueue {
         ensureDirectory()
         // OutputStream (append mode) creates the file when missing and
         // reports failure via return codes — no uncatchable ObjC exceptions
-        // (unlike legacy FileHandle writes; SPEC §3 never-crash).
+        // (unlike legacy FileHandle writes).
         guard let stream = OutputStream(url: fileURL, append: true) else {
             SdkLog.debug("queue append open failed")
             return false
@@ -215,11 +174,7 @@ final class EventQueue {
 
     // MARK: - Production location
 
-    /// Production queue location:
-    /// `Application Support/flowbiz_onsite/<appId>/queue.jsonl`. Creates the
-    /// directories and excludes them from iCloud backup (tracking state must
-    /// not restore onto a new device). Nil when Application Support is
-    /// unavailable (degrades to a memory-only queue in Slice 4).
+    /// Excluded from backup: tracking state must not restore onto a new device.
     static func defaultFileURL(appId: String) -> URL? {
         do {
             let base = try FileManager.default.url(

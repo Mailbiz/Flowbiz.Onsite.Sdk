@@ -1,21 +1,8 @@
 import Foundation
 
-/// Public SDK configuration (SPEC §2). Immutable value type, `Sendable`.
-///
-/// Invalid values never throw (SPEC §3) — they are sanitized at
-/// `Flowbiz.initialize`:
-/// - blank/whitespace `appId` → initialization is a **no-op** (debug warning);
-/// - non-HTTPS / unparseable / hostless `collectorUrl` → replaced with
-///   `defaultCollectorUrl` (debug warning);
-/// - `heartbeatInterval` clamped to the 15 s floor (SPEC §2) and a defensive
-///   24 h ceiling (non-finite values clamp to the floor);
-/// - invalid `baseUri` (must be an https:// origin, no path/query/fragment)
-///   → replaced with `""` (debug warning);
-/// - invalid `recoveryUrl` (must be an absolute https:// URL) → replaced
-///   with `nil` (debug warning).
-///
-/// Session timeout, dedup window, queue cap and connection timeout are
-/// internal constants, not config knobs (SPEC §2).
+/// Configuration for `Flowbiz.initialize`. Invalid values never throw: a
+/// blank `appId` makes initialize a no-op, and other invalid values are
+/// replaced or clamped, with a debug warning.
 public struct FlowbizConfig: Sendable, Equatable {
 
     public static let defaultCollectorUrl = "https://collector.mailbiz.one"
@@ -29,17 +16,17 @@ public struct FlowbizConfig: Sendable, Equatable {
     public let appId: String
 
     /// Store origin (`https://store.com`), same value as the web `baseuri`.
-    /// Required; prepended to path-only URLs (spec §5) and sent as
-    /// `context.baseuri`. Sanitized to `""` when invalid (spec §3).
+    /// Required; prepended to path-only URLs and sent as `context.baseuri`.
+    /// An https origin without path, query or fragment; `""` when invalid.
     public let baseUri: String
 
-    /// Full collector base URL; must be HTTPS.
+    /// Full collector base URL; must be HTTPS, else the default is used.
     public let collectorUrl: String
 
-    /// Verbose logging; never prints PII (SPEC §12).
+    /// Verbose logging; never prints PII.
     public let debug: Bool
 
-    /// `page.ping` cadence in seconds (SPEC §8); clamped to ≥ 15.
+    /// `page.ping` cadence in seconds; clamped to 15 s...24 h.
     public let heartbeatInterval: TimeInterval
 
     /// Absolute https URL the backend targets with cart-recovery links
@@ -63,13 +50,9 @@ public struct FlowbizConfig: Sendable, Equatable {
         self.recoveryUrl = recoveryUrl
     }
 
-    /// `baseUri` as an optional: nil when sanitization emptied it.
     var baseUriOrNil: String? { baseUri.isEmpty ? nil : baseUri }
 }
 
-/// Config validation (SPEC §2/§3): produces the sanitized config the SDK
-/// actually runs with, or nil when `appId` is blank (in which case
-/// initialization must be a complete no-op). Never throws.
 enum ConfigSanitizer {
 
     static func sanitize(_ config: FlowbizConfig) -> FlowbizConfig? {
@@ -116,11 +99,8 @@ enum ConfigSanitizer {
         )
     }
 
-    /// Valid iff the URL parses, the scheme is `https` (case-insensitive)
-    /// and the host is non-empty. The non-empty host requirement is
-    /// deliberate — `https://` alone parses on both platforms but is
-    /// garbage; validation strictness is aligned with the Android
-    /// `ConfigSanitizer`.
+    /// Requires a host: `https://` alone parses, on both platforms. As strict
+    /// as the Android `ConfigSanitizer`.
     static func isValidCollectorUrl(_ url: String) -> Bool {
         guard let parsed = URL(string: url),
               parsed.scheme?.lowercased() == "https",
@@ -129,8 +109,6 @@ enum ConfigSanitizer {
         return true
     }
 
-    /// Spec §3: absolute https origin, no path (or exactly "/"), no query,
-    /// no fragment. Returns the trimmed origin without a trailing slash.
     static func sanitizeBaseUri(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let components = URLComponents(string: trimmed),
@@ -143,7 +121,6 @@ enum ConfigSanitizer {
         return trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
     }
 
-    /// Spec §3: absolute https URL; fragment stripped.
     static func sanitizeRecoveryUrl(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let components = URLComponents(string: trimmed),

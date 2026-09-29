@@ -10,12 +10,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/**
- * Slice 3 warm-up: one integration pass of [FlushController] over the real
- * [ExecutorTaskScheduler] (single-thread `ScheduledExecutorService`) — real
- * asynchrony, real 1 s backoff delay, real serial-thread confinement. All
- * queue/sender access is marshalled onto the executor thread.
- */
+/** Real executor and 1 s backoff; queue and sender are only touched on the executor thread. */
 class FlushControllerRealExecutorTest {
 
     @get:Rule
@@ -44,7 +39,6 @@ class FlushControllerRealExecutorTest {
             val controller = FlushController(queue, sender, scheduler, FakeClock())
             controller.requestFlush(FlushController.FlushReason.EVENT_TRACKED)
 
-            // Second send arrives via the real ~1 s scheduled backoff retry.
             assertTrue(sendsSeen.await(10, TimeUnit.SECONDS))
 
             // Serialize behind the in-flight drain to read settled state.

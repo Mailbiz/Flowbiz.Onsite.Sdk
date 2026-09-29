@@ -3,18 +3,7 @@ package br.com.flowbiz.onsite
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * [Flowbiz.ForegroundTracker] edge detection, exercised through the JVM
- * seams ([Flowbiz.ForegroundTracker.activityStarted] /
- * [Flowbiz.ForegroundTracker.activityStopped]) because no real `Activity`
- * exists on a plain JVM.
- *
- * The critical case is the configuration change (rotation): the activity is
- * stopped and destroyed *before* its replacement starts, so the started
- * count hits 0 mid-rotation — without the `isChangingConfigurations` skip,
- * every rotation would fire a background+foreground pair (resetting the
- * heartbeat cadence and the flush backoff).
- */
+/** Through the JVM seams: no real `Activity` exists on a plain JVM. */
 class ForegroundTrackerTest {
 
     private class Edges {
@@ -37,9 +26,8 @@ class ForegroundTrackerTest {
     fun rotationFiresNoBackgroundOrForegroundEdge() {
         val edges = Edges()
         val tracker = edges.tracker()
-        tracker.activityStarted() // cold start → foreground edge
+        tracker.activityStarted()
         assertEquals(1, edges.foreground)
-        // Rotation: old activity stops (config change) BEFORE the new one starts.
         tracker.activityStopped(isChangingConfigurations = true)
         tracker.activityStarted()
         assertEquals("rotation must not fire a foreground edge", 1, edges.foreground)
@@ -57,10 +45,8 @@ class ForegroundTrackerTest {
         }
         assertEquals(1, edges.foreground)
         assertEquals(0, edges.background)
-        // A real background (home press) after rotations still fires.
         tracker.activityStopped(isChangingConfigurations = false)
         assertEquals(1, edges.background)
-        // And the next start is a real foreground edge again.
         tracker.activityStarted()
         assertEquals(2, edges.foreground)
     }
@@ -82,13 +68,11 @@ class ForegroundTrackerTest {
         val tracker = edges.tracker()
         tracker.activityStarted() // A
         tracker.activityStarted() // B (second started activity, e.g. multi-window)
-        // A rotates while B stays started: the config-change stop must not
-        // fire an edge (the count never reaches 0 here anyway).
+        // A rotates while B stays started.
         tracker.activityStopped(isChangingConfigurations = true)
         tracker.activityStarted() // A's replacement
         assertEquals(1, edges.foreground)
         assertEquals(0, edges.background)
-        // Both stop for real -> exactly one background edge, at zero.
         tracker.activityStopped(isChangingConfigurations = false)
         assertEquals(0, edges.background)
         tracker.activityStopped(isChangingConfigurations = false)

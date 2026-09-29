@@ -3,35 +3,16 @@ package br.com.flowbiz.onsite
 import org.json.JSONObject
 
 /**
- * The SPEC §9 drain loop: batches the [EventQueue] through the [HttpSender]
- * in order, with 413 bisection, poison isolation, and exponential backoff.
+ * Drains the [EventQueue] through the [HttpSender] in queue order, in
+ * batches of up to [MAX_BATCH_SIZE]. A 413 splits the batch in half,
+ * recursively; a single still-rejected entry is poison and dropped. A 4xx
+ * verdict applies to the whole POST, so it is bisected the same way: only
+ * the poison entries are dropped, not the innocent ones batched with them.
+ * A retriable error stops the drain (order preserved) and schedules a retry.
  *
- * ## Drain semantics
- * - Batches of up to [MAX_BATCH_SIZE] (50) entries per request, queue order.
- * - `sent_at` is restamped on every entry at **each transmission attempt**
- *   (SPEC §4); `created_at` is never touched.
- * - [SendResult.SUCCESS] → dequeue exactly the batch, continue draining.
- * - [SendResult.PAYLOAD_TOO_LARGE] → split the batch in half, retry the
- *   halves recursively; a single entry still oversized is poison → dropped.
- * - [SendResult.PERMANENT_ERROR] → same bisection. SPEC §9's "drop it" is
- *   per-event, but a 4xx verdict applies to the whole POST — dropping the
- *   full batch would lose innocent events, so the batch is bisected exactly
- *   like a 413 until the poison entries are isolated and only those are
- *   dropped (a deliberate interpretation, flagged for review).
- * - [SendResult.RETRIABLE_ERROR] → stop draining (order preserved),
- *   schedule a retry with backoff.
- *
- * ## Backoff
- * Exponential 1 s → 60 s cap. **Any** [requestFlush] trigger (next track,
- * foreground, network restored, explicit flush — wired by the facade in
- * Slice 4) resets the backoff to 1 s, cancels a pending retry and attempts
- * immediately (SPEC §9). Scheduled retries themselves do not reset it.
- *
- * ## Concurrency
- * All drain work runs on the injected serial [TaskScheduler]; a guard flag
- * makes overlapping/re-entrant drain requests coalesce into one follow-up
- * pass, so flushes never run concurrently. [requestFlush] is callable from
- * any thread and never throws (SPEC §3).
+ * Backoff doubles from 1 s to a 60 s cap; any [requestFlush] resets it and
+ * drains now, scheduled retries do not. Drains run on the serial
+ * [TaskScheduler], and re-entrant requests coalesce into one follow-up pass.
  */
 internal class FlushController(
     private val queue: EventQueue,
@@ -42,7 +23,7 @@ internal class FlushController(
     private val isActive: () -> Boolean = { true },
 ) {
 
-    /** SPEC §9 retry triggers; carried for debug logging only. */
+    /** Carried for debug logging only. */
     enum class FlushReason { EVENT_TRACKED, APP_FOREGROUND, NETWORK_RESTORED, EXPLICIT }
 
     private enum class Outcome { CONTINUE, STOP_AND_RETRY }
@@ -53,10 +34,7 @@ internal class FlushController(
     private var backoffMillis = INITIAL_BACKOFF_MS
     private var retryHandle: ScheduledHandle? = null
 
-    /**
-     * Requests an immediate flush. Resets the backoff and cancels any
-     * pending scheduled retry (SPEC §9: reset by any retry trigger).
-     */
+    /** Resets the backoff, cancels a pending retry and drains now. Any thread; never throws. */
     fun requestFlush(reason: FlushReason) {
         try {
             synchronized(lock) {
@@ -73,17 +51,13 @@ internal class FlushController(
 
     /** Runs on the serial scheduler thread only. */
     private fun drain() {
-        // SPEC §12 gate: while the SDK is disabled no network happens — this
-        // also covers a backoff retry scheduled *before* the disable (it
-        // fires, hits the gate, and schedules nothing further).
+        // Also ends a backoff retry scheduled before a disable.
         if (!isActive()) {
             SdkLog.debug("drain skipped: SDK disabled")
             return
         }
         synchronized(lock) {
             if (draining) {
-                // Re-entrant request (e.g. a trigger firing mid-drain with an
-                // inline executor): coalesce into one follow-up pass.
                 drainAgain = true
                 return
             }
@@ -158,9 +132,9 @@ internal class FlushController(
     }
 
     /**
-     * Builds the `{"data":[...]}` body, restamping `timings.sent_at` with
-     * the current wall clock on every entry (SPEC §4: per attempt).
-     * A defensively-unparseable entry is sent verbatim rather than dropped.
+     * Restamps `timings.sent_at` on every attempt, so a retried event's
+     * `created_at` → `sent_at` skew shows its real offline latency. An
+     * unparseable entry is sent verbatim rather than dropped.
      */
     private fun buildBody(entries: List<String>): String {
         val sentAt = EnvelopeBuilder.isoMillis(clock.wallMillis())
@@ -179,10 +153,9 @@ internal class FlushController(
     }
 
     companion object {
-        /** SPEC §9: ≤ 50 events per request. */
+        /** Keeps a request well under the collector's 3 MB cap. */
         const val MAX_BATCH_SIZE = 50
 
-        /** SPEC §9: exponential backoff, 1 s doubling to a 60 s cap. */
         const val INITIAL_BACKOFF_MS = 1_000L
         const val MAX_BACKOFF_MS = 60_000L
     }

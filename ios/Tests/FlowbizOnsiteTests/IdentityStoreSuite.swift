@@ -1,4 +1,3 @@
-// SPEC §6 identity persistence over the injected KeyValueStore.
 #if canImport(Testing)
 import Foundation
 import Testing

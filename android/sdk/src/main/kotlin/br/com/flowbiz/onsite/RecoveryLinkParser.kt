@@ -4,23 +4,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Pure decoder behind [Flowbiz.handleLink] (SPEC §11): URL string →
- * `_mb_cr_` query value (+ `utm_source` guard) → base64 → hash JSON
- * `{t, u, c, its: [[qty, product_id, sku, recovery_properties?]]}` →
- * [RecoveryPayload]. Mirrors the web tag's `getRecoveryDataFromQuery`.
+ * Port of the web tag's `getRecoveryDataFromQuery`: `_mb_cr_` (with a
+ * Flowbiz `utm_source`) → base64 → hash JSON
+ * `{t, u, c, its: [[qty, product_id, sku, recovery_properties?]]}`.
  *
- * Operates on the raw URL *string* (the facade adapts `android.net.Uri` via
- * `toString()`), for two reasons: `Uri` does not exist in JVM unit tests,
+ * Works on the raw URL *string*: `Uri` does not exist in JVM unit tests,
  * and `Uri.getQueryParameter` decodes `+` to a space before callers see it.
+ * The value is tried raw, percent-decoded and with `' '` restored to `'+'`;
+ * the first candidate that decodes to a valid payload wins.
  *
- * Encoding tolerance: the value is tried raw, percent-decoded (`%XX` only),
- * and with `' '` restored to `'+'`; missing base64 padding is added;
- * URL-safe `-`/`_` are accepted. First candidate that decodes to a valid
- * payload wins.
- *
- * Tenant check: when `expectedAppId` is given (SDK initialized), `t` must
- * equal it, like web `appId === hash.t`. Before initialize the decoder is
- * pure and skips the check (SPEC §3). Never throws.
+ * With an `expectedAppId` (SDK initialized), `t` must equal it, like web
+ * `appId === hash.t`. Never throws.
  */
 internal object RecoveryLinkParser {
 
@@ -49,10 +43,8 @@ internal object RecoveryLinkParser {
     }
 
     /**
-     * Query pairs in order. Fragment cut first (M2 — spec §7 step 1: a `?`
-     * inside the fragment, e.g. `#/cart?_mb_cr_=…`, is not a query), then
-     * the query is found within what remains. Keys percent-decoded, values
-     * raw.
+     * Query pairs in order; keys percent-decoded, values raw. The fragment is
+     * cut first: a `?` inside it (`#/cart?_mb_cr_=…`) is not a query.
      */
     private fun queryPairs(url: String): List<Pair<String, String>> {
         val fragmentStart = url.indexOf('#')
@@ -74,7 +66,6 @@ internal object RecoveryLinkParser {
         return value.contains("mailbiz") || value.contains("flowbiz")
     }
 
-    /** Standard or URL-safe base64, padding optional → UTF-8 string. */
     private fun decodeBase64(value: String): String? = try {
         var normalized = value.replace('-', '+').replace('_', '/')
         val remainder = normalized.length % 4
@@ -88,10 +79,7 @@ internal object RecoveryLinkParser {
         null
     }
 
-    /**
-     * `%XX` decoding over UTF-8 bytes. Returns null for malformed escapes —
-     * the raw candidate then stands on its own.
-     */
+    /** Null for a malformed escape: the raw candidate then stands on its own. */
     private fun percentDecode(value: String): String? {
         if ('%' !in value) return value
         val bytes = ArrayList<Byte>(value.length)
@@ -118,8 +106,6 @@ internal object RecoveryLinkParser {
         in 'A'..'F' -> char - 'A' + 10
         else -> null
     }
-
-    // MARK: hash → payload
 
     private fun mapHash(json: String, expectedAppId: String?): RecoveryPayload? = try {
         val hash = JSONObject(json)
@@ -174,11 +160,8 @@ internal object RecoveryLinkParser {
      */
     private fun webQuantity(value: Any?): Int {
         val parsed: Int? = when (value) {
-            // `Double.toLong()`/`.toInt()` already saturate out-of-range and
-            // infinite values since Kotlin 1.3 (never throws); the explicit
-            // `coerceIn` makes that saturation to Int32's range visible in
-            // the code path, matching iOS's `parseIntLeading`/`webQuantity`
-            // exactly (SPEC §3: never traps).
+            // Saturates to Int's range like iOS: `toLong()` saturates, but a
+            // bare Long → Int conversion would wrap.
             is Number -> value.toDouble().takeIf { !it.isNaN() }
                 ?.let { it.toLong().coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt() }
             is String -> parseIntLeading(value)
@@ -208,11 +191,7 @@ internal object RecoveryLinkParser {
         return (sign * accumulated).coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
     }
 
-    /**
-     * 4th `its` element → properties map. Web parity: a JSON-object *string*
-     * (`tryToParseJson`); a nested object is additionally tolerated. Garbage
-     * → null (web emits `{}` — same meaning).
-     */
+    /** Web `tryToParseJson` of the 4th `its` element; a nested object is also tolerated. */
     private fun recoveryProperties(value: Any?): Map<String, Any?>? = try {
         when (value) {
             is String -> if (value.isEmpty()) null else JsonPlain.toPlainMap(JSONObject(value))

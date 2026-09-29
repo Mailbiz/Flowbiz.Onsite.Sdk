@@ -9,31 +9,15 @@ import android.util.Log
 import java.util.concurrent.Executors
 
 /**
- * Public entry point (SPEC §2) — a thin static facade over one
- * [FlowbizCore] instance created at [initialize].
+ * SDK entry point. Every call is safe from any thread, returns immediately
+ * and never throws. Calls before [initialize] are no-ops with a debug
+ * warning; the decoders ([handlePush], [handleLink], [handlePushOpened])
+ * still decode.
  *
- * SPEC §3 invariants enforced here:
- * - **Never throws**: every entry wraps its work in a catch-all.
- * - Reference parameters are declared **nullable** on purpose: Java host
- *   apps have no compile-time null checking, and a non-null Kotlin
- *   signature would make the compiler emit an
- *   `Intrinsics.checkNotNullParameter` preamble that throws before the
- *   catch-all is entered. A null argument is a no-op with a debug warning
- *   instead. Kotlin callers are unaffected (non-null arguments flow
- *   through seamlessly).
- * - Any call before [initialize] is a no-op with a debug warning; the
- *   decoders ([handlePush], [handleLink], [handlePushOpened]) still decode,
- *   silently.
- * - Double [initialize] is a no-op; the first config wins.
- * - Every API is callable from any thread; work is handed to the SDK's
- *   single background scheduler and the caller returns immediately.
- *
- * The facade stays deliberately thin — the behavioral tests live on
- * [FlowbizCore] (constructed with fakes); the facade's no-op paths
- * (pre-init, null arguments) are unit-tested (including from Java source,
- * see `FlowbizJavaNullSafetyTest`), while its production wiring
- * (SharedPreferences, queue file, lifecycle callbacks, real clock/network)
- * is exercised by the demo app (SPEC §14).
+ * Reference parameters are nullable on purpose: for a non-null Kotlin
+ * parameter the compiler emits a `checkNotNullParameter` preamble that
+ * would throw on a Java null before the catch-all is entered. A null
+ * argument is a no-op with a debug warning instead.
  */
 object Flowbiz {
 
@@ -43,15 +27,11 @@ object Flowbiz {
     private var core: FlowbizCore? = null
 
     /**
-     * Initializes the SDK. Call once, e.g. from `Application.onCreate`
-     * (which runs before any activity — the heartbeat then starts on the
-     * first activity start; initializing later, with an activity already
-     * started, delays foreground detection to the next start/stop edge).
-     *
-     * A blank [FlowbizConfig.appId] makes this a complete no-op (SPEC §2);
-     * other invalid config values are replaced/clamped with debug warnings.
-     * A null [context] or [config] (possible from Java callers) is a no-op
-     * with a debug warning — never an NPE (SPEC §3).
+     * Initializes the SDK. Call once, ideally from `Application.onCreate`:
+     * initializing with an activity already started delays foreground
+     * detection to the next activity start/stop. Later calls are ignored
+     * (the first config wins); a blank [FlowbizConfig.appId] makes this a
+     * complete no-op.
      */
     @JvmStatic
     fun initialize(context: Context?, config: FlowbizConfig?) {
@@ -99,11 +79,7 @@ object Flowbiz {
         }
     }
 
-    /**
-     * Tracks a typed event (SPEC §5). Enqueues and returns immediately.
-     * A null [event] (possible from Java callers) is a no-op with a debug
-     * warning — never an NPE (SPEC §3).
-     */
+    /** Tracks [event]: it is queued durably and sent in the background. */
     @JvmStatic
     fun track(event: Event?) {
         if (event == null) {
@@ -113,22 +89,27 @@ object Flowbiz {
         withCore("track") { it.track(event) }
     }
 
-    /** Clears user identity, rotates the session (SPEC §6). */
+    /**
+     * Signs the user out: clears the user identity and starts a new session.
+     * A registered push token is removed first (`push.token.remove`).
+     */
     @JvmStatic
     fun logout() = withCore("logout") { it.logout() }
 
-    /** Opt-out switch (SPEC §12); persisted across launches. */
+    /**
+     * Opt-out switch, persisted across launches. While disabled the SDK drops
+     * new events, stops the heartbeat and makes no network calls.
+     */
     @JvmStatic
     fun setEnabled(enabled: Boolean) = withCore("setEnabled") { it.setEnabled(enabled) }
 
-    /** Forces a queue flush (SPEC §2). Fire-and-forget. */
+    /** Sends the queued events now instead of waiting for the next trigger. */
     @JvmStatic
     fun flush() = withCore("flush") { it.flush() }
 
     /**
-     * SPEC §10.1 token relay: persists the token and emits
-     * `push.token.sync` through the normal pipeline. Requires [initialize];
-     * a null/blank token is a no-op with a debug warning.
+     * Relays the device push token (emits `push.token.sync`) and remembers it
+     * so [logout] can remove it. A null/blank token is ignored.
      */
     @JvmStatic
     fun setPushToken(token: String?) {
@@ -139,23 +120,15 @@ object Flowbiz {
         withCore("setPushToken") { it.setPushToken(token) }
     }
 
-    /**
-     * SPEC §10.1: emits `push.token.remove` with the stored token and
-     * forgets it. No stored token → no-op. Requires [initialize].
-     */
+    /** Emits `push.token.remove` for the stored token and forgets it; no-op when none is stored. */
     @JvmStatic
     fun removePushToken() = withCore("removePushToken") { it.removePushToken() }
 
     /**
-     * SPEC §10.3: parses a push payload carrying the `"flowbiz"` marker key
-     * (a JSON-encoded string, SPEC §10.2). Returns null when the payload is
-     * not ours (marker absent or undecodable).
-     *
-     * Pure, synchronous, never throws; callable before [initialize]
-     * (SPEC §3) and from any thread — typically the app's
-     * `FirebaseMessagingService.onMessageReceived` (`message.data`) or the
-     * launch intent extras on notification tap. Receiving is not opening, so
-     * it captures no UTMs: on tap, call [handlePushOpened].
+     * Decodes a Flowbiz push (the `"flowbiz"` key of FCM `message.data` or of
+     * the notification-tap intent extras); null when the push is not ours.
+     * Pure and callable before [initialize]. Receiving is not opening, so it
+     * captures no UTMs: on tap, call [handlePushOpened].
      */
     @JvmStatic
     fun handlePush(payload: Map<String, String>?): FlowbizPush? = try {
@@ -168,16 +141,14 @@ object Flowbiz {
     }
 
     /**
-     * SPEC §11: decodes the `_mb_cr_` query parameter of an incoming deep
-     * link into a [RecoveryPayload]. Returns null = no decodable `_mb_cr_`
-     * param, missing/invalid `utm_source`, or (once initialized) a tenant
-     * mismatch.
+     * Decodes the `_mb_cr_` cart-recovery parameter of an incoming deep link.
+     * Null when it is absent or undecodable, `utm_source` is not a Flowbiz
+     * one, or (once initialized) the link belongs to another appId.
      *
      * Once initialized it also captures the link's campaign UTMs, whatever
      * the decode returns, so forward every incoming link; a [track] issued
-     * afterwards from the same thread carries them. Before [initialize] it
-     * only decodes (without the tenant check). Never throws; the SDK does
-     * not adopt the decoded user as its identity.
+     * afterwards from the same thread carries them. The SDK does not adopt
+     * the decoded user as its identity.
      */
     @JvmStatic
     fun handleLink(url: Uri?): RecoveryPayload? = try {
@@ -218,22 +189,13 @@ object Flowbiz {
     }
 
     /**
-     * Started-activity counting → foreground/background edges (SPEC §1
-     * lifecycle source). On a configuration change (rotation) there is
-     * **no overlap**: the old activity is stopped and destroyed *before*
-     * the replacement is created and started, so the count briefly hits 0
-     * while the app stays visually foregrounded. That stop is identified
-     * via [Activity.isChangingConfigurations] and the background edge is
-     * skipped (a background edge per rotation would reset the heartbeat
-     * cadence and spuriously reset the flush backoff); the [foregrounded]
-     * flag then keeps the replacement's start from firing a spurious
-     * foreground edge. Callbacks arrive on the main thread only, so the
-     * state needs no synchronization.
-     *
-     * Internal (not private) with [Function0] seams instead of a
-     * [FlowbizCore], so the counting logic is unit-testable on a plain JVM
-     * where no real [Activity] can exist (see [activityStarted] /
-     * [activityStopped]).
+     * Started-activity counting → foreground/background edges. On a
+     * configuration change the old activity stops *before* its replacement
+     * starts, so the count briefly hits 0: that stop
+     * ([Activity.isChangingConfigurations]) fires no background edge, which
+     * would reset the heartbeat cadence and the flush backoff on every
+     * rotation. Callbacks arrive on the main thread only, so the state needs
+     * no synchronization.
      */
     internal class ForegroundTracker(
         private val onForeground: () -> Unit,

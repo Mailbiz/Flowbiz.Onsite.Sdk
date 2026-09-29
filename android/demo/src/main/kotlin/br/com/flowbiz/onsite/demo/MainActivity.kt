@@ -27,18 +27,8 @@ import br.com.flowbiz.onsite.RecoveryPayload
 internal fun isFreshLinkLaunch(restoring: Boolean, intentFlags: Int): Boolean =
     !restoring && (intentFlags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
 
-/**
- * Single-activity fake store (SPEC §14): product list → product detail →
- * cart → checkout, plus login, a settings/debug panel and a deep-link
- * recovery screen. Plain programmatic Views — no extra dependencies; the
- * goal is clarity of the SDK call sites, not UX.
- *
- * Every `Flowbiz.*` call site carries a one-line comment naming the SPEC
- * section it demonstrates.
- */
+/** Plain programmatic Views, no extra dependencies: the point is the SDK call sites, not UX. */
 class MainActivity : Activity() {
-
-    // ---- Screen model -----------------------------------------------------
 
     private sealed interface Screen {
         val path: String
@@ -86,8 +76,6 @@ class MainActivity : Activity() {
     /** Demo-local mirror of the opt-out switch (the SDK persists the real state internally). */
     private var trackingEnabled = true
 
-    // ---- Lifecycle & deep links ------------------------------------------
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val freshLaunch = isFreshLinkLaunch(restoring = savedInstanceState != null, intentFlags = intent.flags)
@@ -101,7 +89,6 @@ class MainActivity : Activity() {
         handleDeepLink(intent)
     }
 
-    /** SPEC §11 receiving side: forward any incoming link, branch on the return value. */
     private fun handleDeepLink(intent: Intent?): Boolean {
         val uri = intent?.data ?: return false
         // Null: no decodable _mb_cr_ for this tenant. The UTMs are captured
@@ -111,12 +98,9 @@ class MainActivity : Activity() {
         return true
     }
 
-    // ---- Navigation -------------------------------------------------------
-
     private fun show(screen: Screen, push: Boolean = true) {
         if (push) current?.let(backStack::addLast)
         current = screen
-        // SPEC §5 `page.view`: tracked on every screen change (SPEC §14).
         Flowbiz.track(Event.PageView(path = screen.path, title = screen.title))
         render(screen)
     }
@@ -130,7 +114,7 @@ class MainActivity : Activity() {
             return
         }
         current = previous
-        // SPEC §5 `page.view`: back navigation is a screen change too.
+        // Back navigation is a screen change too.
         Flowbiz.track(Event.PageView(path = previous.path, title = previous.title))
         render(previous)
     }
@@ -147,13 +131,11 @@ class MainActivity : Activity() {
         }
     }
 
-    // ---- Screens ----------------------------------------------------------
-
     private fun renderProductList(): Unit = content("Bela Moda Store") {
         label(
             "Loja fake de demonstração do Flowbiz Onsite SDK. Offline? Tudo bem: " +
                 "os eventos ficam numa fila em disco e são reenviados com backoff " +
-                "exponencial (SPEC §9). Logs: tag FlowbizOnsite."
+                "exponencial. Logs: tag FlowbizOnsite."
         )
         DemoCatalog.products.forEach { product ->
             label("${product.name}\n${product.brand} — R$ %.2f".format(product.price), bold = true)
@@ -166,7 +148,6 @@ class MainActivity : Activity() {
     }
 
     private fun renderProductDetail(product: DemoProduct) {
-        // SPEC §5 `product.view`: tracked when the product screen opens.
         Flowbiz.track(Event.ProductView(DemoCatalog.toSdkProduct(product)))
         content(product.name) {
             label("${product.brand} • ${product.category}")
@@ -174,9 +155,8 @@ class MainActivity : Activity() {
             label("SKU: ${product.sku} — ${product.properties}")
             action("Adicionar ao carrinho") {
                 DemoCart.add(product)
-                // SPEC §5 `cart.add`: only the line that was added.
+                // cart.add carries only the added line; cart.sync the whole cart after it.
                 Flowbiz.track(Event.AddToCart(listOf(DemoCart.toCartItem(product, 1))))
-                // SPEC §5 `cart.sync`: full cart snapshot after the change.
                 Flowbiz.track(Event.CartSync(DemoCart.toCart()))
                 Toast.makeText(this@MainActivity, "cart.add + cart.sync enfileirados", Toast.LENGTH_SHORT).show()
             }
@@ -190,13 +170,12 @@ class MainActivity : Activity() {
             label("${product.name}\n$qty × R$ %.2f".format(product.price), bold = true)
             action("+1") {
                 DemoCart.setQuantity(product.sku, qty + 1)
-                // SPEC §5 `cart.item.update`: quantity change for one line.
                 Flowbiz.track(Event.CartItemUpdate(DemoCart.CART_ID, product.productId, product.sku, qty + 1))
                 renderCart()
             }
             action("-1") {
                 DemoCart.setQuantity(product.sku, qty - 1)
-                // SPEC §5 `cart.item.update`: quantity 0 removes the line store-side.
+                // Quantity 0 removes the line store-side.
                 Flowbiz.track(Event.CartItemUpdate(DemoCart.CART_ID, product.productId, product.sku, qty - 1))
                 renderCart()
             }
@@ -207,7 +186,6 @@ class MainActivity : Activity() {
             val coupon = couponInput.text.toString().trim()
             if (coupon.isNotEmpty()) {
                 DemoCart.coupon = coupon
-                // SPEC §5 `cart.setcoupon`.
                 Flowbiz.track(Event.CartSetCoupon(DemoCart.CART_ID, coupon))
                 renderCart()
             }
@@ -217,7 +195,6 @@ class MainActivity : Activity() {
             val cep = cepInput.text.toString().trim()
             if (cep.isNotEmpty()) {
                 DemoCart.postalCode = cep
-                // SPEC §5 `cart.setpostalcode`.
                 Flowbiz.track(Event.CartSetPostalCode(DemoCart.CART_ID, cep))
                 renderCart()
             }
@@ -229,7 +206,7 @@ class MainActivity : Activity() {
             bold = true,
         )
         action("Sincronizar carrinho (cart.sync)") {
-            // SPEC §5 `cart.sync` — an empty cart still sends (SPEC §7: emptying is signal).
+            // An empty cart still sends: emptying it is a signal.
             Flowbiz.track(Event.CartSync(DemoCart.toCart()))
             Toast.makeText(this@MainActivity, "cart.sync enfileirado", Toast.LENGTH_SHORT).show()
         }
@@ -237,7 +214,6 @@ class MainActivity : Activity() {
     }
 
     private fun renderCheckout(step: Int) {
-        // SPEC §5 `checkout.step`: one event per step of the funnel.
         Flowbiz.track(Event.CheckoutStep(Checkout(DemoCart.CART_ID, step, STEP_NAMES.size, STEP_NAMES[step - 1])))
         content("Checkout — etapa $step/${STEP_NAMES.size} (${STEP_NAMES[step - 1]})") {
             label("Total: R$ %.2f — ${DemoCart.itemCount} item(ns)".format(DemoCart.total()))
@@ -246,7 +222,6 @@ class MainActivity : Activity() {
             } else {
                 action("Concluir pedido (order.complete)") {
                     val orderId = "ord-${System.currentTimeMillis()}"
-                    // SPEC §5 `order.complete`: full order incl. payment/delivery methods.
                     Flowbiz.track(Event.OrderComplete(DemoCart.toOrder(orderId)))
                     DemoCart.clear()
                     dialog("Pedido concluído", "order.complete enfileirado ($orderId).")
@@ -255,7 +230,7 @@ class MainActivity : Activity() {
                 }
             }
             action("Cancelar pedido (order.cancel)") {
-                // SPEC §5 `order.cancel`: at least one of orderId/cartId.
+                // order.cancel needs at least one of orderId/cartId.
                 Flowbiz.track(Event.OrderCancel(cartId = DemoCart.CART_ID))
                 show(CartScreen)
             }
@@ -265,18 +240,15 @@ class MainActivity : Activity() {
     private fun renderLogin(): Unit = content("Login") {
         val user = DemoCatalog.fakeUser
         label("Usuária fake: ${user.name} <${user.email}>")
-        label("Após login/sync o SDK grava user_id/email e todos os eventos passam a carregar identity.user_id (SPEC §5/§6).")
+        label("Após login/sync o SDK grava user_id/email e todos os eventos passam a carregar identity.user_id.")
         action("Entrar (account.login)") {
-            // SPEC §5 `account.login`: also stores user_id/email for the identity block.
             Flowbiz.track(Event.AccountLogin(user))
             dialog("account.login", "Evento enfileirado para ${user.userId}.")
         }
         action("Sincronizar conta (account.sync)") {
-            // SPEC §5 `account.sync`: same payload, distinct wire event.
             Flowbiz.track(Event.AccountSync(user))
         }
         action("Sair (logout)") {
-            // SPEC §6: clears identity, rotates session, auto-emits push.token.remove (§10.1).
             Flowbiz.logout()
             dialog("logout", "Identidade limpa; sessão rotacionada; push.token.remove automático se havia token.")
         }
@@ -288,42 +260,37 @@ class MainActivity : Activity() {
             isChecked = trackingEnabled
             setOnCheckedChangeListener { _, checked ->
                 trackingEnabled = checked
-                // SPEC §12 opt-out: persisted; disabled = drop events, stop heartbeat, no network.
                 Flowbiz.setEnabled(checked)
             }
         })
         label("Gancho de consentimento LGPD/GDPR; o SDK persiste o estado real — o switch acima reflete só esta sessão do app.")
         divider()
         action("setPushToken (token fake)") {
-            // SPEC §10.1: emits push.token.sync through the normal queue/dedup pipeline.
             Flowbiz.setPushToken(FAKE_PUSH_TOKEN)
         }
         action("removePushToken") {
-            // SPEC §10.1: emits push.token.remove with the stored token, then forgets it.
             Flowbiz.removePushToken()
         }
         action("flush (drena a fila)") {
-            // SPEC §9: explicit flush is one of the queue retry triggers.
             Flowbiz.flush()
         }
         action("logout") {
-            // SPEC §6: clears identity, rotates session, auto-emits push.token.remove.
             Flowbiz.logout()
         }
         divider()
-        action("Simular push (SPEC §10.2)") { simulatePush() }
-        action("Simular link de recuperação (SPEC §11)") { simulateRecoveryLink() }
+        action("Simular push") { simulatePush() }
+        action("Simular link de recuperação") { simulateRecoveryLink() }
         divider()
         label(
             "Identidade anônima: o SDK mantém um anonymous_id persistente e um " +
-                "session_id rotativo (SPEC §6). Eles viajam no bloco identity de cada " +
+                "session_id rotativo. Eles viajam no bloco identity de cada " +
                 "evento e não são expostos pela API pública; logout() limpa o user_id " +
                 "e os eventos voltam a ser anônimos."
         )
         label(
             "Rede: com o collectorUrl padrão inalcançável/offline os POSTs falham sem " +
                 "quebrar nada — os eventos aguardam na fila JSONL e o backoff " +
-                "exponencial reenvia no próximo track/foreground/rede/flush (SPEC §9)."
+                "exponencial reenvia no próximo track/foreground/rede/flush."
         )
     }
 
@@ -332,9 +299,9 @@ class MainActivity : Activity() {
         label("As UTMs do link são capturadas mesmo com retorno null e seguem como context.utm nos eventos seguintes.")
         val payload = screen.payload
         if (payload == null) {
-            label("Flowbiz.handleLink devolveu null — o link não carrega um _mb_cr_ decodificável (SPEC §11).", bold = true)
+            label("Flowbiz.handleLink devolveu null — o link não carrega um _mb_cr_ decodificável.", bold = true)
         } else {
-            label("RecoveryPayload (SPEC §11):", bold = true)
+            label("RecoveryPayload:", bold = true)
             label("cartId: ${payload.cartId}\nuserId: ${payload.userId}")
             payload.products.forEach { product ->
                 label("• ${product.quantity}× ${product.productId} / ${product.sku}" +
@@ -342,7 +309,6 @@ class MainActivity : Activity() {
             }
             action("Restaurar carrinho") {
                 DemoCart.restore(payload)
-                // SPEC §5 `cart.sync`: snapshot after restoring the recovered items.
                 Flowbiz.track(Event.CartSync(DemoCart.toCart()))
                 show(CartScreen)
             }
@@ -350,22 +316,16 @@ class MainActivity : Activity() {
         action("Voltar à loja") { show(ProductListScreen) }
     }
 
-    // ---- Debug actions ----------------------------------------------------
-
     private fun simulatePush() {
-        // Canned SPEC §10.2 payload — mirrors shared/push-samples/samples.json
-        // ("cart_recovery_with_real_mb_cr_deep_link"): flat map with the
-        // "flowbiz" marker carrying a JSON-encoded string, exactly what
-        // FirebaseMessagingService.onMessageReceived would hand over.
+        // What FirebaseMessagingService.onMessageReceived hands over: a flat
+        // map whose "flowbiz" value is a JSON-encoded string.
         val payload = mapOf("flowbiz" to SIMULATED_PUSH_MARKER)
-        // SPEC §10.3: pure parser; null would mean "not a Flowbiz push".
         val push = Flowbiz.handlePush(payload)
         if (push == null) {
             dialog("handlePush", "null — payload não é do Flowbiz")
             return
         }
-        // SPEC §10.2: a cart-recovery push carries _mb_cr_ in deep_link,
-        // decoded by the same §11 parser via recoveryPayload.
+        // A cart-recovery push carries _mb_cr_ in its deep_link.
         val recovery = push.recoveryPayload
         val message = buildString {
             appendLine("FlowbizPush:")
@@ -386,18 +346,15 @@ class MainActivity : Activity() {
                 show(RecoveryScreen("push deep_link: $deepLink", opened))
             }
         }
-        dialog("Push simulado (SPEC §10)", message, openRecovery)
+        dialog("Push simulado", message, openRecovery)
     }
 
     private fun simulateRecoveryLink() {
         // Decodes to cart-abc-001 / user-123 / P100 + P200 — no adb needed.
         val uri = Uri.parse(DEMO_RECOVERY_LINK)
-        // SPEC §11: exactly the call the OS deep-link path (onNewIntent) uses.
         val payload = Flowbiz.handleLink(uri)
         show(RecoveryScreen(uri.toString(), payload))
     }
-
-    // ---- Tiny programmatic-UI helpers ------------------------------------
 
     private fun content(title: String, build: LinearLayout.() -> Unit) {
         val column = LinearLayout(this).apply {
@@ -467,7 +424,7 @@ class MainActivity : Activity() {
             "&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email" +
             "&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1"
 
-        /** SPEC §10.2 marker value from shared/push-samples/samples.json. */
+        /** Marker value from shared/push-samples/samples.json. */
         const val SIMULATED_PUSH_MARKER =
             """{"v":1,"type":"cart_recovery","title":"Sua sacola te espera!","body":"Finalize sua compra...","deep_link":"https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCIsIntcImNvclwiOlwiQXp1bFwiLFwidGFtYW5ob1wiOlwiUFwifSJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19","data":{"campaign_id":"cr-42"}}"""
     }

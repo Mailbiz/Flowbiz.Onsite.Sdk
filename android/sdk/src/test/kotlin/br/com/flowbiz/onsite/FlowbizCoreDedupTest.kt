@@ -7,11 +7,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
-/**
- * SPEC §7 dedup through the full [FlowbizCore] pipeline: 20-min window,
- * renew-on-duplicate semantics (pinned), payload sensitivity, per-wire-name
- * isolation, persistence across core recreation.
- */
 class FlowbizCoreDedupTest {
 
     @get:Rule
@@ -39,10 +34,8 @@ class FlowbizCoreDedupTest {
 
     @Test
     fun renewOnDuplicateSemanticsPinned() {
-        // Web EventsState parity: a suppressed duplicate RENEWS the window.
-        // t=0 send; t=15 duplicate (suppressed, renews); t=30 duplicate —
-        // a fixed window from the send would let this through (30 > 20);
-        // the renewed window (15 min since last duplicate) suppresses it.
+        // Web EventsState parity: a suppressed duplicate renews the window, so
+        // the t=30 duplicate is still suppressed (15 min after the last one).
         val h = harness()
         h.core.track(Event.PageView("home"))
         h.clock.advance(15 * MINUTE_MS)
@@ -51,7 +44,6 @@ class FlowbizCoreDedupTest {
         h.core.track(Event.PageView("home"))
         assertEquals(1, h.sentEntries().size)
 
-        // After a quiet 20 minutes it sends again.
         h.clock.advance(20 * MINUTE_MS)
         h.core.track(Event.PageView("home"))
         assertEquals(2, h.sentEntries().size)
@@ -69,7 +61,6 @@ class FlowbizCoreDedupTest {
     fun differentWireNamesDedupIndependently() {
         val user = User(userId = "98412", email = "maria.oliveira@gmail.com")
         val h = harness()
-        // Identical data payloads, distinct wire names → both send.
         h.core.track(Event.AccountLogin(user))
         h.core.track(Event.AccountSync(user))
         assertEquals(2, h.sentEntries().size)
@@ -77,7 +68,7 @@ class FlowbizCoreDedupTest {
 
     @Test
     fun emptyCartSyncIsNeverSpeciallySuppressed() {
-        // SPEC §7: no empty-cart suppression — but normal dedup still applies.
+        // Emptying the cart is a signal: no empty-cart suppression.
         val emptyCart = Event.CartSync(
             Cart(cartId = "c1", subtotal = 0.0, total = 0.0, freight = 0.0, tax = 0.0, discounts = 0.0)
         )
@@ -95,11 +86,10 @@ class FlowbizCoreDedupTest {
         first.core.track(Event.PageView("home"))
         assertEquals(1, first.sentEntries().size)
 
-        // "Process restart": new core over the same persisted store.
         clock.advance(5 * MINUTE_MS)
         val second = CoreHarness(temp.newFolder(), store = store, clock = clock)
         second.core.track(Event.PageView("home"))
-        assertEquals(0, second.sentEntries().size) // still within the window
+        assertEquals(0, second.sentEntries().size)
 
         clock.advance(DedupStore.WINDOW_MS)
         second.core.track(Event.PageView("home"))
@@ -113,7 +103,7 @@ class FlowbizCoreDedupTest {
         val stored = h.store.values[DedupStore.DIGEST_KEY_PREFIX + "page.view"] as String
         val dataJson = EventSerializer.dataJson(Event.PageView("home"), "https://store.com")
         assertEquals(DedupStore.sha256Hex(dataJson), stored)
-        assertFalse(stored.contains("home")) // digest, not the raw payload
+        assertFalse(stored.contains("home"))
         assertEquals(64, stored.length)
     }
 
@@ -121,21 +111,20 @@ class FlowbizCoreDedupTest {
     fun backwardsClockJumpDoesNotSuppressForever() {
         val h = harness()
         h.core.track(Event.PageView("home"))
-        h.clock.wall -= 60 * MINUTE_MS // clock rolled back past the anchor
+        h.clock.wall -= 60 * MINUTE_MS
         h.core.track(Event.PageView("home"))
         assertEquals(2, h.sentEntries().size)
     }
 
     @Test
     fun suppressedDuplicateStillTouchesSession() {
-        // Dedup drops the wire event, but the user activity is real: the
-        // session window must still slide (SPEC §6: every tracked event).
+        // Dedup drops the wire event, but the user activity is real.
         val h = harness()
         h.core.track(Event.PageView("home"))
         val first = h.lastEntry().getJSONObject("identity")
         repeat(3) {
             h.clock.advance(15 * MINUTE_MS)
-            h.core.track(Event.PageView("home")) // suppressed, slides window
+            h.core.track(Event.PageView("home"))
         }
         h.clock.advance(20 * MINUTE_MS) // dedup expired; 20 < 30 session idle
         h.core.track(Event.PageView("home"))

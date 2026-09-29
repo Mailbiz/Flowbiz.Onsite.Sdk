@@ -10,10 +10,6 @@ import org.junit.Test
 import java.io.File
 import java.util.Base64
 
-/**
- * `handleLink` decoding (SPEC §11): the `_mb_cr_` + `utm_source` link the
- * backend emits, pinned by `shared/recovery-links/vectors.json`.
- */
 class RecoveryLinkParserTest {
 
     private val vectors: List<JSONObject> by lazy {
@@ -53,13 +49,7 @@ class RecoveryLinkParserTest {
         assertNull(RecoveryLinkParser.parse("?&&=&_mb_cr_&utm_source"))
     }
 
-    /**
-     * I3: seeded fuzz over the *decoded* hash JSON (not just URL bytes) —
-     * `its` and item slots take every adversarial shape SPEC §3 must
-     * survive (wrong types, huge/negative numbers, deep nesting, giant
-     * strings). The only assertion is that `parse` returns (null or a
-     * payload) instead of throwing.
-     */
+    /** Seeded fuzz over the *decoded* hash JSON, not just the URL bytes. */
     @Test
     fun adversarialDecodedHashesNeverThrow() {
         val generator = SplitMix64(20260902L)
@@ -67,11 +57,10 @@ class RecoveryLinkParserTest {
             val hash = randomHash(generator)
             val b64 = Base64.getEncoder().encodeToString(hash.toString().toByteArray())
             val url = "https://store.com/c?utm_source=flowbiz&_mb_cr_=$b64"
-            RecoveryLinkParser.parse(url, "77777") // must not throw
+            RecoveryLinkParser.parse(url, "77777")
         }
     }
 
-    /** One adversarial `{t, u, c, its}` hash — see [randomField]/[randomIts]. */
     private fun randomHash(gen: SplitMix64): JSONObject =
         JSONObject()
             .put("t", randomField(gen))
@@ -87,7 +76,6 @@ class RecoveryLinkParserTest {
         else -> ""
     }
 
-    /** `its`: usually an array of items, occasionally a non-array. */
     private fun randomIts(gen: SplitMix64): Any = when ((gen.next() % 6UL).toInt()) {
         0 -> JSONObject.NULL
         1 -> "not an array"
@@ -102,7 +90,6 @@ class RecoveryLinkParserTest {
         }
     }
 
-    /** One `its` element: usually an array of adversarial slots, sometimes a non-array item. */
     private fun randomItem(gen: SplitMix64): Any {
         if ((gen.next() % 4UL) == 0UL) return randomSlot(gen)
         val item = JSONArray()
@@ -111,11 +98,6 @@ class RecoveryLinkParserTest {
         return item
     }
 
-    /**
-     * One `its[i]` slot value: a huge/negative/out-of-Int32-range number, a
-     * bool, null, a nested object, a deeply nested array (depth 20), an
-     * empty string, or a ~10 kB string.
-     */
     private fun randomSlot(gen: SplitMix64): Any = when ((gen.next() % 9UL).toInt()) {
         0 -> 1e30
         1 -> -1e30

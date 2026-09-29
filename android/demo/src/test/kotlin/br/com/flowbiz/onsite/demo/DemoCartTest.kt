@@ -7,11 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/**
- * Smoke test for the demo's fake-store state (pure Kotlin — no Android
- * types): the SDK payloads the demo builds must stay arithmetically
- * consistent and recovery restoration must map to catalog products.
- */
 class DemoCartTest {
 
     @Before

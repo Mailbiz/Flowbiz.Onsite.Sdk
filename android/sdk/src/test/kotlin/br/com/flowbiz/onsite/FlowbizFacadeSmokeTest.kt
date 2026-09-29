@@ -1,21 +1,13 @@
 package br.com.flowbiz.onsite
 
-/**
- * Smoke coverage for the static [Flowbiz] facade WITHOUT Robolectric: only
- * the pre-initialize paths are reachable on a plain JVM ([Flowbiz.initialize]
- * needs a real `Context`). SPEC §3: every pre-init call must be a silent
- * no-op, never a throw.
- *
- * What is deliberately **not** covered here and rides on the demo app
- * (SPEC §14) instead: `initialize` production wiring (SharedPreferences,
- * queue file location, HttpUrlSender, ActivityLifecycleCallbacks
- * registration, `Log.d` sink) and double-initialize on a real Context. The
- * behavioral equivalents (first-config-wins config handling, lifecycle
- * edges, never-throw pipeline) are all pinned at the [FlowbizCore] level.
- */
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Without Robolectric only the pre-initialize paths are reachable:
+ * [Flowbiz.initialize] needs a real `Context`. Its production wiring runs in
+ * the demo app; the behavior behind it is pinned on [FlowbizCore].
+ */
 class FlowbizFacadeSmokeTest {
 
     @Test
@@ -42,13 +34,7 @@ class FlowbizFacadeSmokeTest {
         }
     }
 
-    /**
-     * SPEC §3 platform-defensive nullability: the facade's reference
-     * parameters are nullable so Java callers passing null get a logged
-     * no-op, never an NPE (the bytecode-level proof — no
-     * `Intrinsics.checkNotNullParameter` preamble — is
-     * `FlowbizJavaNullSafetyTest`, compiled from Java source).
-     */
+    /** Java callers can pass null; `FlowbizJavaNullSafetyTest` proves it from Java source. */
     @Test
     fun nullArgumentsAreLoggedNoOpsAndNeverThrow() {
         val warnings = mutableListOf<String>()
@@ -66,12 +52,7 @@ class FlowbizFacadeSmokeTest {
         }
     }
 
-    /**
-     * `handlePush`/`handleLink` decode before initialize (no warning, real
-     * result), unlike the pipeline entry points above. `handleLink` with a
-     * real `Uri` needs Android (demo app); the string-level behavior is
-     * `RecoveryLinkParserTest`.
-     */
+    /** A real `Uri` needs Android; `RecoveryLinkParserTest` covers `handleLink` on strings. */
     @Test
     fun pureHandlersWorkBeforeInitialize() {
         val warnings = mutableListOf<String>()
@@ -81,7 +62,7 @@ class FlowbizFacadeSmokeTest {
             assertTrue(push != null && push.type == "promo")
             assertTrue(Flowbiz.handlePush(mapOf("other" to "x")) == null)
             assertTrue(Flowbiz.handleLink(null) == null)
-            assertTrue(warnings.isEmpty()) // pure: no "initialize was not called" warnings
+            assertTrue(warnings.isEmpty())
         } finally {
             SdkLog.sink = null
         }

@@ -11,12 +11,7 @@ import br.com.flowbiz.onsite.ProductVariant
 import br.com.flowbiz.onsite.RecoveryPayload
 import br.com.flowbiz.onsite.User
 
-/**
- * One fake-store product. Data mirrors the realistic Brazilian ecommerce
- * catalog used by `shared/fixtures/` (Bela Moda Store); `P100`/`P200` match
- * the product ids inside the shared recovery-link vectors so a simulated
- * recovery link restores real catalog items.
- */
+/** `P100`/`P200` match the shared recovery-link vectors, so a simulated link restores real items. */
 data class DemoProduct(
     val productId: String,
     val sku: String,
@@ -30,7 +25,6 @@ data class DemoProduct(
     val properties: Map<String, Any?>,
 )
 
-/** Static fake catalog + fake user — pure Kotlin, JVM-unit-testable. */
 object DemoCatalog {
 
     val products: List<DemoProduct> = listOf(
@@ -84,7 +78,6 @@ object DemoCatalog {
         ),
     )
 
-    /** Fake logged-in user for `account.login` / `account.sync` (SPEC §5). */
     val fakeUser = User(
         userId = "u-9f2c",
         email = "maria.souza@exemplo.com.br",
@@ -99,7 +92,6 @@ object DemoCatalog {
     fun byProductId(productId: String): DemoProduct? =
         products.firstOrNull { it.productId == productId }
 
-    /** SDK `Product` payload for `product.view` (SPEC §5), one variant per demo product. */
     fun toSdkProduct(product: DemoProduct): Product = Product(
         productId = product.productId,
         url = product.url,
@@ -122,10 +114,7 @@ object DemoCatalog {
     )
 }
 
-/**
- * In-memory demo cart. Holds the store state the SDK events are built from;
- * pure Kotlin (no Android types) so it is JVM-unit-testable.
- */
+/** No Android types here, so the demo store state stays JVM-unit-testable. */
 object DemoCart {
 
     const val CART_ID = "demo-cart-001"
@@ -156,7 +145,6 @@ object DemoCart {
 
     fun subtotal(): Double = round2(lines.sumOf { (product, qty) -> product.price * qty })
 
-    /** Flat 10% off with any coupon applied — fake but arithmetically consistent. */
     fun discounts(): Double = if (coupon == null) 0.0 else round2(subtotal() * 0.10)
 
     fun freight(): Double = if (quantities.isEmpty()) 0.0 else 22.9
@@ -178,7 +166,6 @@ object DemoCart {
         recoveryProperties = mapOf("seller_id" to "1"),
     )
 
-    /** SDK `Cart` payload for `cart.sync` (SPEC §5); an empty cart is valid and always sent (SPEC §7). */
     fun toCart(): Cart = Cart(
         cartId = CART_ID,
         subtotal = subtotal(),
@@ -192,7 +179,6 @@ object DemoCart {
         deliveryAddress = deliveryAddress(),
     )
 
-    /** SDK `Order` payload for `order.complete` (SPEC §5). */
     fun toOrder(orderId: String): Order = Order(
         cartId = CART_ID,
         orderId = orderId,
@@ -209,11 +195,7 @@ object DemoCart {
         deliveryMethods = listOf(DeliveryMethod(type = "sedex", amount = freight())),
     )
 
-    /**
-     * Restores recovered lines (SPEC §11) into the demo cart. Recovery lines
-     * are matched to the catalog by sku, then product_id; unknown lines are
-     * skipped (a real store would fetch them from its own backend).
-     */
+    /** Unknown lines are skipped; a real store would fetch them from its own backend. */
     fun restore(payload: RecoveryPayload) {
         quantities.clear()
         coupon = null

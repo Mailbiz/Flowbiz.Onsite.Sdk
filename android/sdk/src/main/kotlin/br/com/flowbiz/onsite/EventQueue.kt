@@ -8,41 +8,21 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 /**
- * Durable event queue (SPEC §9): JSON Lines file, one serialized envelope
- * entry per line, append-only.
+ * Durable event queue: a JSON Lines file, one envelope entry per line, with
+ * an in-memory deque of the pending lines. Appends are O(1); consumed,
+ * capacity-dropped and garbage lines stay in the file as stale until
+ * compaction rewrites it (at [COMPACT_STALE_THRESHOLD], whenever the queue
+ * drains empty, and at load).
  *
- * ## Model
- * An in-memory deque of pending lines mirrors the file; the file may
- * additionally contain **stale** lines (consumed after a successful flush,
- * dropped at the capacity cap, or unparseable garbage) that are purged only
- * at compaction. Appends are O(1) (open-append-close); consumption is
- * logical (head of the deque) until compaction rewrites the file.
+ * A crash mid-append costs one truncated line, skipped at load. Compaction
+ * writes a tmp file and renames it over the original, so a crash leaves the
+ * original intact. Delivery is at-least-once (consumed lines not yet
+ * compacted resend after a process death); `hash` is the collector-side
+ * idempotency key.
  *
- * ## Durability & crash behavior
- * - A crash mid-append costs one truncated line; unparseable/blank lines
- *   are skipped (and counted stale) at load, never fatal (SPEC §3/§9).
- * - Compaction writes `queue.jsonl.tmp` then atomically renames it over the
- *   original ([Files.move] + `REPLACE_EXISTING`, a same-directory rename) —
- *   a crash between write and rename leaves the original intact; the
- *   leftover tmp is deleted at next load.
- * - Delivery is at-least-once: consumed-but-not-yet-compacted lines (and,
- *   rarely, capacity-dropped ones) resend after a process death. `hash` is
- *   the collector-side idempotency key (SPEC §9).
- *
- * ## Compaction trigger
- * Compacts when the stale-line count reaches [COMPACT_STALE_THRESHOLD], and
- * eagerly whenever the queue drains empty (a cheap truncate — the common
- * "successful flush" case, per SPEC §9), and at load when any stale line
- * was found.
- *
- * ## Concurrency
- * **Thread-confined** to the SDK's serial [TaskScheduler] thread — no
- * internal locking, no file locking. Single-process access is a SPEC §9
- * assumption. Never throws: I/O failures log and degrade to memory-only
- * behavior for the session.
- *
- * The backing [file] is injected (tests use temp dirs); [defaultFile] is the
- * only member touching `android.*`.
+ * Confined to the SDK's serial [TaskScheduler] thread and single-process by
+ * assumption, hence no locking. I/O failures degrade to memory-only
+ * behavior; never throws.
  */
 internal class EventQueue(
     private val file: File,
@@ -92,23 +72,16 @@ internal class EventQueue(
         }
     }
 
-    /** Number of pending (not yet delivered) entries. */
     val size: Int
         get() = pending.size
 
-    /** Oldest-first snapshot of up to [max] pending entries; the queue is unchanged. */
     fun peek(max: Int): List<String> {
         if (max <= 0 || pending.isEmpty()) return emptyList()
         val count = minOf(max, pending.size)
         return List(count) { pending[it] }
     }
 
-    /**
-     * Appends one serialized envelope entry. At [capacity] the oldest
-     * pending entry is dropped first (SPEC §9 drop-oldest). Entries
-     * containing raw newlines are rejected (canonical JSON never has them —
-     * defensive only).
-     */
+    /** At [capacity] the oldest pending entry is dropped first. */
     fun append(entry: String) {
         if (entry.isBlank() || entry.contains('\n') || entry.contains('\r')) {
             SdkLog.debug("queue rejected malformed entry")
@@ -138,7 +111,6 @@ internal class EventQueue(
         compactIfNeeded()
     }
 
-    /** Removes the [count] oldest pending entries (a delivered or poison batch). */
     fun removeOldest(count: Int) {
         var remaining = minOf(count, pending.size)
         while (remaining > 0) {
@@ -155,7 +127,6 @@ internal class EventQueue(
         }
     }
 
-    /** Rewrites the file to exactly the pending entries (write tmp, atomic rename). */
     private fun compact() {
         try {
             file.parentFile?.mkdirs()
@@ -185,17 +156,9 @@ internal class EventQueue(
     }
 
     companion object {
-        /** SPEC §9: 1000 events, drop-oldest. Internal constant, not a knob. */
         const val DEFAULT_CAPACITY = 1000
-
-        /** Stale lines tolerated in the file before a rewrite is forced. */
         const val COMPACT_STALE_THRESHOLD = 64
 
-        /**
-         * Production queue location:
-         * `<filesDir>/flowbiz_onsite/<appId>/queue.jsonl` (app-private; the
-         * only `android.*` touchpoint in this class).
-         */
         fun defaultFile(context: Context, appId: String): File =
             File(File(File(context.filesDir, "flowbiz_onsite"), appId), "queue.jsonl")
     }

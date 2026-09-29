@@ -1,6 +1,6 @@
 # Flowbiz Demo (iOS)
 
-Minimal SwiftUI fake store (SPEC §14) exercising **every public SDK API**:
+Minimal SwiftUI fake store exercising **every public SDK API**:
 product list → product detail (`product.view`), cart (`cart.add`,
 `cart.item.update`, `cart.sync`, `cart.setcoupon`, `cart.setpostalcode`),
 three-step checkout (`checkout.step`, `order.complete`, `order.cancel`),
@@ -37,7 +37,7 @@ root (`path: ../..`) is wired by `project.yml`.
    (the folder containing `Package.swift`); add the `FlowbizOnsite` product
    to the app target.
 5. In the target's Info tab add a URL Type with scheme `flowbizdemo`
-   (deep-link entry point, SPEC §11).
+   (deep-link entry point).
 6. Run on an iOS Simulator.
 
 ## Trying recovery & push
@@ -55,11 +55,11 @@ root (`path: ../..`) is wired by `project.yml`.
   (`|` written as `%7C`, which `URL(string:)` also parses on iOS 13–16). Any
   link works for UTMs, with or without `_mb_cr_`.
 - **Push without APNs**: Settings ▸ "Simular push" feeds the canned
-  SPEC §10.2 payload from `shared/push-samples/samples.json` into
+  cart-recovery payload from `shared/push-samples/samples.json` into
   `Flowbiz.handlePush` and renders the parsed `FlowbizPush`, including its
   `recoveryPayload`. "Abrir notificação" plays the tap:
   `Flowbiz.handlePushOpened(push)` captures the deep link's UTMs and
   returns the tenant-checked payload.
 - **Offline behavior**: the default collectorUrl failing is expected and
-  demonstrates the SPEC §9 durable queue + backoff. Logs: os_log subsystem
+  demonstrates the durable queue + backoff. Logs: os_log subsystem
   `br.com.flowbiz.onsite`, category `FlowbizOnsite` (debug=true).

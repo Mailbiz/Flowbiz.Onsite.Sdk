@@ -1,4 +1,3 @@
-// Envelope shape tests for the SPEC §4 entry produced by `EnvelopeBuilder`.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -60,7 +59,6 @@ import Testing
     @Test func dataIsAJSONStringNotANestedObject() throws {
         let envelope = try build()
         let data = try #require(envelope["data"] as? String, "data must be a String on the wire")
-        // ... and it must parse back to the payload object.
         let parsed = try JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any]
         let cart = parsed?["cart"] as? [String: Any]
         #expect(cart?["cart_id"] as? String == "c-9f81b2e0")
@@ -120,8 +118,6 @@ import Testing
         #expect((envelope["context"] as? [String: Any])?["baseuri"] == nil)
     }
 
-    /// M4: `context.url` uses the same non-empty guard as `baseuri` /
-    /// `recoveryUrl` — an empty (not nil) `contextUrl` must be omitted too.
     @Test func emptyContextUrlIsOmitted() throws {
         let envelope = try EnvelopeBuilder.build(
             event: .cartSetCoupon(cartId: "c-1", coupon: "X"),

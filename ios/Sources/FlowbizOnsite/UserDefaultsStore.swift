@@ -1,21 +1,9 @@
 import Foundation
 
-/// `KeyValueStore` over `UserDefaults`, suite `flowbiz_onsite_<appId>`
-/// (appId-scoped so distinct tenants in one host app never collide, and so
-/// the SDK never touches the host app's standard defaults domain). The
-/// suite name intentionally matches the Android preferences file name —
-/// one storage schema, see `StorageKeys`.
-///
-/// SPEC §3 hardening: reads go through `object(forKey:)` with conditional
-/// casts — a value persisted with a different type degrades to `nil`, never
-/// a crash. Numeric reads accept any exactly-representable `NSNumber`
-/// (UserDefaults plists don't preserve Swift integer widths). Writes are
-/// synchronous in-memory with async disk persistence — never block the
-/// caller. `UserDefaults` itself is thread-safe.
-///
-/// If the suite cannot be created (`UserDefaults(suiteName:)` returns nil
-/// for reserved names — cannot happen for our fixed prefix, but SPEC §3
-/// forbids assuming), it falls back to `.standard` with prefixed keys.
+/// One suite per appId, named like the Android preferences file, so tenants
+/// never collide and the host's standard defaults stay untouched. Numbers
+/// read as any exactly-representable `NSNumber`: plists drop Swift integer
+/// widths.
 final class UserDefaultsStore: KeyValueStore, @unchecked Sendable {
 
     private let defaults: UserDefaults
@@ -26,7 +14,7 @@ final class UserDefaultsStore: KeyValueStore, @unchecked Sendable {
         if let suite = UserDefaults(suiteName: suiteName) {
             defaults = suite
             prefix = ""
-        } else {
+        } else { // nil only for reserved suite names
             defaults = .standard
             prefix = suiteName + "."
         }

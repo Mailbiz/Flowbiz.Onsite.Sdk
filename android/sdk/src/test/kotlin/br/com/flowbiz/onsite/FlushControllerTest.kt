@@ -9,11 +9,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/**
- * SPEC §9 drain loop: batching, 413/permanent bisection, poison isolation,
- * retriable stop, per-attempt `sent_at` restamp, backoff sequencing and
- * reset, no concurrent flushes.
- */
 class FlushControllerTest {
 
     @get:Rule
@@ -42,7 +37,6 @@ class FlushControllerTest {
             )
     )
 
-    /** Event names ("e1"…) of each entry in a captured `{"data":[...]}` body. */
     private fun eventsIn(body: String): List<String> {
         val data = JSONObject(body).getJSONArray("data")
         return (0 until data.length()).map { data.getJSONObject(it).getString("event") }
@@ -50,8 +44,6 @@ class FlushControllerTest {
 
     private fun timingsOf(body: String, index: Int): JSONObject =
         JSONObject(body).getJSONArray("data").getJSONObject(index).getJSONObject("timings")
-
-    // --- Batching ---
 
     @Test
     fun drainBatchesAtMostFiftyPerRequestInOrder() {
@@ -72,8 +64,6 @@ class FlushControllerTest {
         (1..5).forEach { queue.append(entry(it)) }
         sender.results.addAll(listOf(SendResult.SUCCESS, SendResult.RETRIABLE_ERROR))
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
-        // First batch (e1..e3) delivered and removed; second stopped by the
-        // retriable error and fully preserved.
         assertEquals(listOf(entry(4), entry(5)), queue.peek(10))
     }
 
@@ -84,8 +74,6 @@ class FlushControllerTest {
         assertEquals(0, sender.bodies.size)
         assertTrue(scheduler.allScheduleDelays.isEmpty())
     }
-
-    // --- 413 bisection (SPEC §9) ---
 
     @Test
     fun payloadTooLargeSplitsInHalfUntilDeliverable() {
@@ -115,13 +103,10 @@ class FlushControllerTest {
             }
         }
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
-        // e1 dropped (still 413 alone), e2 delivered; nothing left, no retry.
         assertEquals(0, queue.size)
         assertTrue(scheduler.allScheduleDelays.isEmpty())
         assertEquals(listOf("e2"), eventsIn(sender.bodies.last()))
     }
-
-    // --- Poison isolation on permanent 4xx (documented interpretation) ---
 
     @Test
     fun permanentErrorBisectsToDropOnlyThePoisonEvent() {
@@ -132,8 +117,6 @@ class FlushControllerTest {
         }
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
         assertEquals(0, queue.size)
-        // Delivered bodies (successes) cover exactly e1,e2,e4,e5 — e3 never
-        // delivered alone, dropped as poison.
         val delivered = sender.bodies.filter { !eventsIn(it).contains("e3") }.flatMap { eventsIn(it) }
         assertEquals(listOf("e1", "e2", "e4", "e5"), delivered)
         assertTrue(scheduler.allScheduleDelays.isEmpty())
@@ -149,8 +132,6 @@ class FlushControllerTest {
         assertTrue(scheduler.allScheduleDelays.isEmpty())
     }
 
-    // --- Retriable stops the drain, order preserved ---
-
     @Test
     fun retriableErrorStopsDrainPreservingOrderAndSchedulesRetry() {
         val c = controller(batchSize = 2)
@@ -158,7 +139,6 @@ class FlushControllerTest {
         sender.results.add(SendResult.SUCCESS)
         sender.defaultResult = SendResult.RETRIABLE_ERROR
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
-        // e1,e2 delivered; e3.. untouched and in order.
         assertEquals(listOf(entry(3), entry(4), entry(5)), queue.peek(10))
         assertEquals(2, sender.bodies.size)
         assertEquals(listOf(FlushController.INITIAL_BACKOFF_MS), scheduler.allScheduleDelays)
@@ -171,12 +151,9 @@ class FlushControllerTest {
         sender.results.add(SendResult.PERMANENT_ERROR) // full batch
         sender.defaultResult = SendResult.RETRIABLE_ERROR // every sub-batch
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
-        // Network died mid-bisection: nothing dropped, everything still queued.
         assertEquals(4, queue.size)
         assertEquals(1, scheduler.allScheduleDelays.size)
     }
-
-    // --- sent_at restamped per attempt, created_at stable (SPEC §4) ---
 
     @Test
     fun sentAtIsRewrittenOnEachAttemptCreatedAtUntouched() {
@@ -201,12 +178,9 @@ class FlushControllerTest {
         assertEquals(createdIso, second.getString("created_at"))
         assertEquals(firstAttemptIso, first.getString("sent_at"))
         assertEquals(secondAttemptIso, second.getString("sent_at"))
-        // Timezone survives the restamp.
         assertEquals("-03:00", second.getString("timezone"))
         assertEquals(0, queue.size)
     }
-
-    // --- Backoff (SPEC §9: 1 s doubling to 60 s cap, reset on any trigger) ---
 
     @Test
     fun backoffDoublesToSixtySecondCap() {
@@ -231,8 +205,6 @@ class FlushControllerTest {
         scheduler.runLastScheduled()
         assertEquals(listOf(1_000L, 2_000L, 4_000L), scheduler.allScheduleDelays)
 
-        // A new trigger (e.g. network restored) resets to 1 s and cancels
-        // the pending 4 s retry.
         c.requestFlush(FlushController.FlushReason.NETWORK_RESTORED)
         assertTrue(scheduler.scheduled[2].cancelled)
         assertEquals(listOf(1_000L, 2_000L, 4_000L, 1_000L), scheduler.allScheduleDelays)
@@ -251,8 +223,6 @@ class FlushControllerTest {
         assertEquals(2, sender.bodies.size)
     }
 
-    // --- No concurrent flushes ---
-
     @Test
     fun reentrantFlushRequestCoalescesInsteadOfNesting() {
         val c = controller()
@@ -266,8 +236,6 @@ class FlushControllerTest {
             }
         }
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
-        // The nested request never nested a drain (depth 1) and the
-        // follow-up pass found an empty queue — exactly one send.
         assertEquals(1, sender.maxDepth)
         assertEquals(1, sender.bodies.size)
         assertEquals(0, queue.size)

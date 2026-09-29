@@ -1,7 +1,3 @@
-// SPEC §9 response classification through URLProtocol-stubbed URLSession
-// plus the pure classify(status:) table. Also pins the wire mechanics:
-// POST to /collect, JSON content type, platform header, body passthrough,
-// redirects refused.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -183,7 +179,7 @@ final class StubURLProtocol: URLProtocol {
         #expect(sender(collectorUrl: "nonsense://::bad::").send(body: "{}") == .permanentError)
     }
 
-    // MARK: Pure classification table (SPEC §9)
+    // MARK: Pure classification table
 
     @Test func classificationTable() {
         let cases: [(Int, SendResult)] = [

@@ -1,16 +1,9 @@
 import Foundation
 
-/// Minimal internal log seam. The transport components (queue, sender,
-/// flusher) log through this; Slice 4 wires `sink` to `os_log`-style output
-/// when `debug` is enabled — until then logging is a no-op.
-///
-/// Never throws/crashes: a misbehaving sink cannot break the SDK (SPEC §3).
-/// Callers must never log PII (SPEC §12) — messages carry counts, codes and
-/// reasons only.
+/// Debug log, a no-op until `debug` sets a sink. Never log PII: counts, codes
+/// and reasons only.
 enum SdkLog {
 
-    /// Lock-guarded holder so the mutable sink is concurrency-safe shared
-    /// state (warning-clean under strict concurrency).
     private final class SinkBox: @unchecked Sendable {
         private let lock = NSLock()
         private var sink: (@Sendable (String) -> Void)?

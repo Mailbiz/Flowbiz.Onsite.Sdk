@@ -6,7 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** SPEC §6 identity persistence over the injected [KeyValueStore]. */
 class IdentityStoreTest {
 
     private val store = FakeKeyValueStore()
@@ -23,7 +22,6 @@ class IdentityStoreTest {
     fun anonymousIdGeneratedOnceThenStable() {
         val first = identity.anonymousId
         assertEquals(first, identity.anonymousId)
-        // ... and it is the persisted value, not per-instance state.
         assertEquals(first, store.values[StorageKeys.ANONYMOUS_ID])
     }
 

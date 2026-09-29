@@ -1,10 +1,6 @@
 import Foundation
 
-/// Persistence cell for the last registered push token (SPEC §10.1) so
-/// `logout()` can emit `push.token.remove` with it. Storage only — the
-/// `push.token.sync`/`push.token.remove` events are wired in a later slice.
-///
-/// Thread-safe: stateless over a thread-safe `KeyValueStore`.
+/// The last registered push token, kept so `logout()` can remove it.
 final class PushTokenStore: @unchecked Sendable {
 
     private let store: any KeyValueStore

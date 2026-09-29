@@ -1,6 +1,3 @@
-// SPEC §9 drain loop: batching, 413/permanent bisection, poison isolation,
-// retriable stop, per-attempt sent_at restamp, backoff sequencing and
-// reset, no concurrent flushes.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -67,7 +64,7 @@ import Testing
         #expect(scheduler.allScheduleDelays.isEmpty)
     }
 
-    // MARK: 413 bisection (SPEC §9)
+    // MARK: 413 bisection
 
     @Test func payloadTooLargeSplitsInHalfUntilDeliverable() {
         let c = controller()
@@ -98,7 +95,7 @@ import Testing
         #expect(eventsIn(sender.bodies.last!) == ["e2"])
     }
 
-    // MARK: Poison isolation on permanent 4xx (documented interpretation)
+    // MARK: Poison isolation on permanent 4xx
 
     @Test func permanentErrorBisectsToDropOnlyThePoisonEvent() {
         let c = controller()
@@ -134,7 +131,6 @@ import Testing
         sender.results = [.success]
         sender.defaultResult = .retriableError
         c.requestFlush(.explicit)
-        // e1,e2 delivered; e3.. untouched and in order.
         #expect(queue.peek(10) == [entry(3), entry(4), entry(5)])
         #expect(sender.bodies.count == 2)
         #expect(scheduler.allScheduleDelays == [FlushController.initialBackoffMillis])
@@ -151,7 +147,7 @@ import Testing
         #expect(scheduler.allScheduleDelays.count == 1)
     }
 
-    // MARK: sent_at restamped per attempt, created_at stable (SPEC §4)
+    // MARK: sent_at restamped per attempt, created_at stable
 
     @Test func sentAtIsRewrittenOnEachAttemptCreatedAtUntouched() {
         let c = controller()
@@ -175,12 +171,11 @@ import Testing
         #expect(second["created_at"] as? String == createdIso)
         #expect(first["sent_at"] as? String == firstAttemptIso)
         #expect(second["sent_at"] as? String == secondAttemptIso)
-        // Timezone survives the restamp.
         #expect(second["timezone"] as? String == "-03:00")
         #expect(queue.size == 0)
     }
 
-    // MARK: Backoff (SPEC §9: 1 s doubling to 60 s cap, reset on any trigger)
+    // MARK: Backoff (1 s doubling to a 60 s cap, reset on any trigger)
 
     @Test func backoffDoublesToSixtySecondCap() {
         let c = controller()

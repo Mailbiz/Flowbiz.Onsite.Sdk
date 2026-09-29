@@ -1,18 +1,10 @@
 import Foundation
 
-/// Pure decoder behind `Flowbiz.handleLink` (SPEC §11): URL string →
-/// `_mb_cr_` query value (+ `utm_source` guard) → base64 → hash JSON
-/// `{t, u, c, its: [[qty, product_id, sku, recovery_properties?]]}` →
-/// `RecoveryPayload`. Mirrors the web tag's `getRecoveryDataFromQuery`.
-///
-/// Encoding tolerance: the value is tried raw, percent-decoded (`%XX`
-/// only), and with `' '` restored to `'+'`; missing base64 padding is
-/// added; URL-safe `-`/`_` are accepted. First candidate that decodes to a
-/// valid payload wins.
-///
-/// Tenant check: when `expectedAppId` is given (SDK initialized), `t` must
-/// equal it, like web `appId === hash.t`. Before initialize the decoder is
-/// pure and skips the check (SPEC §3). Never throws.
+/// Port of the web tag's `getRecoveryDataFromQuery`: `_mb_cr_` (next to a
+/// Flowbiz `utm_source`) is base64 of `{t, u, c, its: [[qty, product_id, sku,
+/// recovery_properties?]]}`. The value is tried raw, percent-decoded and with
+/// `' '` back to `'+'`; the first that decodes wins. When given,
+/// `expectedAppId` must equal `t`, like web `appId === hash.t`.
 enum RecoveryLinkParser {
 
     private static let param = "_mb_cr_"
@@ -23,10 +15,8 @@ enum RecoveryLinkParser {
         let pairs = queryPairs(url)
         guard let raw = pairs.first(where: { $0.key == param && !$0.value.isEmpty })?.value else { return nil }
         guard let utm = pairs.first(where: { $0.key == utmParam })?.value, isValidUtm(utm) else { return nil }
-        // Order `[rawFix, raw, decodedFix, decoded]`, deduplicated
-        // preserving order (M1) — literally the same sequence as Kotlin's
-        // `LinkedHashSet`, so decode + mapHash + the tenant-mismatch debug
-        // line each run at most once per distinct candidate.
+        // Deduplicated in order, like Kotlin's `LinkedHashSet`, so each
+        // distinct candidate decodes (and logs a tenant mismatch) once.
         var candidates: [String] = []
         var seen = Set<String>()
         func add(_ candidate: String) {
@@ -45,11 +35,8 @@ enum RecoveryLinkParser {
         return nil
     }
 
-    /// Query pairs in order. Fragment cut first (M2 — spec §7 step 1: a
-    /// `?` inside the fragment, e.g. `#/cart?_mb_cr_=…`, is not a query),
-    /// then the query is found within what remains. Keys are
-    /// percent-decoded; values are left raw (callers decide how to decode
-    /// them).
+    /// The fragment is cut first: a `?` inside it (`#/cart?_mb_cr_=…`) is not
+    /// a query. Keys are percent-decoded, values left raw.
     private static func queryPairs(_ url: String) -> [(key: String, value: String)] {
         var beforeFragment = Substring(url)
         if let fragmentStart = url.firstIndex(of: "#") { beforeFragment = url[..<fragmentStart] }
@@ -158,7 +145,7 @@ enum RecoveryLinkParser {
                 // `Int(double)` traps when the value is outside Int's range
                 // (e.g. a decoded hash quantity of 1e30); clamp to Int32's
                 // range first, matching `parseIntLeading` and Kotlin's
-                // saturating `toDouble().toInt()` (SPEC §3: never traps).
+                // saturating `toDouble().toInt()`.
                 let truncated = double.rounded(.towardZero)
                 let clamped = min(max(truncated, Double(Int32.min)), Double(Int32.max))
                 parsed = Int(clamped)

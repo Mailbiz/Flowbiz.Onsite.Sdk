@@ -8,11 +8,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Drift-guard tests: every fixture in `shared/fixtures/` is mapped onto the
- * typed constructors, serialized, and the produced `data` JSON string is
- * structurally compared against `expected.data`. The Swift test suite runs
- * the exact same fixtures — if the two SDKs disagree, the code is wrong,
- * never the fixture.
+ * The Swift suite runs the same `shared/fixtures/`: if the SDKs disagree, the
+ * code is wrong, never the fixture.
  */
 class WireFixtureTest {
 
@@ -81,10 +78,7 @@ class WireFixtureTest {
         }
     }
 
-    /**
-     * Garbage-input contract, aligned with Swift: serialization throws on
-     * non-finite numbers (SPEC §3's never-throw boundary lands in Slice 4).
-     */
+    /** As in Swift, the serializer throws; the core catches it and drops the event. */
     @Test
     fun nonFiniteNumbersThrow() {
         for (garbage in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {

@@ -1,7 +1,4 @@
-// Test doubles for the Slice 2 state components (identity, session,
-// enabled, push token): an in-memory KeyValueStore (real UserDefaults would
-// leak state between tests and onto the host machine) and a manually-driven
-// Clock.
+// In memory: real UserDefaults would leak state between tests and onto the host.
 import Foundation
 @testable import FlowbizOnsite
 

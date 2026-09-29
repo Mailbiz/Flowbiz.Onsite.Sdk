@@ -1,18 +1,5 @@
 package br.com.flowbiz.onsite
 
-/**
- * Payload value types for the typed event catalog (SPEC §5).
- *
- * Properties are camelCase; serialization emits snake_case wire keys
- * (see [EventSerializer]). Optional (`null`) fields are omitted from the
- * wire entirely — `"key": null` never appears.
- *
- * `properties` / `recoveryProperties` are free-form maps passed through to
- * the wire as-is (keys are not case-converted). Supported value types:
- * `String`, `Number`, `Boolean`, `List`, `Map`, `null` (null entries are
- * dropped from objects).
- */
-
 /** User payload for `accountLogin` / `accountSync`. */
 data class User(
     val userId: String,
@@ -33,7 +20,9 @@ data class ProductVariant(
     val priceFrom: Double? = null,
     val stock: Int? = null,
     val available: Boolean? = null,
+    /** Free-form: keys ship as-is; values String, Number, Boolean, List, Map or null (dropped from maps). */
     val properties: Map<String, Any?>? = null,
+    /** Same rules as [properties]. */
     val recoveryProperties: Map<String, Any?>? = null,
 )
 
@@ -58,7 +47,9 @@ data class CartItem(
     val brand: String? = null,
     val url: String? = null,
     val imageUrl: String? = null,
+    /** Free-form: keys ship as-is; values String, Number, Boolean, List, Map or null (dropped from maps). */
     val properties: Map<String, Any?>? = null,
+    /** Same rules as [properties]. */
     val recoveryProperties: Map<String, Any?>? = null,
 )
 
@@ -74,7 +65,7 @@ data class Address(
     val neighborhood: String? = null,
 )
 
-/** Cart payload for `cartSync`. An empty-items cart is valid and always sent (SPEC §7). */
+/** Cart payload for `cartSync`. Unlike on web, an empty cart is not suppressed: emptying a cart is signal. */
 data class Cart(
     val cartId: String,
     val subtotal: Double,

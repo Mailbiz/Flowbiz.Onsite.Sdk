@@ -1,6 +1,4 @@
-// `handlePush` (SPEC §10.2/§10.3) driven by the shared drift-guard samples
-// (`shared/push-samples/samples.json`). Samples are exercised through the
-// public facade — `handlePush` is pure and requires no initialize (SPEC §3).
+// Through the public facade: `handlePush` is pure and needs no initialize.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -75,7 +73,6 @@ import Testing
 
     // MARK: contract details beyond the shared samples
 
-    /// A well-formed `deep_link` surfaces as both the raw string and a URL.
     @Test func wellFormedDeepLinkBecomesAURL() {
         let push = Flowbiz.handlePush(
             ["flowbiz": #"{"v":1,"type":"promo","deep_link":"https://store.com/promo"}"#]
@@ -162,7 +159,6 @@ import Testing
         }
     }
 
-    /// SPEC §3 purity: no initialize needed, nil/empty payloads are nil.
     @Test func nilAndEmptyPayloadsAreNil() {
         #expect(Flowbiz.handlePush(nil) == nil)
         #expect(Flowbiz.handlePush([:]) == nil)
@@ -178,7 +174,7 @@ import Testing
                     garbage.unicodeScalars.append(scalar)
                 }
             }
-            _ = Flowbiz.handlePush(["flowbiz": garbage]) // must not crash
+            _ = Flowbiz.handlePush(["flowbiz": garbage])
         }
     }
 }
