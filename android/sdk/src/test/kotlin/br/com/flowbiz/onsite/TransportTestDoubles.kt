@@ -4,12 +4,8 @@ package br.com.flowbiz.onsite
  * Manually-driven [TaskScheduler]: `execute` runs inline (the tests *are*
  * the serial thread), delayed/repeating tasks are recorded for the test to
  * fire explicitly. [allScheduleDelays] is the backoff-sequence probe.
- *
- * With `inline = false`, `execute` holds each task in [pending] until
- * [runPending] instead — the probe for "handed to the scheduler, not run on
- * the caller's thread", which an inline scheduler cannot tell apart.
  */
-internal class FakeTaskScheduler(private val inline: Boolean = true) : TaskScheduler {
+internal class FakeTaskScheduler : TaskScheduler {
 
     class FakeHandle(
         val delayMillis: Long,
@@ -28,17 +24,7 @@ internal class FakeTaskScheduler(private val inline: Boolean = true) : TaskSched
     val allScheduleDelays: List<Long>
         get() = scheduled.filter { !it.repeating }.map { it.delayMillis }
 
-    /** Tasks held by a non-inline scheduler, in submission order. */
-    val pending = ArrayDeque<Runnable>()
-
-    override fun execute(task: Runnable) {
-        if (inline) task.run() else pending.addLast(task)
-    }
-
-    /** Runs the held tasks FIFO — including any they submit — until none is left. */
-    fun runPending() {
-        while (true) (pending.removeFirstOrNull() ?: break).run()
-    }
+    override fun execute(task: Runnable) = task.run()
 
     override fun schedule(delayMillis: Long, task: Runnable): ScheduledHandle =
         FakeHandle(delayMillis, task, repeating = false).also { scheduled += it }

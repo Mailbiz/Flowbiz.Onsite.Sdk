@@ -5,12 +5,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The demo's launch-link rule (pure Kotlin; `Intent` flags are compile-time
- * constants): `onCreate` hands its intent's link to `Flowbiz.handleLink`
- * only on a fresh launch, so a rotation or a relaunch from Recents never
- * re-captures an old link's UTMs over newer ones (SPEC §11.1).
- */
 class DeepLinkLaunchTest {
 
     @Test

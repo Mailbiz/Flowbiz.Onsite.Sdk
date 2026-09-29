@@ -27,19 +27,20 @@ object FixtureSupport {
     fun fixtureFiles(): List<File> =
         fixturesDir().listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
 
-    /**
-     * `shared/utm-links/vectors.json` (SPEC §11.1): the web-generated UTM
-     * ingestion vectors — `extract`, `sequences` and `envelope` (format in
-     * the sibling README).
-     */
-    fun utmLinkVectors(): JSONObject = JSONObject(File(sharedDir("utm-links"), "vectors.json").readText())
+    /** A `shared/utm-links` step: a link (null: a foreground edge) and the web's `context.utm` after it. */
+    data class UtmStep(val url: String?, val expected: String?)
 
-    /** The `extract` vector called [name]: its `url` and the web's exact `context.utm` (`expected`). */
-    fun utmExtractVector(name: String): JSONObject {
-        val extract = utmLinkVectors().getJSONArray("extract")
-        return extract.objects().firstOrNull { it.getString("name") == name }
-            ?: error("utm-links extract vector '$name' not found")
-    }
+    private val utmVectors by lazy { JSONObject(File(sharedDir("utm-links"), "vectors.json").readText()) }
+
+    private fun JSONObject.utmStep() = UtmStep(stringOrNull("url"), stringOrNull("expected"))
+
+    fun utmExtractVectors(): Map<String, UtmStep> =
+        utmVectors.getJSONArray("extract").objects().associate { it.getString("name") to it.utmStep() }
+
+    fun utmSequenceVectors(): Map<String, List<UtmStep>> = utmVectors.getJSONArray("sequences").objects()
+        .associate { it.getString("name") to it.getJSONArray("steps").objects().map { step -> step.utmStep() } }
+
+    fun utmEnvelopeVector(): JSONObject = utmVectors.getJSONObject("envelope")
 
     /** Maps a fixture (`event` name + camelCase `input`) onto the typed constructors. */
     fun buildEvent(eventName: String, input: JSONObject): Event = when (eventName) {

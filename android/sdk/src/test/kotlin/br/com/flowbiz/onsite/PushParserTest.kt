@@ -102,7 +102,7 @@ class PushParserTest {
 
     // MARK: purity / never-throw
 
-    /** SPEC §3: handlePush is pure and handleLink decodes purely — no initialize needed (see also FlowbizFacadeSmokeTest). */
+    /** handlePush and handleLink decode before initialize (see also FlowbizFacadeSmokeTest). */
     @Test
     fun handlePushWorksWithoutInitialize() {
         val push = Flowbiz.handlePush(mapOf("flowbiz" to """{"v":1,"type":"promo"}"""))

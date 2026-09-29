@@ -21,11 +21,9 @@
             </intent-filter>
             <!-- SPEC §11 deep-link entry point. A custom scheme keeps the demo
                  self-contained (a real integration uses verified App Links so
-                 the same URL falls back to web recovery). Every link handed to
-                 Flowbiz.handleLink also has its UTMs captured (SPEC §11.1).
-                 Try a MessageBuilder-shaped recovery link with (the outer
-                 single quotes keep the device shell off '&' and '|'):
-                 adb shell 'am start -a android.intent.action.VIEW -d "flowbizdemo://recover?_mb_cr_=<hash>&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1"'
+                 the same URL falls back to web recovery). Try it with (the
+                 outer single quotes keep the device shell off '&' and '|'):
+                 adb shell 'am start -a android.intent.action.VIEW -d "flowbizdemo://recover?_mb_cr_=<hash>&utm_source=flowbiz&utm_campaign=jornadas|cart|carrinho-abandonado"'
                  — or use the in-app "simulate recovery link" button. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

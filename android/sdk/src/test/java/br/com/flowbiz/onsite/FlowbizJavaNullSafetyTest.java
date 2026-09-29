@@ -6,9 +6,8 @@ import org.junit.Test;
 
 /**
  * SPEC §3 never-throw, proven from real Java source: Java host apps have no
- * compile-time null checking, so {@code Flowbiz.track(null)},
- * {@code Flowbiz.initialize(null, ...)} and {@code Flowbiz.handlePushOpened(null)}
- * are legal call sites. With non-null
+ * compile-time null checking, so {@code Flowbiz.track(null)} and
+ * {@code Flowbiz.initialize(null, ...)} are legal call sites. With non-null
  * Kotlin signatures the compiler emits an
  * {@code Intrinsics.checkNotNullParameter} preamble that throws an NPE
  * <em>before</em> the facade's catch-all — the facade therefore declares

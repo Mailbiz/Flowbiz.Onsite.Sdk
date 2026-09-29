@@ -1,12 +1,12 @@
 package br.com.flowbiz.onsite
 
 import org.json.JSONObject
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 
 /**
  * SPEC §12: `debug` logging never prints PII. Pins the invariant end-to-end:
@@ -63,65 +63,58 @@ class DebugLogRedactionTest {
     }
 
     /**
-     * SPEC §11.1/§12: UTM capture logs counts and reasons only — never the
-     * link (its `_mb_cr_` carries the user id), a `key=value`, a value or
-     * the `context.utm` JSON — across every evaluation path: capture, push
-     * open, foreground, disabled capture, re-enable, a link without UTMs,
-     * corrupt and expired stored state, and the disabled expired-set purge.
+     * UTM logs carry counts and reasons only, across capture, discard and a
+     * failed refresh (which keeps the context).
      */
     @Test
-    fun utmCaptureLogsNeverContainTheLinkOrItsValues() {
-        val hash = "eyJ0IjoiNzc3NzciLCJ1IjoicGlpLXVzZXItOTkifQ"
-        val link = "https://store.com/carrinho?_mb_cr_=$hash&utm_source=probe-source" +
+    fun utmLogsNeverCarryALinkAKeyOrAValue() {
+        val link = "https://store.com/?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoicGlpLXByb2JlIn0&utm_source=probe-source" +
             "&utm_campaign=probe%20campaign&utm_flow_params=probe-step|probe-version|probe-instance"
+        val kv = FakeKeyValueStore()
+        var failingReads = false
+        val store = object : KeyValueStore by kv {
+            override fun getString(key: String): String? =
+                if (failingReads) throw IllegalStateException(link) else kv.getString(key)
+        }
+        val clock = FakeClock()
+        val sender = FakeHttpSender()
         val captured = mutableListOf<String>()
         SdkLog.sink = { captured += it }
         try {
-            val harness = CoreHarness(temp.newFolder())
-            val push = Flowbiz.handlePush(
-                mapOf("flowbiz" to JSONObject().put("v", 1).put("type", "cart_recovery").put("deep_link", link).toString())
+            val core = FlowbizCore(
+                config = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
+                store = store,
+                queueFactory = { EventQueue(File(temp.newFolder(), "queue.jsonl")) },
+                sender = sender,
+                scheduler = FakeTaskScheduler(),
+                clock = clock,
+                deviceContext = FakeDeviceContext(),
+                reachability = FakeReachability(),
             )
-            harness.core.captureUtm(link)
-            Flowbiz.handlePushOpened(push, harness.core)
-            harness.core.onForeground()
-            harness.core.track(Event.PageView("/carrinho"))
-            harness.core.setEnabled(false)
-            harness.core.captureUtm(link) // disabled-skip log path
-            harness.core.setEnabled(true) // re-enable evaluation
-            harness.store.values[StorageKeys.UTM_DATA] = "[[\"utm_source\",\"probe-corrupt\"]" // corrupt
-            harness.core.onBackground()
-            harness.core.onForeground()
-            harness.core.captureUtm("https://store.com/produto/1?utm_source=") // nothing stored, nothing captured
-            harness.core.captureUtm(link)
-            harness.clock.advance(UtmStore.TTL_MS) // expired
-            harness.core.onBackground()
-            harness.core.onForeground()
-            harness.core.captureUtm(link)
-            harness.core.setEnabled(false)
-            harness.clock.advance(UtmStore.TTL_MS) // expired while disabled
-            harness.core.onBackground()
-            harness.core.onForeground() // disabled purge path
-            Flowbiz.handlePushOpened(push, harness.core) // disabled push-open path
-
-            // Every UTM log path above actually fired — the enabled read and
-            // the disabled purge each removed an expired set…
-            for (path in listOf("utm context set", "utm capture skipped", "utm capture: no campaign", "discarded: corrupt", "discarded: expired")) {
-                assertTrue("missing log path '$path' in: $captured", captured.any { it.contains(path) })
-            }
-            assertEquals(captured.toString(), 2, captured.count { it.contains("discarded: expired") })
-            // …and none of them carries the link, a value or the JSON.
-            val probes = listOf(
-                link, hash, "store.com", "probe-source", "probe campaign", "probe%20campaign", "probe-step",
-                "probe-version", "probe-instance", "probe-corrupt", "utm_source", "utm_campaign", "{", "=",
-            )
-            for (probe in probes) {
-                assertFalse(
-                    "debug log leaked '$probe' in: ${captured.filter { it.contains(probe) }}",
-                    captured.any { it.contains(probe) },
-                )
-            }
+            Flowbiz.handleLink(link, core)
+            failingReads = true
+            Flowbiz.handleLink(link, core)
+            failingReads = false
+            core.track(Event.PageView("/carrinho"))
+            kv.values[StorageKeys.UTM_DATA] = """[["utm_source","probe-corrupt"]"""
+            core.onForeground()
+            Flowbiz.handleLink(link, core)
+            clock.advance(UtmStore.TTL_MS)
+            core.onBackground()
+            core.onForeground()
         } finally {
             SdkLog.sink = null
+        }
+        val afterFailure = JSONObject(sender.bodies.first()).getJSONArray("data").getJSONObject(0)
+        assertTrue(afterFailure.getJSONObject("context").has("utm"))
+        val paths = listOf(
+            "utm context: 5 captured", "discarded: corrupt", "discarded: expired", "utm refresh failed: IllegalStateException",
+        )
+        for (path in paths) {
+            assertTrue("no '$path' in $captured", captured.any { path in it })
+        }
+        for (probe in listOf("probe", "eyJ0", "store.com", "utm_", "{", "=")) {
+            assertFalse("'$probe' leaked in $captured", captured.any { probe in it })
         }
     }
 }

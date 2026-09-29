@@ -21,7 +21,9 @@ import java.util.concurrent.Executors
  *   catch-all is entered. A null argument is a no-op with a debug warning
  *   instead. Kotlin callers are unaffected (non-null arguments flow
  *   through seamlessly).
- * - Any call before [initialize] is a no-op with a debug warning.
+ * - Any call before [initialize] is a no-op with a debug warning; the
+ *   decoders ([handlePush], [handleLink], [handlePushOpened]) still decode,
+ *   silently.
  * - Double [initialize] is a no-op; the first config wins.
  * - Every API is callable from any thread; work is handed to the SDK's
  *   single background scheduler and the caller returns immediately.
@@ -29,10 +31,7 @@ import java.util.concurrent.Executors
  * The facade stays deliberately thin — the behavioral tests live on
  * [FlowbizCore] (constructed with fakes); the facade's no-op paths
  * (pre-init, null arguments) are unit-tested (including from Java source,
- * see `FlowbizJavaNullSafetyTest`), and so are the capture rules of
- * [handleLink] and [handlePushOpened] (through their seams, plus the public
- * [handlePushOpened]'s hand-off of the live core); the facade's
- * production wiring
+ * see `FlowbizJavaNullSafetyTest`), while its production wiring
  * (SharedPreferences, queue file, lifecycle callbacks, real clock/network)
  * is exercised by the demo app (SPEC §14).
  */
@@ -155,10 +154,8 @@ object Flowbiz {
      * Pure, synchronous, never throws; callable before [initialize]
      * (SPEC §3) and from any thread — typically the app's
      * `FirebaseMessagingService.onMessageReceived` (`message.data`) or the
-     * launch intent extras on notification tap. It never captures UTMs —
-     * receiving a push is not a click (SPEC §10.2); when the user opens the
-     * notification, call [handlePushOpened] with the returned push (route
-     * with [FlowbizPush.deepLink] as usual).
+     * launch intent extras on notification tap. Receiving is not opening, so
+     * it captures no UTMs: on tap, call [handlePushOpened].
      */
     @JvmStatic
     fun handlePush(payload: Map<String, String>?): FlowbizPush? = try {
@@ -176,21 +173,11 @@ object Flowbiz {
      * param, missing/invalid `utm_source`, or (once initialized) a tenant
      * mismatch.
      *
-     * SPEC §11.1: every link forwarded here is also a UTM source, like a
-     * page URL on web — once initialized and enabled (SPEC §12: nothing is
-     * captured while disabled), the link's campaign parameters are captured
-     * whatever the decode returns (no `_mb_cr_`, a foreign `utm_source`, a
-     * tenant mismatch) and ride as `context.utm` on the events that follow. For an opened push call [handlePushOpened], which
-     * runs this over the push's raw `deep_link` ([handlePush] never
-     * captures).
-     *
-     * Synchronous, never throws, callable from any thread (SPEC §3): the
-     * decoding is pure, and the capture is handed to the SDK's background
-     * scheduler like [track] — a [track] issued after this call from the
-     * same thread carries the link's UTMs. Before [initialize] the decoder
-     * still works (without the tenant check) but nothing is captured and
-     * nothing is logged. The SDK does not adopt the decoded user as its
-     * identity.
+     * Once initialized it also captures the link's campaign UTMs, whatever
+     * the decode returns, so forward every incoming link; a [track] issued
+     * afterwards from the same thread carries them. Before [initialize] it
+     * only decodes (without the tenant check). Never throws; the SDK does
+     * not adopt the decoded user as its identity.
      */
     @JvmStatic
     fun handleLink(url: Uri?): RecoveryPayload? = try {
@@ -199,14 +186,7 @@ object Flowbiz {
         null
     }
 
-    /**
-     * [handleLink] over the link string, with the core read once and passed
-     * in (null = not initialized). Seam for JVM unit tests, where no real
-     * [Uri] exists and the singleton core cannot be installed; production
-     * entry is [handleLink]. Deliberately not `withCore`: pre-initialize it
-     * captures nothing and stays silent (no "initialize was not called"
-     * warning).
-     */
+    /** [handleLink] over the link string (JVM tests have no real [Uri]); [current] is null before init. */
     internal fun handleLink(link: String?, current: FlowbizCore?): RecoveryPayload? {
         if (link == null) return null
         current?.captureUtm(link)
@@ -214,36 +194,15 @@ object Flowbiz {
     }
 
     /**
-     * SPEC §10.2/§10.3: the user opened this push (notification tap) —
-     * [handleLink] over the push's **raw** `deep_link` string. Once
-     * initialized and enabled (SPEC §12: nothing is captured while
-     * disabled), the deep link's campaign UTMs are captured (SPEC §11.1)
-     * whatever the decode returns; the result is the tenant-checked
-     * [RecoveryPayload] (the same as [handleLink]'s for that link), or null
-     * when the push has no deep link or it carries no decodable `_mb_cr_`
-     * value for this tenant. Call it on tap only — receiving a push is not a
-     * click ([handlePush] never captures).
-     *
-     * Synchronous, never throws, callable from any thread (SPEC §3), like
-     * [handleLink]. A null [push] (possible from Java callers) or one
-     * without a deep link returns null silently. Before [initialize] it
-     * decodes only (no tenant check): nothing is captured, nothing logged.
+     * The user tapped this push: [handleLink] over its raw `deep_link`, with
+     * the same result; null also for a null push or one without `deep_link`.
      */
     @JvmStatic
     fun handlePushOpened(push: FlowbizPush?): RecoveryPayload? = try {
-        handlePushOpened(push, core)
+        handleLink(push?.deepLinkString, core)
     } catch (t: Throwable) {
         null
     }
-
-    /**
-     * [handlePushOpened] with the core passed in (null = not initialized):
-     * [handleLink]'s String seam over the raw `deep_link` string — never the
-     * parsed [FlowbizPush.deepLink] — so JVM tests pin exactly what the
-     * public entry reads. Production entry is [handlePushOpened].
-     */
-    internal fun handlePushOpened(push: FlowbizPush?, current: FlowbizCore?): RecoveryPayload? =
-        handleLink(push?.deepLinkString, current)
 
     private inline fun withCore(name: String, action: (FlowbizCore) -> Unit) {
         try {
