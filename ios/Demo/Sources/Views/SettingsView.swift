@@ -2,8 +2,7 @@ import SwiftUI
 import FlowbizOnsite
 
 /// Settings/debug panel: opt-out switch, push-token relay, flush, logout,
-/// simulated push (SPEC §10.2) and simulated recovery link (SPEC §11,
-/// UTM capture §11.1).
+/// simulated push (SPEC §10.2) and simulated recovery link (SPEC §11).
 /// Mirrors the Android demo 1:1.
 struct SettingsView: View {
 
@@ -38,10 +37,7 @@ struct SettingsView: View {
                     Text(summary).font(.system(.footnote, design: .monospaced))
                     if let push = lastPush {
                         Button("Abrir notificação") {
-                            // SPEC §10.2/§11.1: opening the notification is the click —
-                            // handlePushOpened runs handleLink over the raw deep_link, so
-                            // the campaign UTMs are captured (handlePush/recoveryPayload
-                            // never capture) and the payload comes back tenant-checked.
+                            // Opening the notification is the click that captures its UTMs.
                             let opened = Flowbiz.handlePushOpened(push)
                             store.recovery = DemoStore.RecoveryResult(
                                 source: "push deep_link: \(push.deepLink?.absoluteString ?? "-")",
@@ -94,8 +90,7 @@ struct SettingsView: View {
             return
         }
         // SPEC §10.2: a cart-recovery push carries _mb_cr_ in deep_link,
-        // decoded by the same §11 parser via recoveryPayload (pure: no UTM
-        // capture, no tenant check — safe on receipt).
+        // decoded by the same §11 parser via recoveryPayload.
         let recovery = push.recoveryPayload
         var summary = "FlowbizPush: v=\(push.version) type=\(push.type)\n"
         summary += "title=\(push.title ?? "-")\n"
@@ -115,10 +110,7 @@ struct SettingsView: View {
         // Hash from shared/recovery-links/vectors.json ("basic"):
         // decodes to cart-abc-001 / user-123 / P100 + P200 — no push/link infra needed.
         guard let url = URL(string: DemoStore.recoveryLink) else { return }
-        // SPEC §11 + §11.1: exactly the call the onOpenURL deep-link path
-        // uses — decodes the cart and captures the link's UTMs, which then
-        // ride as context.utm on every later event (e.g. the cart.sync of
-        // "Restaurar carrinho").
+        // SPEC §11: exactly the call the onOpenURL deep-link path uses.
         store.recovery = DemoStore.RecoveryResult(source: url.absoluteString, payload: Flowbiz.handleLink(url))
     }
 }

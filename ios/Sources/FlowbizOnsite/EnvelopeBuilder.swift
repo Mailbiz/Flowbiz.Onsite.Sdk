@@ -50,10 +50,9 @@ enum EnvelopeBuilder {
     /// Builds one entry of the envelope `data` array (SPEC §4).
     ///
     /// - `identity.user_id` is omitted when `userId` is nil.
-    /// - `context.url` / `context.baseuri` / `context.recoveryUrl` /
-    ///   `context.utm` are passed in by the core, spec §4; omitted when nil
-    ///   or empty. `utm` is the already-rendered SPEC §11.1 JSON string —
-    ///   it rides as a string value, never a nested object.
+    /// - `context.url` / `context.baseuri` / `context.recoveryUrl` are
+    ///   passed in by the core, spec §4; omitted when nil or empty.
+    /// - `context.utm` likewise, as the rendered JSON string (not an object).
     /// - `data` is a JSON **string** (the payload serialized separately),
     ///   not a nested object.
     /// - Throws only for non-finite numbers in the payload (see

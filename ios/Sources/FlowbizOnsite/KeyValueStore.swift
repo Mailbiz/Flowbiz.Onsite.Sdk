@@ -46,9 +46,7 @@ enum StorageKeys {
     /// Last registered push token, kept for logout removal (SPEC §10.1).
     static let pushToken = "push_token"
 
-    /// Captured campaign UTMs (SPEC §11.1): a JSON array of `[key, value]`
-    /// string pairs in merge order, plus its sliding 30-day wall-clock
-    /// expiry (epoch millis). See `UtmStore`.
+    /// Captured campaign UTMs and their wall-clock expiry (`UtmStore`).
     static let utmData = "utm_data"
     static let utmExpiresAtWallMs = "utm_expires_at_wall_ms"
 }

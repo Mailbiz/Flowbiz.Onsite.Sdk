@@ -6,11 +6,6 @@ import Foundation
 /// Manually-driven `TaskScheduler`: `execute` runs inline, delayed/repeating
 /// tasks are recorded for the test to fire explicitly. `allScheduleDelays`
 /// is the backoff-sequence probe.
-///
-/// With `inline: false`, `execute` holds each task in `pending` until
-/// `runPending()` instead. That is the probe for "handed to the scheduler,
-/// not run on the caller's thread", which an inline scheduler cannot tell
-/// apart.
 final class FakeTaskScheduler: TaskScheduler, @unchecked Sendable {
 
     final class FakeHandle: ScheduledHandle, @unchecked Sendable {
@@ -35,25 +30,8 @@ final class FakeTaskScheduler: TaskScheduler, @unchecked Sendable {
         scheduled.filter { !$0.repeating }.map(\.delayMillis)
     }
 
-    private let inline: Bool
-
-    /// Tasks held by a non-inline scheduler, in submission order.
-    private(set) var pending: [@Sendable () -> Void] = []
-
-    init(inline: Bool = true) {
-        self.inline = inline
-    }
-
     func execute(_ task: @escaping @Sendable () -> Void) {
-        if inline { task() } else { pending.append(task) }
-    }
-
-    /// Runs the held tasks FIFO, including any they submit, until none is
-    /// left.
-    func runPending() {
-        while !pending.isEmpty {
-            pending.removeFirst()()
-        }
+        task()
     }
 
     func schedule(afterMillis: Int64, _ task: @escaping @Sendable () -> Void) -> any ScheduledHandle {

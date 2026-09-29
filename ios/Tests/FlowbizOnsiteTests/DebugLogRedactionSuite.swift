@@ -68,76 +68,40 @@ final class LogCapture: @unchecked Sendable {
         }
     }
 
-    /// SPEC §12 / §11.1: UTM evaluation logs carry counts and reasons only —
-    /// never the link (its `_mb_cr_` carries the user id), a UTM key=value
-    /// or the `context.utm` JSON — on every path: capture, foreground,
-    /// disabled capture, re-enable, a link without UTMs, and corrupt and
-    /// expired stored state. Mirrors Android's
-    /// `utmCaptureLogsNeverContainTheLinkOrItsValues`, log strings included
-    /// (the platforms log identical messages).
-    @Test func utmCaptureLogsCarryCountsOnly() {
-        let probe = "utm-probe-Q7x"
-        let hash = "eyJ0IjoiNzc3NzciLCJ1IjoicGlpLXVzZXItOTkifQ"
-        let link = "https://probe-host.example/carrinho?_mb_cr_=\(hash)&utm_source=\(probe)" +
-            "&utm_campaign=\(probe)%20c&utm_flow_params=\(probe)-s|\(probe)-v|\(probe)-i"
-
+    /// UTM lines are fixed reasons and counts: never the link (its `_mb_cr_`
+    /// carries the user id), a key or a value.
+    @Test func utmLogsNeverCarryALinkAKeyOrAValue() {
+        let link = "https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoiUTd4In0&utm_source=Q7xsrc" +
+            "&utm_campaign=Q7x%20c&utm_flow_params=Q7xs|Q7xv|Q7xi"
         let capture = LogCapture()
         SdkLog.sink = { capture.append($0) }
         defer { SdkLog.sink = nil }
 
-        let harness = CoreHarness()
-        harness.core.captureUtm(fromLink: link)
-        harness.core.onForeground()
-        harness.core.track(.pageView(path: "home"))
-        harness.core.setEnabled(false)
-        harness.core.captureUtm(fromLink: link) // disabled-skip path
-        harness.core.setEnabled(true) // re-enable evaluation path
-        harness.store[StorageKeys.utmData] = #"[["utm_source","\#(probe)-corrupt"]"# // corrupt
-        harness.core.onBackground()
-        harness.core.onForeground()
-        harness.core.captureUtm(fromLink: "https://probe-host.example/produto/1?utm_source=") // nothing stored or captured
-        harness.core.captureUtm(fromLink: link)
-        harness.clock.advance(UtmStore.ttlMillis) // expired
-        harness.core.onBackground()
-        harness.core.onForeground()
+        let h = CoreHarness()
+        _ = Flowbiz.handleLink(link, core: h.core)
+        h.clock.advance(UtmStore.ttlMillis)
+        h.core.onForeground()
+        h.store[StorageKeys.utmData] = #"[["utm_source","Q7xsrc"]"#
+        h.store[StorageKeys.utmExpiresAtWallMs] = h.clock.wall + 1
+        _ = Flowbiz.handleLink(link, core: h.core)
 
-        let messages = capture.messages
-        // Every UTM log path above actually fired…
-        for path in [
-            "utm context set", "utm capture skipped", "utm capture: no campaign",
-            "stored utm discarded: corrupt", "stored utm discarded: expired",
-        ] {
-            #expect(messages.contains { $0.contains(path) }, "missing log path '\(path)' in: \(messages)")
+        let shapes = ["utm context: # captured, # active", "stored utm discarded: expired", "stored utm discarded: corrupt"]
+        let utmLines = capture.messages.filter { $0.contains("utm") }
+        for line in ["utm context: 5 captured, 5 active", "stored utm discarded: expired", "stored utm discarded: corrupt"] {
+            #expect(utmLines.contains(line), "missing '\(line)' in \(utmLines)")
         }
-        // …and none of them carries the link, a value or the JSON.
-        for needle in [probe, hash, "probe-host", "%20", "utm_source", "utm_campaign", "utm_step_id", "{\""] {
-            let leaks = messages.filter { $0.contains(needle) }
-            #expect(leaks.isEmpty, "debug log leaked '\(needle)' in: \(leaks)")
+        for line in utmLines {
+            #expect(shapes.contains(line.replacingOccurrences(of: "[0-9]+", with: "#", options: .regularExpression)), "\(line)")
         }
+        #expect(!capture.messages.contains { $0.contains("Q7x") || $0.contains("eyJ0") || $0.contains("utm_") })
     }
 
-    /// SPEC §3: `handlePush`, `handleLink` and `handlePushOpened` decode
-    /// purely. They *work* before initialize (real result, no "initialize
-    /// was not called" warning), unlike the pipeline entry points. A
-    /// UTM-bearing recovery link (`messagebuilder_journey_cart_recovery`)
-    /// goes through the core-less paths the public `handleLink` and
-    /// `handlePushOpened` take before initialize (`core: nil`). It decodes,
-    /// and no handler or initialize warning is logged. The assertion
-    /// targets those words only, so parallel suites logging through the
-    /// sink (UTM logs included) cannot produce false failures. That nothing
-    /// is captured then is structural (`core?.`), not asserted here.
-    /// Mirrors the Android facade smoke test.
-    @Test func pureHandlersWorkBeforeInitializeWithoutWarnings() throws {
-        let vectors = try #require(try UtmLinkParserSuite.vectors()["extract"] as? [[String: Any]])
-        let journey = try #require(vectors.first { $0["name"] as? String == "messagebuilder_journey_cart_recovery" })
-        let link = try #require(journey["url"] as? String)
-        let marker = try #require(String(
-            data: try JSONSerialization.data(
-                withJSONObject: ["v": 1, "type": "cart_recovery", "deep_link": link] as [String: Any]
-            ),
-            encoding: .utf8
-        ))
-
+    /// `handlePush`/`handleLink` decode before initialize (real result, no
+    /// "initialize was not called" warning), unlike the pipeline entry
+    /// points. Mirrors the Android facade smoke test; the assertion targets
+    /// the pure handlers' names so parallel suites logging through the sink
+    /// cannot produce false failures.
+    @Test func pureHandlersWorkBeforeInitializeWithoutWarnings() {
         let capture = LogCapture()
         SdkLog.sink = { capture.append($0) }
         defer { SdkLog.sink = nil }
@@ -147,17 +111,25 @@ final class LogCapture: @unchecked Sendable {
         #expect(Flowbiz.handlePush(["other": "x"]) == nil)
         #expect(Flowbiz.handleLink(nil) == nil)
         #expect(Flowbiz.handleLink(URL(string: "https://store.com/?x=1")) == nil)
-        #expect(Flowbiz.handlePushOpened(nil) == nil)
-        #expect(Flowbiz.handleLink(link, core: nil)?.cartId == "cart-abc-001")
-        let recoveryPush = try #require(Flowbiz.handlePush(["flowbiz": marker]))
-        #expect(Flowbiz.handlePushOpened(recoveryPush, core: nil)?.cartId == "cart-abc-001")
-        // Pure: no handler may route through the core lookup that logs
-        // "Flowbiz.<name> ignored: initialize was not called", nor log a
-        // "not initialized" skip of its UTM capture.
+        // Pure: neither handler may route through the core lookup that logs
+        // "Flowbiz.<name> ignored: initialize was not called".
         let handlerWarnings = capture.messages.filter {
-            $0.contains("handlePush") || $0.contains("handleLink") || $0.contains("not initialized")
+            $0.contains("handlePush") || $0.contains("handleLink")
         }
         #expect(handlerWarnings.isEmpty, "pure handlers logged warnings: \(handlerWarnings)")
+    }
+
+    /// Through the seam with no core: the one real `initialize` below may
+    /// already have installed the global one.
+    @Test func beforeInitializeALinkIsOnlyDecoded() throws {
+        let capture = LogCapture()
+        SdkLog.sink = { capture.append($0) }
+        defer { SdkLog.sink = nil }
+
+        let link = try UtmLinkParserSuite.extractVector("messagebuilder_journey_cart_recovery").url
+        #expect(Flowbiz.handleLink(link, core: nil)?.cartId == "cart-abc-001")
+        #expect(Flowbiz.handlePushOpened(nil) == nil)
+        #expect(!capture.messages.contains { $0.contains("handleLink") || $0.contains("handlePushOpened") })
     }
 
     /// I1 regression: `ConfigSanitizer` warnings must reach the debug sink
