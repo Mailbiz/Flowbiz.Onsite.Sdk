@@ -1,6 +1,5 @@
 import Foundation
 
-/// The last registered push token, kept so `logout()` can remove it.
 final class PushTokenStore: @unchecked Sendable {
 
     private let store: any KeyValueStore

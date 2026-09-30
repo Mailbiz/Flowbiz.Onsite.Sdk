@@ -1,7 +1,5 @@
 import Foundation
 
-/// Byte-identical to the Kotlin `EventSerializer`, both pinned by
-/// `shared/fixtures/`; like org.json, throws on non-finite numbers.
 enum EventSerializer {
 
     static func wireName(_ event: Event) -> String {

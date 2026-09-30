@@ -1,10 +1,6 @@
 import Foundation
 
-/// JSON Lines, one envelope per line, mirrored in memory. Appends are O(1);
-/// consumed and dropped lines stay in the file until compaction, so delivery
-/// is at-least-once (they resend after a crash) and `hash` is the collector's
-/// idempotency key. Confined to the SDK's serial queue, single process; I/O
-/// failures degrade to memory-only.
+// At-least-once: removed lines stay in the file until compaction; `hash` is the collector's idempotency key.
 final class EventQueue {
 
     static let defaultCapacity = 1000
@@ -15,14 +11,9 @@ final class EventQueue {
     private let capacity: Int
     private var pending: [String] = []
 
-    /// Lines present in the file but no longer pending (consumed/dropped/garbage).
     private var staleLines = 0
 
-    /// Set when an append failed or may have written a torn tail line.
-    /// While dirty, plain file appends are unsafe — a partially-written tail
-    /// without its newline would merge with the next appended entry into one
-    /// garbage line — so the next write goes through a full `compact()`
-    /// (rewrite from `pending`) instead; a successful compaction clears it.
+    // A failed append may leave a torn tail that would fuse with the next line: rewrite until compacted.
     private var fileDirty = false
 
     init(fileURL: URL, capacity: Int = EventQueue.defaultCapacity) {
@@ -52,11 +43,10 @@ final class EventQueue {
         }
         pending.append(entry)
         if fileDirty {
-            // A previous append tore the tail — rewrite instead of appending.
             compact()
         } else if !appendToFile(entry) {
             fileDirty = true
-            compact() // heal immediately when possible
+            compact()
         }
         compactIfNeeded()
     }
@@ -70,12 +60,9 @@ final class EventQueue {
         compactIfNeeded()
     }
 
-    // MARK: - File I/O (never throws out of this class)
-
     private func load() {
         let manager = FileManager.default
-        // A leftover tmp means a compaction crashed between write and
-        // replace; the original is authoritative.
+        // A leftover tmp is a compaction that crashed before replace; the original is authoritative.
         if manager.fileExists(atPath: tmpURL.path) {
             try? manager.removeItem(at: tmpURL)
         }
@@ -94,8 +81,6 @@ final class EventQueue {
                 staleLines += 1
             }
         }
-        // Over-capacity file (e.g. cap lowered, or drop-oldest lines
-        // resurrected after a crash): drop-oldest to the cap.
         if pending.count > capacity {
             staleLines += pending.count - capacity
             pending.removeFirst(pending.count - capacity)
@@ -103,13 +88,9 @@ final class EventQueue {
         if staleLines > 0 { compact() }
     }
 
-    /// Returns false on any failure — including a *partial* write, which
-    /// leaves a torn tail line the caller must mark dirty.
     private func appendToFile(_ entry: String) -> Bool {
         ensureDirectory()
-        // OutputStream (append mode) creates the file when missing and
-        // reports failure via return codes — no uncatchable ObjC exceptions
-        // (unlike legacy FileHandle writes).
+        // OutputStream, not FileHandle: legacy FileHandle writes raise uncatchable ObjC exceptions.
         guard let stream = OutputStream(url: fileURL, append: true) else {
             SdkLog.debug("queue append open failed")
             return false
@@ -142,7 +123,6 @@ final class EventQueue {
         }
     }
 
-    /// Rewrites the file to exactly the pending entries (write tmp, atomic replace).
     private func compact() {
         do {
             ensureDirectory()
@@ -157,8 +137,6 @@ final class EventQueue {
             staleLines = 0
             fileDirty = false
         } catch {
-            // Original file untouched on failure; stale lines are retried at
-            // the next trigger and at worst resend after a restart.
             SdkLog.debug("queue compaction failed")
         }
     }
@@ -172,9 +150,6 @@ final class EventQueue {
         (try? JSONSerialization.jsonObject(with: Data(line.utf8))) is [String: Any]
     }
 
-    // MARK: - Production location
-
-    /// Excluded from backup: tracking state must not restore onto a new device.
     static func defaultFileURL(appId: String) -> URL? {
         do {
             let base = try FileManager.default.url(

@@ -10,7 +10,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/** Real executor and 1 s backoff; queue and sender are only touched on the executor thread. */
 class FlushControllerRealExecutorTest {
 
     @get:Rule
@@ -23,7 +22,7 @@ class FlushControllerRealExecutorTest {
         val executor = Executors.newSingleThreadScheduledExecutor()
         try {
             val scheduler = ExecutorTaskScheduler(executor)
-            val sendsSeen = CountDownLatch(2) // failed attempt + successful retry
+            val sendsSeen = CountDownLatch(2)
             val queue = executor.submit<EventQueue> {
                 EventQueue(File(temp.newFolder(), "queue.jsonl")).also {
                     it.append(entry(1))
@@ -41,7 +40,7 @@ class FlushControllerRealExecutorTest {
 
             assertTrue(sendsSeen.await(10, TimeUnit.SECONDS))
 
-            // Serialize behind the in-flight drain to read settled state.
+            // Read on the executor: the drain can still be finishing when the latch opens.
             val (size, bodies) = executor.submit<Pair<Int, List<String>>> {
                 queue.size to sender.bodies.toList()
             }.get()

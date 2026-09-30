@@ -7,8 +7,6 @@ import Testing
 
     private let user = User(userId: "98412", email: "maria.oliveira@gmail.com")
 
-    // MARK: Envelope pipeline
-
     @Test func trackedEnvelopeCarriesIdentitySessionContextAndData() throws {
         let h = CoreHarness()
         h.core.track(.pageView(path: "home"))
@@ -22,7 +20,7 @@ import Testing
         #expect(isUUIDShaped(entry["hash"]))
 
         let identity = object(entry, "identity")
-        #expect(identity["user_id"] == nil) // no login yet → omitted
+        #expect(identity["user_id"] == nil)
         #expect(isUUIDShaped(identity["anonymous_id"]))
         #expect(isUUIDShaped(identity["session_id"]))
         #expect(identity["visit_count"] as? Int == 1)
@@ -45,8 +43,6 @@ import Testing
     }
 
     @Test func trackedEnvelopeDataMatchesSharedFixture() throws {
-        // Drift-guard reuse: the pipeline must ship the exact canonical data
-        // string the shared fixture pins for both platforms.
         let h = CoreHarness()
         let url = FixtureSupport.fixturesDirectory().appendingPathComponent("cart_sync_full.json")
         let fixture = try FixtureSupport.loadFixture(url)
@@ -73,7 +69,6 @@ import Testing
         h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "Y"))
         #expect(object(try h.lastEntry(), "context")["url"] as? String == "https://store.com/checkout")
 
-        // An empty pageView does not clear the remembered page.
         h.core.track(.pageView())
         #expect(object(try h.lastEntry(), "context")["url"] as? String == "https://store.com/checkout")
     }
@@ -109,11 +104,9 @@ import Testing
     @Test func trackedEventIsQueuedThenDrainedBySuccessfulFlush() throws {
         let h = CoreHarness()
         h.core.track(.pageView(path: "home"))
-        #expect(h.queue.size == 0) // drained inline by the flush
+        #expect(h.queue.size == 0)
         #expect(h.sender.bodies.count == 1)
     }
-
-    // MARK: Identity side effects
 
     @Test func accountLoginSetsUserIdOnItselfAndSubsequentEvents() throws {
         let h = CoreHarness()
@@ -151,14 +144,11 @@ import Testing
         #expect(h.store[StorageKeys.email] == nil)
     }
 
-    // MARK: Session semantics
-
     @Test func everyTrackSlidesTheSessionWindow() throws {
         let h = CoreHarness()
         h.core.track(.pageView(path: "a"))
         let first = object(try h.lastEntry(), "identity")
 
-        // 20 min steps never expire a 30-min sliding window.
         for index in 0..<3 {
             h.clock.advance(20 * minuteMs)
             h.core.track(.pageView(path: "screen-\(index)"))
@@ -181,15 +171,13 @@ import Testing
         #expect(second["visit_count"] as? Int == (first["visit_count"] as? Int ?? 0) + 1)
     }
 
-    // MARK: Timezone
-
     @Test(arguments: [
-        (0, "+00:00"),      // UTC
-        (-180, "-03:00"),   // São Paulo
-        (330, "+05:30"),    // India (half-hour zone)
-        (-570, "-09:30"),   // Marquesas (negative half-hour)
-        (345, "+05:45"),    // Nepal (quarter-hour)
-        (840, "+14:00"),    // Line Islands
+        (0, "+00:00"),
+        (-180, "-03:00"),
+        (330, "+05:30"),
+        (-570, "-09:30"),
+        (345, "+05:45"),
+        (840, "+14:00"),
     ])
     func timezoneOffsetsRenderAsSignedHoursMinutes(minutes: Int, expected: String) throws {
         let h = CoreHarness()
@@ -198,8 +186,6 @@ import Testing
         #expect(object(try h.lastEntry(), "timings")["timezone"] as? String == expected)
         #expect(FlowbizCore.formatTimezoneOffset(minutes: minutes) == expected)
     }
-
-    // MARK: Never-throw boundary
 
     @Test func nanPriceEventIsDroppedAndNextEventIsFine() throws {
         let h = CoreHarness()
@@ -215,15 +201,13 @@ import Testing
         #expect(try h.lastEntry()["event"] as? String == "page.view")
     }
 
-    // MARK: Explicit flush
-
     @Test func explicitFlushDrainsARetriableBacklog() throws {
         let h = CoreHarness()
         h.sender.results = [.retriableError]
-        h.core.track(.pageView(path: "home")) // first attempt fails, stays queued
+        h.core.track(.pageView(path: "home"))
         #expect(h.queue.size == 1)
 
-        h.core.flush() // default result .success
+        h.core.flush()
         #expect(h.queue.size == 0)
         #expect(h.sender.bodies.count == 2)
     }

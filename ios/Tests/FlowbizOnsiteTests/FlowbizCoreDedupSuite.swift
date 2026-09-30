@@ -16,16 +16,13 @@ import Testing
     @Test func identicalPayloadAfterWindowSendsAgain() throws {
         let h = CoreHarness()
         h.core.track(.pageView(path: "home"))
-        h.clock.advance(DedupStore.windowMillis) // boundary: exactly 20 min → expired
+        h.clock.advance(DedupStore.windowMillis)
         h.core.track(.pageView(path: "home"))
         #expect(try h.sentEntries().count == 2)
     }
 
     @Test func renewOnDuplicateSemanticsPinned() throws {
-        // Web EventsState parity: a suppressed duplicate RENEWS the window.
-        // t=0 send; t=15 duplicate (suppressed, renews); t=30 duplicate —
-        // a fixed window from the send would let this through (30 > 20);
-        // the renewed window (15 min since last duplicate) suppresses it.
+        // t=30 is past a fixed 20-min window from the send but inside the one the t=15 duplicate renewed.
         let h = CoreHarness()
         h.core.track(.pageView(path: "home"))
         h.clock.advance(15 * minuteMs)
@@ -70,7 +67,6 @@ import Testing
         first.core.track(.pageView(path: "home"))
         #expect(try first.sentEntries().count == 1)
 
-        // "Process restart": new core over the same persisted store.
         clock.advance(5 * minuteMs)
         let second = CoreHarness(store: store, clock: clock)
         second.core.track(.pageView(path: "home"))
@@ -94,14 +90,12 @@ import Testing
     @Test func backwardsClockJumpDoesNotSuppressForever() throws {
         let h = CoreHarness()
         h.core.track(.pageView(path: "home"))
-        h.clock.wall -= 60 * minuteMs // clock rolled back past the anchor
+        h.clock.wall -= 60 * minuteMs
         h.core.track(.pageView(path: "home"))
         #expect(try h.sentEntries().count == 2)
     }
 
     @Test func suppressedDuplicateStillTouchesSession() throws {
-        // Dedup drops the wire event, but the user activity is real: the
-        // session window must still slide.
         let h = CoreHarness()
         h.core.track(.pageView(path: "home"))
         let first = object(try h.lastEntry(), "identity")
@@ -109,7 +103,7 @@ import Testing
             h.clock.advance(15 * minuteMs)
             h.core.track(.pageView(path: "home"))
         }
-        h.clock.advance(20 * minuteMs) // dedup expired; 20 < 30 session idle
+        h.clock.advance(20 * minuteMs)
         h.core.track(.pageView(path: "home"))
         let last = object(try h.lastEntry(), "identity")
         #expect(try h.sentEntries().count == 2)

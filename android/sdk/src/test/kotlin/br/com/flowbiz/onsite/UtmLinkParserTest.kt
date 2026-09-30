@@ -21,11 +21,6 @@ class UtmLinkParserTest {
         }
     }
 
-    /**
-     * Oracle: `decodeURIComponent` succeeds exactly when every `%` starts a
-     * `%XX` escape and every run of escapes is well-formed UTF-8, which the
-     * JVM's strict decoder checks independently.
-     */
     @Test
     fun decoderMatchesAnOracleAndHostileLinksExtractOnlyAllowlistedUtms() {
         val random = Random(20260929)

@@ -7,10 +7,6 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The Swift suite runs the same `shared/fixtures/`: if the SDKs disagree, the
- * code is wrong, never the fixture.
- */
 class WireFixtureTest {
 
     @Test
@@ -34,16 +30,11 @@ class WireFixtureTest {
                     failures += "${file.name}: wire_event expected '${expected.getString("wire_event")}' but was '$wireName'"
                 }
 
-                // Serialize to the wire string, then parse it back — the wire
-                // string is what actually ships.
                 val wireString = EventSerializer.dataJson(event, baseUri)
                 FixtureSupport.diff(expected.getJSONObject("data"), JSONObject(wireString), "data")?.let {
                     failures += "${file.name}: $it"
                 }
 
-                // Byte-for-byte pin of the canonical wire string (sorted
-                // keys, JSON.stringify-compatible numbers and escaping) —
-                // any future number/escaping divergence fails here.
                 val canonical = expected.getString("data_canonical")
                 if (wireString != canonical) {
                     failures += "${file.name}: canonical wire string mismatch\n" +
@@ -78,7 +69,6 @@ class WireFixtureTest {
         }
     }
 
-    /** As in Swift, the serializer throws; the core catches it and drops the event. */
     @Test
     fun nonFiniteNumbersThrow() {
         for (garbage in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {

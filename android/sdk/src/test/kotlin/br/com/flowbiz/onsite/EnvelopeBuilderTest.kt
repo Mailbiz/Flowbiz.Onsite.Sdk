@@ -8,7 +8,6 @@ import org.junit.Test
 
 class EnvelopeBuilderTest {
 
-    // 2023-11-14T22:13:20 UTC
     private val createdAtMillis = 1_700_000_000_000L
     private val sentAtMillis = 1_700_000_000_123L
 

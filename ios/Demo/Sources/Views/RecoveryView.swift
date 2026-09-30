@@ -1,8 +1,6 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Deep-link recovery sheet: renders the parsed `RecoveryPayload` — or the
-/// nil case — and can restore the cart.
 struct RecoveryView: View {
 
     @EnvironmentObject var store: DemoStore

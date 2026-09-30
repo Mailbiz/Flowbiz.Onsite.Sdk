@@ -9,8 +9,7 @@ final class IdentityStore: @unchecked Sendable {
         self.store = store
     }
 
-    /// Lowercase UUID v4 that lives until uninstall: no Keychain or backup
-    /// pinning, by design.
+    // Lives until uninstall: no Keychain or backup pinning, by design.
     var anonymousId: String {
         lock.lock()
         defer { lock.unlock() }
@@ -21,7 +20,7 @@ final class IdentityStore: @unchecked Sendable {
             }
             return normalized
         }
-        let fresh = UUID().uuidString.lowercased() // Foundation UUID is v4
+        let fresh = UUID().uuidString.lowercased()
         store.set(fresh, forKey: StorageKeys.anonymousId)
         return fresh
     }

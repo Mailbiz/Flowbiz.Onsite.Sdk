@@ -1,13 +1,8 @@
 import Foundation
 
-/// `mach_continuous_time` keeps counting through sleep, like Android's
-/// `elapsedRealtime()`; `mach_absolute_time` and `DispatchTime` stop while the
-/// device sleeps, so a phone asleep for an hour would resume a stale session.
-/// It resets at reboot, which `SessionManager`'s wall-clock fallback covers.
+// mach_continuous_time, not DispatchTime or mach_absolute_time: those stop while the device sleeps.
 struct SystemClock: Clock, Sendable {
 
-    /// Ticks→ns (125/3 on Apple silicon); `UInt64` math overflows only after
-    /// centuries of uptime.
     private static let timebase: (numer: UInt64, denom: UInt64) = {
         var info = mach_timebase_info_data_t()
         mach_timebase_info(&info)

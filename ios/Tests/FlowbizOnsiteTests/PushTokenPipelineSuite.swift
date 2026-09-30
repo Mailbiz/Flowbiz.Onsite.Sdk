@@ -17,7 +17,6 @@ import Testing
         #expect(entry["data"] as? String == #"{"platform":"ios","token":"apns-token-1"}"#)
         #expect(object(entry, "identity")["session_id"] != nil)
         #expect(object(entry, "context")["platform"] as? String == "ios")
-        // Persisted for a later logout/remove.
         #expect(harness.store[StorageKeys.pushToken] as? String == "apns-token-1")
     }
 
@@ -68,8 +67,6 @@ import Testing
         #expect(try entries(harness, event: "push.token.remove").isEmpty)
     }
 
-    /// The token cell stays current while disabled, so a later enable acts on
-    /// the true registration state.
     @Test func disabledDropsEventsButStillPersistsAndClearsTheToken() throws {
         let harness = CoreHarness()
         harness.core.setEnabled(false)
@@ -84,8 +81,6 @@ import Testing
         #expect(harness.store[StorageKeys.pushToken] == nil)
     }
 
-    /// The collector no longer associates a removed token, so its re-sync
-    /// must not be deduped.
     @Test func removeClearsTheSyncDedupAnchorSoTheSameTokenResyncs() throws {
         let harness = CoreHarness()
         harness.core.setPushToken("apns-token-1")
@@ -102,7 +97,6 @@ import Testing
         #expect(try entries(harness, event: "push.token.sync").count == 2)
     }
 
-    /// A token registered while disabled is persisted but its sync dropped.
     @Test func reEnableReEmitsSyncForTheStoredToken() throws {
         let harness = CoreHarness()
         harness.core.setEnabled(false)
@@ -140,7 +134,6 @@ import Testing
     }
 
     @Test func facadeBlankTokenIsANoOp() {
-        // Without initialize there is nothing to observe beyond "does not crash".
         Flowbiz.setPushToken("   ")
         Flowbiz.removePushToken()
     }

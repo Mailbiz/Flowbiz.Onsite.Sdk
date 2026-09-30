@@ -1,12 +1,9 @@
-// Only no-op paths: a real `initialize` on the shared singleton would leak
-// UserDefaults suites / queue files onto the test machine and poison other
-// suites (first config wins forever). The production wiring rides on the
-// demo app; its behavior is pinned at the `FlowbizCore` level.
 #if canImport(Testing)
 import Foundation
 import Testing
 @testable import FlowbizOnsite
 
+// No-op paths only: a real initialize would leak state into other suites (first config wins).
 @Suite struct FlowbizFacadeSmokeSuite {
 
     @Test func preInitializeCallsAreSilentNoOpsAndNeverThrow() {
@@ -18,7 +15,6 @@ import Testing
         Flowbiz.setEnabled(false)
         Flowbiz.setEnabled(true)
         Flowbiz.flush()
-        // Reaching this line is the assertion: nothing threw or crashed.
     }
 
     @Test func initializeWithBlankAppIdIsACompleteNoOp() {

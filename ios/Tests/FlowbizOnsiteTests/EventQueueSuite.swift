@@ -15,8 +15,6 @@ import Testing
         try String(contentsOf: file, encoding: .utf8)
     }
 
-    // MARK: Round-trip & order
-
     @Test func appendPeekRoundTripPreservesOrder() {
         let queue = EventQueue(fileURL: file)
         (1...5).forEach { queue.append(entry($0)) }
@@ -40,34 +38,28 @@ import Testing
         #expect(queue.peek(10) == [entry(3), entry(4)])
     }
 
-    // MARK: Corruption tolerance
-
     @Test func truncatedAndGarbageLinesAreSkippedNotFatal() throws {
         try FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(), withIntermediateDirectories: true
         )
         let content = entry(1) + "\n"
-            + "{\"event\":\"trunca" + "\n" // crash mid-write
+            + "{\"event\":\"trunca" + "\n"
             + "not json at all\n"
             + "\n"
             + entry(2) + "\n"
-            + "{\"event\":\"e3\",\"ha" // truncated final line, no newline
+            + "{\"event\":\"e3\",\"ha"
         try Data(content.utf8).write(to: file)
         let queue = EventQueue(fileURL: file)
         #expect(queue.peek(10) == [entry(1), entry(2)])
-        // Stale garbage found at load forces an immediate compaction:
-        // the file now holds exactly the surviving lines.
         #expect(try fileText() == entry(1) + "\n" + entry(2) + "\n")
     }
 
     @Test func unreadableStateStartsEmpty() throws {
-        // A directory where the file should be → reads fail, queue degrades.
+        // A directory where the file should be → read fails.
         try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
         let queue = EventQueue(fileURL: file)
         #expect(queue.size == 0)
     }
-
-    // MARK: Capacity
 
     @Test func capacityDropsOldestOnAppend() {
         let queue = EventQueue(fileURL: file, capacity: 5)
@@ -83,8 +75,6 @@ import Testing
         #expect(smaller.peek(10) == (7...10).map { entry($0) })
     }
 
-    // MARK: Compaction
-
     @Test func compactionTriggersAtStaleThresholdAndPreservesOrder() throws {
         let queue = EventQueue(fileURL: file)
         let total = EventQueue.compactStaleThreshold + 6
@@ -99,7 +89,6 @@ import Testing
         let queue = EventQueue(fileURL: file)
         (1...6).forEach { queue.append(entry($0)) }
         queue.removeOldest(2)
-        // Logical removal only — durability model keeps the lines (at-least-once).
         let lines = try fileText().split(separator: "\n")
         #expect(lines.count == 6)
         #expect(queue.peek(10) == [entry(3), entry(4), entry(5), entry(6)])
@@ -113,15 +102,11 @@ import Testing
         #expect(try fileText().isEmpty)
     }
 
-    // MARK: Compaction crash safety (write tmp, then atomic replace)
-
     @Test func leftoverTmpFromCrashedCompactionIsIgnoredAndOriginalIntact() throws {
         try FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(), withIntermediateDirectories: true
         )
         try Data((entry(1) + "\n" + entry(2) + "\n").utf8).write(to: file)
-        // Simulated crash between tmp write and replace: tmp holds a stale,
-        // partial rewrite. The original must win.
         let tmp = URL(fileURLWithPath: file.path + ".tmp")
         try Data((entry(99) + "\n").utf8).write(to: tmp)
         let queue = EventQueue(fileURL: file)
@@ -129,8 +114,6 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: tmp.path))
         #expect(try fileText() == entry(1) + "\n" + entry(2) + "\n")
     }
-
-    // MARK: Defensive input handling
 
     @Test func entriesWithRawNewlinesAreRejected() {
         let queue = EventQueue(fileURL: file)
@@ -153,25 +136,19 @@ import Testing
         queue.append(entry(1))
         let manager = FileManager.default
         let directory = file.deletingLastPathComponent()
-        // Sabotage: read-only file blocks appends; read-only directory
-        // blocks the healing compaction (tmp file creation).
+        // Read-only directory too: it blocks the healing compaction's tmp file.
         try manager.setAttributes([.posixPermissions: 0o444], ofItemAtPath: file.path)
         try manager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
-        queue.append(entry(2)) // append fails → dirty; compaction fails too
-        queue.append(entry(3)) // still dirty → rewrite attempt, fails again
+        queue.append(entry(2))
+        queue.append(entry(3))
         #expect(queue.size == 3)
-        #expect(try fileText() == entry(1) + "\n") // no torn/merged writes
+        #expect(try fileText() == entry(1) + "\n")
 
-        // Filesystem healed: the next write must REWRITE the whole pending
-        // set (a plain append after a potentially-torn tail could merge two
-        // entries into one garbage line).
         try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
         try manager.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.path)
         queue.append(entry(4))
         #expect(EventQueue(fileURL: file).peek(10) == (1...4).map { entry($0) })
     }
-
-    // MARK: Production location
 
     @Test func defaultQueueDirectoryIsExcludedFromBackup() throws {
         let appId = "backup-test-\(UUID().uuidString)"

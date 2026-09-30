@@ -11,7 +11,6 @@ import br.com.flowbiz.onsite.ProductVariant
 import br.com.flowbiz.onsite.RecoveryPayload
 import br.com.flowbiz.onsite.User
 
-/** `P100`/`P200` match the shared recovery-link vectors, so a simulated link restores real items. */
 data class DemoProduct(
     val productId: String,
     val sku: String,
@@ -114,12 +113,11 @@ object DemoCatalog {
     )
 }
 
-/** No Android types here, so the demo store state stays JVM-unit-testable. */
 object DemoCart {
 
     const val CART_ID = "demo-cart-001"
 
-    private val quantities = LinkedHashMap<String, Int>() // sku -> quantity
+    private val quantities = LinkedHashMap<String, Int>()
     var coupon: String? = null
     var postalCode: String? = null
 
@@ -195,7 +193,6 @@ object DemoCart {
         deliveryMethods = listOf(DeliveryMethod(type = "sedex", amount = freight())),
     )
 
-    /** Unknown lines are skipped; a real store would fetch them from its own backend. */
     fun restore(payload: RecoveryPayload) {
         quantities.clear()
         coupon = null

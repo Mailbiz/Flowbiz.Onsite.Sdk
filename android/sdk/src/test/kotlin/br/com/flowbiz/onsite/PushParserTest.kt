@@ -14,10 +14,7 @@ class PushParserTest {
     private fun samples(): JSONArray =
         JSONArray(File(FixtureSupport.sharedDir("push-samples"), "samples.json").readText())
 
-    /**
-     * A non-string value (`non_string_marker_dict`) is smuggled in through
-     * erasure, as a buggy Java caller could.
-     */
+    // Keeps non-string values as they are, smuggled through erasure as a buggy Java caller could.
     private fun payloadMap(payload: JSONObject): Map<String, String> {
         val map = HashMap<String, Any>()
         val keys = payload.keys()

@@ -1,9 +1,5 @@
 import Foundation
 
-/// One suite per appId, named like the Android preferences file, so tenants
-/// never collide and the host's standard defaults stay untouched. Numbers
-/// read as any exactly-representable `NSNumber`: plists drop Swift integer
-/// widths.
 final class UserDefaultsStore: KeyValueStore, @unchecked Sendable {
 
     private let defaults: UserDefaults
@@ -24,6 +20,7 @@ final class UserDefaultsStore: KeyValueStore, @unchecked Sendable {
         defaults.object(forKey: prefix + key) as? String
     }
 
+    // Any exactly-representable NSNumber: plists drop Swift integer widths.
     func int(forKey key: String) -> Int? {
         (defaults.object(forKey: prefix + key) as? NSNumber).flatMap { Int(exactly: $0) }
     }

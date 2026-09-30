@@ -8,10 +8,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/**
- * Debug logs carry wire event names, counts, codes and exception class names
- * only: never PII, `data` payloads or tokens.
- */
 class DebugLogRedactionTest {
 
     @get:Rule
@@ -29,21 +25,22 @@ class DebugLogRedactionTest {
         try {
             val harness = CoreHarness(temp.newFolder())
             val user = User(userId = "u-77", email = email, phone = phone, name = name)
+            // The repeats are deliberate: each call below drives another log path.
             harness.core.track(Event.AccountLogin(user))
-            harness.core.track(Event.AccountLogin(user)) // dedup-suppression log path
+            harness.core.track(Event.AccountLogin(user))
             harness.core.setPushToken(token)
-            harness.core.setPushToken(token) // dedup-suppression log path for the token event
-            harness.core.track( // serialization-failure (dropped event) log path
+            harness.core.setPushToken(token)
+            harness.core.track(
                 Event.ProductView(
                     Product(productId = "P1", variants = listOf(ProductVariant(sku = "S1", price = Double.NaN)))
                 )
             )
             harness.core.setEnabled(false)
-            harness.core.track(Event.AccountSync(user)) // disabled-drop log path
-            harness.core.setEnabled(true) // re-enable + stored-token re-emit path
+            harness.core.track(Event.AccountSync(user))
+            harness.core.setEnabled(true)
             harness.core.removePushToken()
             harness.core.setPushToken(token)
-            harness.core.logout() // logout removal + summary log path
+            harness.core.logout()
             harness.core.flush()
 
             assertTrue("scenario must produce debug logs", captured.isNotEmpty())
@@ -58,10 +55,6 @@ class DebugLogRedactionTest {
         }
     }
 
-    /**
-     * UTM logs carry counts and reasons only, across capture, discard and a
-     * failed refresh (which keeps the context).
-     */
     @Test
     fun utmLogsNeverCarryALinkAKeyOrAValue() {
         val link = "https://store.com/?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoicGlpLXByb2JlIn0&utm_source=probe-source" +

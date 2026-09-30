@@ -57,7 +57,6 @@ import Testing
     }
 
     @Test func sendFailureIsDroppedAndNeverEnqueued() {
-        // A durable queue co-exists; a failing heartbeat must never reach it.
         let queueFile = temporaryQueueFile()
         let queue = EventQueue(fileURL: queueFile)
         sender.defaultResult = .retriableError
@@ -75,8 +74,6 @@ import Testing
         scheduler.tickRepeating(2)
         #expect(sender.bodies.isEmpty)
     }
-
-    // MARK: page.ping envelope shape (not part of the Event catalog)
 
     @Test func buildPingProducesAPingEnvelopeWithEmptyPayload() throws {
         let entry = EnvelopeBuilder.buildPing(

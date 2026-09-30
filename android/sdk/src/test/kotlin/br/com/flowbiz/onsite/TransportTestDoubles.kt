@@ -1,9 +1,5 @@
 package br.com.flowbiz.onsite
 
-/**
- * `execute` runs inline (the test *is* the serial thread); delayed and
- * repeating tasks wait for the test to fire them.
- */
 internal class FakeTaskScheduler : TaskScheduler {
 
     class FakeHandle(
@@ -19,7 +15,6 @@ internal class FakeTaskScheduler : TaskScheduler {
 
     val scheduled = mutableListOf<FakeHandle>()
 
-    /** Every `schedule()` delay in call order, including later-cancelled ones. */
     val allScheduleDelays: List<Long>
         get() = scheduled.filter { !it.repeating }.map { it.delayMillis }
 
@@ -31,7 +26,6 @@ internal class FakeTaskScheduler : TaskScheduler {
     override fun scheduleRepeating(intervalMillis: Long, task: Runnable): ScheduledHandle =
         FakeHandle(intervalMillis, task, repeating = true).also { scheduled += it }
 
-    /** Fires the most recently scheduled, still-pending one-shot task. */
     fun runLastScheduled() {
         scheduled.last { !it.repeating && !it.cancelled }.task.run()
     }
@@ -44,7 +38,6 @@ internal class FakeTaskScheduler : TaskScheduler {
     }
 }
 
-/** Scripted [HttpSender]; [maxDepth] above 1 means a send ran inside another. */
 internal class FakeHttpSender : HttpSender {
 
     val bodies = mutableListOf<String>()

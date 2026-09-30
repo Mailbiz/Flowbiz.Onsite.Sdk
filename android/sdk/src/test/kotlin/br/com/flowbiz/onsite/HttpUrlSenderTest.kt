@@ -11,10 +11,7 @@ import java.net.Socket
 
 class HttpUrlSenderTest {
 
-    /**
-     * Loopback stub on a raw [ServerSocket]: `com.sun.net.httpserver` is not on
-     * the Android unit-test classpath (tests compile against `android.jar`).
-     */
+    // A raw ServerSocket: com.sun.net.httpserver is not on the android.jar unit-test classpath.
     private class StubServer(
         private val status: Int,
         private val delayMillis: Long = 0,
@@ -36,7 +33,6 @@ class HttpUrlSenderTest {
                     socket.accept().use { handle(it) }
                 }
             } catch (_: Throwable) {
-                // Server socket closed — test over.
             }
         }.apply {
             isDaemon = true
@@ -143,8 +139,6 @@ class HttpUrlSenderTest {
     fun http302IsPermanentAndNotFollowed() {
         val stub = startServer(302, headers = mapOf("Location" to "http://127.0.0.1:1/elsewhere"))
         assertEquals(SendResult.PERMANENT_ERROR, sendTo(stub.baseUrl))
-        // The redirect target (a dead port) was never contacted — the 302
-        // itself was observed and classified.
         assertEquals("/collect", stub.path)
     }
 
@@ -182,7 +176,6 @@ class HttpUrlSenderTest {
 
     @Test
     fun connectionRefusedIsRetriable() {
-        // Grab a genuinely free port, then close it — nothing listens there.
         val port = ServerSocket(0).use { it.localPort }
         val sender = HttpUrlSender("http://127.0.0.1:$port", "android", connectTimeoutMillis = 500)
         assertEquals(SendResult.RETRIABLE_ERROR, sender.send("""{"data":[]}"""))
@@ -216,8 +209,8 @@ class HttpUrlSenderTest {
             502 to SendResult.RETRIABLE_ERROR,
             503 to SendResult.RETRIABLE_ERROR,
             599 to SendResult.RETRIABLE_ERROR,
-            100 to SendResult.RETRIABLE_ERROR, // unexpected → keep and retry
-            -1 to SendResult.RETRIABLE_ERROR, // HttpURLConnection "no valid code"
+            100 to SendResult.RETRIABLE_ERROR,
+            -1 to SendResult.RETRIABLE_ERROR,
         )
         for ((code, expected) in cases) {
             assertEquals("status $code", expected, HttpUrlSender.classify(code))

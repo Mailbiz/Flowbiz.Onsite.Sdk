@@ -60,14 +60,14 @@ class FlowbizCoreLifecycleTest {
     fun pingBypassesQueueAndDedupAndCarriesSessionIdentity() {
         val h = harness()
         h.core.onForeground()
-        h.scheduler.tickRepeating(2) // identical beats: dedup-exempt by design
+        h.scheduler.tickRepeating(2)
 
         val pings = pingEntries(h)
         assertEquals(2, pings.size)
         assertEquals(0, h.queue.size)
 
         val ping = pings.first()
-        assertEquals("{}", ping.getString("data")) // no named pageView yet
+        assertEquals("{}", ping.getString("data"))
         val identity = ping.getJSONObject("identity")
         assertTrue(IdentityStore.UUID_SHAPE.matches(identity.getString("anonymous_id")))
         assertTrue(IdentityStore.UUID_SHAPE.matches(identity.getString("session_id")))
@@ -86,7 +86,6 @@ class FlowbizCoreLifecycleTest {
             pingEntries(h).last().getString("data"),
         )
 
-        // An anonymous pageView does not clear the last named screen.
         h.core.track(Event.PageView())
         h.scheduler.tickRepeating()
         assertEquals(
@@ -110,7 +109,6 @@ class FlowbizCoreLifecycleTest {
         assertEquals("https://store.com", context.getString("baseuri"))
         assertEquals("https://store.com/carrinho", context.getString("recoveryUrl"))
 
-        // `push.token.sync` goes through `emitInternal`, a third envelope path.
         h.core.setPushToken("tok")
         val sync = h.sentEntries().last { it.getString("event") == "push.token.sync" }
         val syncContext = sync.getJSONObject("context")
@@ -154,7 +152,7 @@ class FlowbizCoreLifecycleTest {
             h.clock.advance(25 * MINUTE_MS)
             h.scheduler.tickRepeating()
         }
-        h.clock.advance(25 * MINUTE_MS) // 25 < 30 since last ping
+        h.clock.advance(25 * MINUTE_MS)
         h.core.track(Event.PageView("later"))
         assertEquals(sessionBefore, h.lastEntry().getJSONObject("identity").getString("session_id"))
     }

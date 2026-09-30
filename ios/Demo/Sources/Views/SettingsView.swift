@@ -1,12 +1,9 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Settings/debug panel: opt-out switch, push-token relay, flush, logout,
-/// simulated push and simulated recovery link.
 struct SettingsView: View {
 
     @EnvironmentObject var store: DemoStore
-    /// Demo-local mirror of the opt-out switch (the SDK persists the real state internally).
     @State private var trackingEnabled = true
     @State private var lastPushSummary: String?
     @State private var lastPush: FlowbizPush?
@@ -33,7 +30,6 @@ struct SettingsView: View {
                     Text(summary).font(.system(.footnote, design: .monospaced))
                     if let push = lastPush {
                         Button("Abrir notificação") {
-                            // Opening the notification is the click that captures its UTMs.
                             let opened = Flowbiz.handlePushOpened(push)
                             store.recovery = DemoStore.RecoveryResult(
                                 source: "push deep_link: \(push.deepLink?.absoluteString ?? "-")",
@@ -71,15 +67,12 @@ struct SettingsView: View {
     }
 
     private func simulatePush() {
-        // The "flowbiz" marker as a JSON-encoded string, exactly what the
-        // UNUserNotificationCenter delegate's userInfo would hand over.
         let payload: [AnyHashable: Any] = ["flowbiz": DemoStore.simulatedPushMarker]
         guard let push = Flowbiz.handlePush(payload) else {
             lastPushSummary = "handlePush → nil (não é um push Flowbiz)"
             lastPush = nil
             return
         }
-        // A cart-recovery push carries _mb_cr_ in its deep_link.
         let recovery = push.recoveryPayload
         var summary = "FlowbizPush: v=\(push.version) type=\(push.type)\n"
         summary += "title=\(push.title ?? "-")\n"
@@ -97,7 +90,6 @@ struct SettingsView: View {
 
     private func simulateRecoveryLink() {
         guard let url = URL(string: DemoStore.recoveryLink) else { return }
-        // Exactly the call the onOpenURL deep-link path makes.
         store.recovery = DemoStore.RecoveryResult(source: url.absoluteString, payload: Flowbiz.handleLink(url))
     }
 }

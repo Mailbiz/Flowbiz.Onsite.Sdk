@@ -1,9 +1,6 @@
 import Foundation
 
-/// A `Sendable` JSON value for the free-form `properties` /
-/// `recoveryProperties` maps (`[String: Any]` cannot be `Sendable`). Literals
-/// build it: `["cor": "Azul Marinho", "estoque": 12, "ativo": true]`. Keys
-/// ship as-is (not snake_cased); `.null` object entries are dropped.
+/// Free-form `properties` values, from literals; keys ship as-is, `.null` object entries are dropped.
 public enum JSONValue: Sendable, Equatable, Hashable {
     case string(String)
     case number(Double)
@@ -44,7 +41,6 @@ extension JSONValue: ExpressibleByDictionaryLiteral {
 }
 
 extension JSONValue {
-    /// Inverse of `foundationValue`; nil outside the JSON model.
     static func fromFoundation(_ any: Any) -> JSONValue? {
         switch any {
         case let string as String:
@@ -78,14 +74,11 @@ extension JSONValue {
         return entries
     }
 
-    /// NSNumber booleans are CFBooleans underneath; a plain number is not.
+    // Not `as? Bool`, which also matches a numeric 0 or 1: only a CFBoolean is a JSON boolean.
     static func isBoolean(_ number: NSNumber) -> Bool {
         CFGetTypeID(number) == CFBooleanGetTypeID()
     }
 
-    /// As in the Kotlin serializer, `.null` object entries are dropped while
-    /// `.null` array elements stay (positions matter); whole numbers become
-    /// integers.
     var foundationValue: Any {
         switch self {
         case .string(let value):

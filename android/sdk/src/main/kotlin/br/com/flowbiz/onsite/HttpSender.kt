@@ -3,37 +3,18 @@ package br.com.flowbiz.onsite
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Outcome of one `POST /collect` attempt; the collector accepts or rejects the whole batch. */
 internal enum class SendResult {
-    /** 2xx — the batch was ingested; dequeue it. */
     SUCCESS,
-
-    /** 5xx / 408 / 429 / timeout / network error — keep queued, back off. */
     RETRIABLE_ERROR,
-
-    /** 4xx (except 408/429/413) and 3xx — retrying cannot help; drop (after bisection). */
     PERMANENT_ERROR,
-
-    /** 413 — the batch is too large; split and retry the halves. */
     PAYLOAD_TOO_LARGE,
 }
 
-/**
- * Posts one serialized `{"data":[...]}` body. Blocking by design: always
- * called on the SDK's scheduler thread. Never throws; every failure maps to
- * a [SendResult].
- */
+// Blocking by design: only ever called on the SDK's serial scheduler, never the caller's thread.
 internal interface HttpSender {
     fun send(body: String): SendResult
 }
 
-/**
- * `POST {collectorUrl}/collect` with the `platform` header. Redirects are not
- * followed and a 3xx is permanent: a redirect means the batch was not
- * ingested, and a redirecting collector URL is a misconfiguration that
- * retrying can never fix, so a retriable 3xx would loop the batch forever.
- * A malformed [collectorUrl] makes every send permanent for the same reason.
- */
 internal class HttpUrlSender(
     collectorUrl: String,
     private val platform: String,
@@ -49,12 +30,13 @@ internal class HttpUrlSender(
     }
 
     override fun send(body: String): SendResult {
+        // Permanent, so a malformed collectorUrl cannot grow the queue forever.
         val url = endpoint ?: return SendResult.PERMANENT_ERROR
         var connection: HttpURLConnection? = null
         return try {
             connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
-            connection.instanceFollowRedirects = false // observe 3xx, never follow
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = connectTimeoutMillis
             connection.readTimeout = readTimeoutMillis
             connection.doOutput = true
@@ -84,16 +66,15 @@ internal class HttpUrlSender(
     companion object {
         const val CONNECT_TIMEOUT_MS = 5_000
 
-        /** Read timeout; the collector answers small JSON bodies fast. */
         const val READ_TIMEOUT_MS = 10_000
 
         fun classify(code: Int): SendResult = when {
             code in 200..299 -> SendResult.SUCCESS
-            code in 300..399 -> SendResult.PERMANENT_ERROR // misconfig; see class doc
+            code in 300..399 -> SendResult.PERMANENT_ERROR // misconfigured collector: retrying would loop forever
             code == 413 -> SendResult.PAYLOAD_TOO_LARGE
             code == 408 || code == 429 -> SendResult.RETRIABLE_ERROR
             code in 400..499 -> SendResult.PERMANENT_ERROR
-            else -> SendResult.RETRIABLE_ERROR // 5xx and anything unexpected
+            else -> SendResult.RETRIABLE_ERROR
         }
     }
 }

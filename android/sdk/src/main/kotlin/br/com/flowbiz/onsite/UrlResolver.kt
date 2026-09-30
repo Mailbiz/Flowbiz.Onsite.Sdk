@@ -1,6 +1,5 @@
 package br.com.flowbiz.onsite
 
-/** Resolves app-supplied URL-shaped values against the configured `baseUri`; nothing is stripped or encoded. */
 internal object UrlResolver {
 
     private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.-]*:")

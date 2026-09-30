@@ -1,9 +1,6 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Fake-store demo over the production wiring, mirroring the Android demo
-/// 1:1. Failed POSTs are harmless: events wait in the durable queue and retry
-/// with backoff. os_log category `FlowbizOnsite`.
 @main
 struct FlowbizDemoApp: App {
 
@@ -21,7 +18,7 @@ struct FlowbizDemoApp: App {
             baseUri: "https://www.belamodastore.com.br",
             collectorUrl: collectorUrl,
             debug: true,
-            recoveryUrl: "https://www.belamodastore.com.br/carrinho" // where recovery links land (Universal Link domain)
+            recoveryUrl: "https://www.belamodastore.com.br/carrinho"
         ))
     }
 
@@ -30,8 +27,7 @@ struct FlowbizDemoApp: App {
             ProductListView()
                 .environmentObject(store)
                 .onOpenURL { url in
-                    // Forward every incoming link, recovery or not: handleLink
-                    // also captures its UTMs.
+                    // Forward every incoming link, recovery or not: handleLink also captures its UTMs.
                     store.recovery = DemoStore.RecoveryResult(
                         source: url.absoluteString,
                         payload: Flowbiz.handleLink(url)

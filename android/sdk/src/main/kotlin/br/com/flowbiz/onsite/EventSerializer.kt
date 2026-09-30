@@ -3,16 +3,6 @@ package br.com.flowbiz.onsite
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * [Event] → wire name and `data` payload: snake_case keys, `null` fields
- * omitted. Free-form `properties` / `recoveryProperties` keep their keys;
- * `null` values inside them are dropped, except array elements (kept as
- * JSON `null` to preserve positions).
- *
- * Must stay byte-identical to the Swift `EventSerializer`; both are pinned
- * by `shared/fixtures/`. Like Swift, it **throws** on non-finite numbers
- * (org.json rejects them when they enter the tree); the caller drops the event.
- */
 internal object EventSerializer {
 
     fun wireName(event: Event): String = when (event) {

@@ -1,7 +1,5 @@
 import Foundation
 
-/// Getters return nil for missing or corrupt (wrong-type) values, so callers
-/// fall back to defaults; writes never block. Safe from any thread.
 protocol KeyValueStore {
     func string(forKey key: String) -> String?
     func int(forKey key: String) -> Int?
@@ -14,7 +12,6 @@ protocol KeyValueStore {
     func removeValue(forKey key: String)
 }
 
-/// Shared verbatim with the Android SDK.
 enum StorageKeys {
     static let anonymousId = "anonymous_id"
     static let userId = "user_id"

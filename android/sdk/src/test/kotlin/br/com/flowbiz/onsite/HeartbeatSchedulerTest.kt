@@ -66,7 +66,6 @@ class HeartbeatSchedulerTest {
 
     @Test
     fun sendFailureIsDroppedAndNeverEnqueued() {
-        // Fire-and-forget: a failed beat is dropped, never queued or retried.
         val queueFile = File(temp.newFolder(), "queue.jsonl")
         val queue = EventQueue(queueFile)
         sender.defaultResult = SendResult.RETRIABLE_ERROR

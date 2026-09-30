@@ -148,8 +148,8 @@ class FlushControllerTest {
     fun retryDuringBisectionStopsWithoutDroppingInnocents() {
         val c = controller()
         (1..4).forEach { queue.append(entry(it)) }
-        sender.results.add(SendResult.PERMANENT_ERROR) // full batch
-        sender.defaultResult = SendResult.RETRIABLE_ERROR // every sub-batch
+        sender.results.add(SendResult.PERMANENT_ERROR)
+        sender.defaultResult = SendResult.RETRIABLE_ERROR
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
         assertEquals(4, queue.size)
         assertEquals(1, scheduler.allScheduleDelays.size)
@@ -231,7 +231,6 @@ class FlushControllerTest {
         sender.onSend = {
             if (!triggered) {
                 triggered = true
-                // A track() firing mid-drain (inline executor = worst case).
                 c.requestFlush(FlushController.FlushReason.EVENT_TRACKED)
             }
         }

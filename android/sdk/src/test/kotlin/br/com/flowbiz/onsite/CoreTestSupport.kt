@@ -26,7 +26,6 @@ internal class FakeDeviceContext(
     override fun timezoneOffsetMinutes(wallMillis: Long): Int = offsetMinutes
 }
 
-/** [FlowbizCore] over fakes; the inline scheduler runs `track` and its flush synchronously. */
 internal class CoreHarness(
     queueDir: File,
     val config: FlowbizConfig = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
@@ -49,7 +48,6 @@ internal class CoreHarness(
         reachability = reachability,
     )
 
-    /** Entries of every sent body, in send order (flush batches flattened). */
     fun sentEntries(): List<JSONObject> = sender.bodies.flatMap { body ->
         val data = JSONObject(body).getJSONArray("data")
         (0 until data.length()).map { data.getJSONObject(it) }

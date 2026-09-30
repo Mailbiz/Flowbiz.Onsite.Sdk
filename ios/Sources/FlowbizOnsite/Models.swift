@@ -1,6 +1,5 @@
 import Foundation
 
-/// User payload for `accountLogin` / `accountSync`.
 public struct User: Sendable, Equatable {
     public let userId: String
     public let email: String
@@ -26,7 +25,6 @@ public struct User: Sendable, Equatable {
     }
 }
 
-/// A purchasable variant of a ``Product``.
 public struct ProductVariant: Sendable, Equatable {
     public let sku: String
     public let price: Double
@@ -64,7 +62,6 @@ public struct ProductVariant: Sendable, Equatable {
     }
 }
 
-/// Product payload for `productView`.
 public struct Product: Sendable, Equatable {
     public let productId: String
     public let url: String?
@@ -87,7 +84,6 @@ public struct Product: Sendable, Equatable {
     }
 }
 
-/// A line item inside a ``Cart``, `addToCart` or an ``Order``.
 public struct CartItem: Sendable, Equatable {
     public let productId: String
     public let sku: String
@@ -131,7 +127,6 @@ public struct CartItem: Sendable, Equatable {
     }
 }
 
-/// Delivery address for ``Cart`` / ``Order``.
 public struct Address: Sendable, Equatable {
     public let postalCode: String?
     public let addressLine1: String?
@@ -163,8 +158,7 @@ public struct Address: Sendable, Equatable {
     }
 }
 
-/// Cart payload for `cartSync`. A cart without items is still sent: emptying a
-/// cart is signal (the web tag suppresses it).
+/// Unlike on web, an empty cart is still sent: emptying a cart is signal.
 public struct Cart: Sendable, Equatable {
     public let cartId: String
     public let subtotal: Double
@@ -202,7 +196,6 @@ public struct Cart: Sendable, Equatable {
     }
 }
 
-/// Checkout progress payload for `checkoutStep`.
 public struct Checkout: Sendable, Equatable {
     public let cartId: String
     public let step: Int
@@ -217,7 +210,6 @@ public struct Checkout: Sendable, Equatable {
     }
 }
 
-/// A payment method entry on an ``Order``.
 public struct PaymentMethod: Sendable, Equatable {
     public let type: String
     public let amount: Double
@@ -228,7 +220,6 @@ public struct PaymentMethod: Sendable, Equatable {
     }
 }
 
-/// A delivery method entry on an ``Order``.
 public struct DeliveryMethod: Sendable, Equatable {
     public let type: String
     public let amount: Double
@@ -239,7 +230,6 @@ public struct DeliveryMethod: Sendable, Equatable {
     }
 }
 
-/// Order payload for `orderComplete`.
 public struct Order: Sendable, Equatable {
     public let cartId: String
     public let orderId: String?

@@ -24,14 +24,13 @@ class FlowbizCoreUtmTest {
         appId: String = "77777",
     ) = CoreHarness(temp.newFolder(), FlowbizConfig(appId = appId, baseUri = "https://store.com"), store, clock)
 
-    /** MessageBuilder's journey cart-recovery link (raw `|`) for cart-abc-001 of tenant 77777. */
     private val journey = FixtureSupport.utmExtractVectors().getValue("messagebuilder_journey_cart_recovery")
     private val link = journey.url!!
     private val utm = journey.expected!!
 
     private var probe = 0
 
-    /** Tracks an event dedup never suppresses and returns its `context.utm`. */
+    // A fresh coupon per probe: dedup would suppress a repeat.
     private fun CoreHarness.trackProbe(): String? {
         core.track(Event.CartSetCoupon(cartId = "c-1", coupon = "probe-${probe++}"))
         return lastEntry().utm()
@@ -50,7 +49,6 @@ class FlowbizCoreUtmTest {
         return Flowbiz.handlePush(mapOf("flowbiz" to marker.toString()))!!
     }
 
-    /** Installs [core] as the facade's singleton, which `initialize` cannot do without a Context. */
     private fun withInstalledCore(core: FlowbizCore, block: () -> Unit) {
         val field = Flowbiz::class.java.getDeclaredField("core").apply { isAccessible = true }
         check(field.get(null) == null) { "a core is already installed" }
@@ -112,7 +110,6 @@ class FlowbizCoreUtmTest {
         }
     }
 
-    /** A url step is a forwarded link, a null one a foreground edge; a fresh core then reads the store. */
     @Test
     fun everySequenceVectorHoldsThroughTheCoreAndARestart() {
         for ((name, steps) in FixtureSupport.utmSequenceVectors()) {
@@ -153,7 +150,7 @@ class FlowbizCoreUtmTest {
         val lastVisit = h.clock.wall
 
         h.clock.advance(10 * DAY_MS)
-        val restarted = harness(h.store, h.clock) // a push or background wake: no foreground
+        val restarted = harness(h.store, h.clock)
         assertEquals(utm, restarted.trackProbe())
         assertEquals(lastVisit + 30 * DAY_MS, restarted.expiry())
 
@@ -195,7 +192,7 @@ class FlowbizCoreUtmTest {
 
     @Test
     fun captureDoesNotDependOnTheRecoveryDecode() {
-        val thirdParty = FixtureSupport.utmExtractVectors().getValue("third_party_campaign") // no _mb_cr_
+        val thirdParty = FixtureSupport.utmExtractVectors().getValue("third_party_campaign")
         val cases = listOf(
             Triple("77777", thirdParty.url!!, thirdParty.expected),
             Triple("77777", link.replace("utm_source=flowbiz", "utm_source=google"), utm.replace("flowbiz", "google")),
@@ -208,7 +205,6 @@ class FlowbizCoreUtmTest {
         }
     }
 
-    /** Through the public entry: the installed core is what captures. */
     @Test
     fun handlePushOpenedCapturesTheRawDeepLinkAndHandlePushNothing() {
         val h = harness()

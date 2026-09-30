@@ -1,5 +1,3 @@
-// Strings are compared as UTF-8 bytes: Swift `==` is canonical equivalence,
-// so `"=\u{338}"` would equal `"≠"`.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -26,6 +24,7 @@ import JavaScriptCore
         return (try #require(vector["url"] as? String), try #require(vector["expected"] as? String))
     }
 
+    // Bytes, not ==: Swift's == is canonical equivalence, so "=\u{338}" would equal "≠".
     static func bytes(_ value: String?) -> [UInt8]? { value.map { Array($0.utf8) } }
 
     @Test func everyExtractVectorRendersTheWebContextUtm() throws {
@@ -37,10 +36,6 @@ import JavaScriptCore
     }
 
     #if canImport(JavaScriptCore)
-    /// Oracle: JavaScriptCore's (Safari's) `decodeURIComponent`, null where it
-    /// throws and the port keeps the raw input. Every 1- and 2-escape
-    /// sequence, then seeded mixes of escapes and raw characters, which are
-    /// also fed to `extract` as hostile links.
     @Test func decoderMatchesAnOracleAndHostileLinksExtractOnlyAllowlistedUtms() throws {
         let context = try #require(JSContext())
         context.evaluateScript("function d(s) { try { return decodeURIComponent(s) } catch (e) { return null } }")

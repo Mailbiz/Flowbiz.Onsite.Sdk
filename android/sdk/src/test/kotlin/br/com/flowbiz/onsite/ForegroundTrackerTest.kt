@@ -3,7 +3,6 @@ package br.com.flowbiz.onsite
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Through the JVM seams: no real `Activity` exists on a plain JVM. */
 class ForegroundTrackerTest {
 
     private class Edges {
@@ -55,9 +54,9 @@ class ForegroundTrackerTest {
     fun activityToActivityNavigationOverlapFiresNoEdges() {
         val edges = Edges()
         val tracker = edges.tracker()
-        tracker.activityStarted() // A
-        tracker.activityStarted() // B starts before A stops (normal navigation overlap)
-        tracker.activityStopped(isChangingConfigurations = false) // A stops, count stays ≥ 1
+        tracker.activityStarted()
+        tracker.activityStarted()
+        tracker.activityStopped(isChangingConfigurations = false)
         assertEquals(1, edges.foreground)
         assertEquals(0, edges.background)
     }
@@ -66,11 +65,10 @@ class ForegroundTrackerTest {
     fun rotationWithSecondActivityStartedFiresNoEdges() {
         val edges = Edges()
         val tracker = edges.tracker()
-        tracker.activityStarted() // A
-        tracker.activityStarted() // B (second started activity, e.g. multi-window)
-        // A rotates while B stays started.
+        tracker.activityStarted()
+        tracker.activityStarted()
         tracker.activityStopped(isChangingConfigurations = true)
-        tracker.activityStarted() // A's replacement
+        tracker.activityStarted()
         assertEquals(1, edges.foreground)
         assertEquals(0, edges.background)
         tracker.activityStopped(isChangingConfigurations = false)

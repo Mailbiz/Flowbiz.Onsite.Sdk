@@ -4,12 +4,7 @@ import static org.junit.Assert.assertNull;
 
 import org.junit.Test;
 
-/**
- * Java on purpose: a non-null Kotlin parameter gets an
- * {@code Intrinsics.checkNotNullParameter} preamble that throws an NPE
- * <em>before</em> the facade's catch-all. Plain-JVM safe: the null paths
- * return before any Android API and never install the singleton core.
- */
+// Java on purpose: it keeps compiling if a parameter turns non-null, then trips Kotlin's NPE preamble.
 public class FlowbizJavaNullSafetyTest {
 
     @Test

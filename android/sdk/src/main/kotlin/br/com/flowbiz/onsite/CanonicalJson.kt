@@ -5,35 +5,12 @@ import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.abs
 
-/**
- * Canonical JSON writer for the wire payload strings. org.json's own
- * `toString()` diverges from the web tracker's `JSON.stringify`:
- * `1.0E7`-style exponents for large doubles (JVM), `-0` for negative zero,
- * `\u2014`-style escaping of U+2000–U+20FF characters, and `<\/` slash
- * escaping. This writer emits the canonical cross-platform form instead:
- *
- * - **numbers**: the ECMAScript `Number::toString` layout (`19.0` → `19`,
- *   `10000000` not `1.0E7`, `1e+21`, `-0.0` → `0`). On JDK ≤ 18 (Android
- *   included) `Double.toString` is *not* always shortest-round-trip
- *   (JDK-4511638), so a few extreme magnitudes carry extra digits vs
- *   JS/Swift (`1e23` → `9.999999999999999e+22`); both parse back to the
- *   same double, and prices/quantities are unaffected. Pinned by
- *   `CanonicalJsonNumberTest`.
- * - **objects**: keys sorted by UTF-16 code units (deterministic output;
- *   matches Swift's UTF-16 sort and JS `Array.prototype.sort`)
- *
- * Mirrored by the Swift `CanonicalJSON`; both are pinned byte-for-byte by
- * `expected.data_canonical` in `shared/fixtures/`. **Throws** on non-finite
- * numbers, like the Swift serializer.
- */
+// Not JSONObject.toString(): it diverges from JSON.stringify (`1.0E7`, `-0`, `\u20xx` escapes, `<\/`).
 internal object CanonicalJson {
 
     fun render(value: Any?): String = buildString { appendValue(this, value) }
 
-    /**
-     * `JSON.stringify` of a flat string map, keys in iteration order rather
-     * than sorted: the web's `context.utm` key order is part of its string.
-     */
+    // Keys in insertion order, not sorted: the web's `context.utm` key order is part of its string.
     fun renderStringPairs(pairs: Map<String, String>): String = buildString {
         append('{')
         pairs.entries.forEachIndexed { index, (key, value) ->
@@ -51,8 +28,7 @@ internal object CanonicalJson {
             value is String -> appendString(out, value)
             value is Boolean -> out.append(if (value) "true" else "false")
             value is Int || value is Long -> out.append(value.toString())
-            // Double/Float and org.json's parsed BigDecimals: all treated as
-            // doubles, matching iOS (`JSONValue.number(Double)`) and JS.
+            // Every other Number, org.json's BigDecimal included, goes through double, as in JS and iOS.
             value is Number -> out.append(numberToJson(value.toDouble()))
             value is JSONObject -> {
                 out.append('{')
@@ -80,11 +56,6 @@ internal object CanonicalJson {
         }
     }
 
-    /**
-     * Minimal escaping, matching `JSON.stringify`: `"` and `\` plus control
-     * characters (and lone surrogates, per well-formed `JSON.stringify`);
-     * everything else — slashes, unicode — is emitted raw.
-     */
     private fun appendString(out: StringBuilder, value: String) {
         out.append('"')
         var i = 0
@@ -111,15 +82,13 @@ internal object CanonicalJson {
         out.append('"')
     }
 
-    /** ECMAScript `Number::toString(10)` of a finite double, built from `Double.toString`'s digits. */
+    // ECMAScript `Number::toString(10)`, rebuilt from `Double.toString`'s digits.
     fun numberToJson(value: Double): String {
         require(!value.isNaN() && !value.isInfinite()) {
             "JSON does not allow non-finite numbers ($value)"
         }
-        if (value == 0.0) return "0" // covers -0.0 → "0" (JSON.stringify(-0))
+        if (value == 0.0) return "0" // also -0.0, like JSON.stringify(-0)
 
-        // Parse the shortest representation, e.g. "19.99", "19.0", "1.0E21",
-        // "1.0E-7", into sign + digit string + decimal exponent.
         var repr = value.toString()
         var sign = ""
         if (repr.startsWith("-")) {
@@ -135,7 +104,6 @@ internal object CanonicalJson {
         }
         val dotIndex = mantissa.indexOf('.')
         val rawDigits = if (dotIndex >= 0) mantissa.removeRange(dotIndex, dotIndex + 1) else mantissa
-        // `n` per ECMA-262 Number::toString: value == 0.digits × 10^n.
         var n = (if (dotIndex >= 0) dotIndex else mantissa.length) + exp10
         var start = 0
         while (start < rawDigits.length - 1 && rawDigits[start] == '0') {

@@ -1,8 +1,6 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Cart screen: quantity updates, coupon, postal code, explicit sync and
-/// the checkout entry point.
 struct CartView: View {
 
     @EnvironmentObject var store: DemoStore
@@ -22,7 +20,6 @@ struct CartView: View {
                             get: { line.quantity },
                             set: { newValue in
                                 store.setQuantity(sku: line.product.sku, quantity: newValue)
-                                // Quantity 0 removes the line store-side.
                                 Flowbiz.track(.cartItemUpdate(
                                     cartId: DemoStore.cartId,
                                     productId: line.product.productId,
@@ -59,7 +56,7 @@ struct CartView: View {
             }
             Section {
                 Button("Sincronizar carrinho (cart.sync)") {
-                    // An empty cart is still sent: emptying it is signal.
+                    // Sync an empty cart too: emptying it is a signal.
                     Flowbiz.track(.cartSync(cart: store.cart()))
                 }
                 NavigationLink("Finalizar compra", destination: CheckoutView())

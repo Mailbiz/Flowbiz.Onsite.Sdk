@@ -1,11 +1,3 @@
-// Regenerates vectors.json by running the web tag's own code (Node >= 22.18):
-//
-//   node shared/utm-links/generate.mts [path/to/Mailbiz.Onsite.Tag]
-//
-// `Url` is imported from onsite-core's url.ts; `setUtmNavigationContext` is read
-// from tracker-core-invoker.ts and run against an in-memory store instead of the
-// 30-day StorageFactory. `expected` is the string web passes to `setUtmData`
-// (context.utm), or null when web never calls it.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -40,7 +32,6 @@ const store = {
 const g = globalThis as any;
 g.window = { location: { href: '' } };
 
-/** One web page load on `href` (null = a load with no query); returns context.utm or null. */
 function evaluate(href: string | null): string | null {
   g.window.location.href = href ?? 'https://store.com/';
   sent = null;
@@ -54,15 +45,13 @@ const pipesEncoded = (link: string) => link.replaceAll('|', '%7C');
 const journeyLink = (channel: string) => `https://store.com/carrinho?_mb_cr_=${MB_CR}&utm_journey=16&utm_journey_channel=${channel}&utm_source=flowbiz&utm_medium=${channel}&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1`;
 const flowLink = (channel: string) => `https://store.com/carrinho?_mb_cr_=${MB_CR}&utm_flow_params=${FLOW}&utm_journey=123&utm_journey_channel=${channel}&utm_source=flowbiz&utm_medium=${channel}&utm_campaign=jornadas|flow|recuperacao-de-carrinho|${channel}-4&utm_journey_type=4`;
 
-// [name, link] — each evaluated as the first page load of a fresh store.
 const extract: Array<[string, string]> = [
   // Links as MessageBuilder builds them (HtmlParseHelper.GetUtmFilledLink: raw, unencoded values).
   ['messagebuilder_flow_cart_recovery', flowLink('email')],
   ['messagebuilder_journey_cart_recovery', journeyLink('email')],
   ['messagebuilder_whatsapp_cta', journeyLink('whatsapp')],
   ['messagebuilder_legacy_tenant_source', `https://store.com/carrinho?utm_journey=7&utm_journey_channel=email&utm_source=MailBiz&utm_medium=Email_I&utm_campaign=jornadas|cart|volte&utm_journey_type=1&_mb_cr_=${MB_CR}`],
-  // The same links as the app receives them after the collector's 302: the query is kept
-  // byte for byte and the browser hands each '|' over as %7C.
+  // As the app receives them after the collector's 302: query kept byte for byte, each | as %7C.
   ['delivered_email_journey', pipesEncoded(journeyLink('email'))],
   ['delivered_whatsapp_journey', pipesEncoded(journeyLink('whatsapp'))],
   ['delivered_email_flow', pipesEncoded(flowLink('email'))],
@@ -77,12 +66,10 @@ const extract: Array<[string, string]> = [
   ['universal_link_with_fragment', `https://store.com/carrinho?utm_source=flowbiz&utm_medium=email&_mb_cr_=${MB_CR}#topo`],
   ['allowlist_order_not_query_order', 'https://store.com/?utm_journey_type=1&utm_campaign=c&utm_medium=m&utm_source=s'],
   ['no_host_slash', 'https://store.com?utm_source=a'],
-  // No UTMs → web never calls setUtmData.
   ['no_query', 'https://store.com/carrinho'],
   ['empty_query', 'https://store.com/?'],
   ['no_allowlisted_keys', 'https://store.com/?foo=1&bar=2'],
   ['non_allowlisted_utms_dropped', 'https://store.com/?utm_term=t&utm_content=c&gclid=g&utm_flow_params='],
-  // Query extent: text between the first and second '?', cut at '/#' then '#'.
   ['hash_route_query_is_read', 'https://store.com/#/cart?utm_source=x'],
   ['query_before_hash_route_wins', 'https://store.com/?a=1#/p?utm_source=x'],
   ['second_question_mark_truncates', 'https://store.com/?utm_source=a?utm_medium=b'],
@@ -90,7 +77,6 @@ const extract: Array<[string, string]> = [
   ['fragment_cut', 'https://store.com/?utm_source=a#utm_medium=b'],
   ['empty_segments_skipped', 'https://store.com/?&&utm_source=a&&'],
   ['semicolon_is_not_a_separator', 'https://store.com/?utm_source=a;utm_medium=b'],
-  // Key/value split: split('='), value is pair[1] only; keys raw and case-sensitive.
   ['value_truncated_at_second_equals', 'https://store.com/?utm_campaign=a=b'],
   ['missing_equals_is_undefined', 'https://store.com/?utm_source'],
   ['flow_params_missing_equals', 'https://store.com/?utm_flow_params'],
@@ -99,7 +85,6 @@ const extract: Array<[string, string]> = [
   ['keys_case_sensitive_and_not_decoded', 'https://store.com/?UTM_SOURCE=a&utm%5Fsource=b'],
   ['last_duplicate_wins', 'https://store.com/?utm_source=a&utm_source=b'],
   ['empty_duplicate_erases', 'https://store.com/?utm_source=a&utm_source=&utm_medium=m'],
-  // Value decoding: decodeURIComponent, raw value on failure, '+' untouched.
   ['plus_is_not_space', 'https://store.com/?utm_campaign=a+b%20c'],
   ['malformed_percent_kept_raw', 'https://store.com/?utm_source=%C3&utm_medium=100%'],
   ['invalid_hex_kept_raw', 'https://store.com/?utm_source=%zz'],
@@ -118,12 +103,10 @@ const extract: Array<[string, string]> = [
   ['utf8_mixed_raw_and_escape_fail_whole_value', 'https://store.com/?utm_campaign=ok%20then%C3'],
   ['combining_mark_after_separators', 'https://store.com/?utm_source=\u0338a&\u0338utm_medium=b&utm_campaign=c#\u0338'],
   ['combining_mark_after_question_mark', 'https://store.com/?\u0338&utm_source=a'],
-  // Escaping of the inner JSON (JSON.stringify).
   ['nul_char', 'https://store.com/?utm_source=%00'],
   ['control_chars_lowercase_hex', 'https://store.com/?utm_source=%1F%7F%1B'],
   ['quotes_backslash_newline_tab', 'https://store.com/?utm_campaign=a/b%20%22%C3%A7%22%0A%09%5C&utm_source=x'],
   ['line_separators_raw', 'https://store.com/?utm_campaign=%E2%80%A8%E2%80%A9'],
-  // Piped utm_flow_params → utm_step_id | utm_journey_version | utm_journey_instance.
   ['flow_params_encoded_pipes', 'https://store.com/?utm_flow_params=AE-1%7C3%7Cinst-9'],
   ['flow_params_extra_segments_ignored', 'https://store.com/?utm_flow_params=A|B|C|D'],
   ['flow_params_fewer_segments', 'https://store.com/?utm_flow_params=A|1'],
@@ -137,7 +120,6 @@ const extract: Array<[string, string]> = [
   ['flow_params_empty_value', 'https://store.com/?utm_flow_params='],
 ];
 
-// [name, steps] — one store, page loads in order; null = a load with no link.
 const sequences: Array<[string, Array<string | null>]> = [
   ['merge_per_key_across_links', [
     'https://store.com/',
@@ -181,7 +163,6 @@ const out = {
   }),
 };
 
-// One vector per line.
 const j = JSON.stringify;
 writeFileSync(resolve(here, 'vectors.json'), [
   `{"source": ${j(out.source)},`,

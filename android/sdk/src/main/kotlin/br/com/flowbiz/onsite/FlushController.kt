@@ -2,18 +2,6 @@ package br.com.flowbiz.onsite
 
 import org.json.JSONObject
 
-/**
- * Drains the [EventQueue] through the [HttpSender] in queue order, in
- * batches of up to [MAX_BATCH_SIZE]. A 413 splits the batch in half,
- * recursively; a single still-rejected entry is poison and dropped. A 4xx
- * verdict applies to the whole POST, so it is bisected the same way: only
- * the poison entries are dropped, not the innocent ones batched with them.
- * A retriable error stops the drain (order preserved) and schedules a retry.
- *
- * Backoff doubles from 1 s to a 60 s cap; any [requestFlush] resets it and
- * drains now, scheduled retries do not. Drains run on the serial
- * [TaskScheduler], and re-entrant requests coalesce into one follow-up pass.
- */
 internal class FlushController(
     private val queue: EventQueue,
     private val sender: HttpSender,
@@ -23,7 +11,6 @@ internal class FlushController(
     private val isActive: () -> Boolean = { true },
 ) {
 
-    /** Carried for debug logging only. */
     enum class FlushReason { EVENT_TRACKED, APP_FOREGROUND, NETWORK_RESTORED, EXPLICIT }
 
     private enum class Outcome { CONTINUE, STOP_AND_RETRY }
@@ -34,7 +21,6 @@ internal class FlushController(
     private var backoffMillis = INITIAL_BACKOFF_MS
     private var retryHandle: ScheduledHandle? = null
 
-    /** Resets the backoff, cancels a pending retry and drains now. Any thread; never throws. */
     fun requestFlush(reason: FlushReason) {
         try {
             synchronized(lock) {
@@ -49,14 +35,13 @@ internal class FlushController(
         }
     }
 
-    /** Runs on the serial scheduler thread only. */
     private fun drain() {
-        // Also ends a backoff retry scheduled before a disable.
         if (!isActive()) {
             SdkLog.debug("drain skipped: SDK disabled")
             return
         }
         synchronized(lock) {
+            // Re-entrant with an inline executor (a trigger mid-drain): coalesce into one follow-up pass.
             if (draining) {
                 drainAgain = true
                 return
@@ -84,10 +69,6 @@ internal class FlushController(
         }
     }
 
-    /**
-     * Sends the [count] oldest queued entries as one request, bisecting on
-     * 413/permanent rejection. Recursion depth ≤ log2(batch) ≈ 6.
-     */
     private fun drainPrefix(count: Int): Outcome {
         val entries = queue.peek(count)
         if (entries.isEmpty()) return Outcome.CONTINUE
@@ -99,6 +80,7 @@ internal class FlushController(
 
             SendResult.RETRIABLE_ERROR -> Outcome.STOP_AND_RETRY
 
+            // The verdict covers the whole POST: bisect so only the poison entry is dropped.
             SendResult.PAYLOAD_TOO_LARGE, SendResult.PERMANENT_ERROR -> {
                 if (entries.size == 1) {
                     SdkLog.debug("dropping poison event (rejected by collector)")
@@ -131,11 +113,7 @@ internal class FlushController(
         }
     }
 
-    /**
-     * Restamps `timings.sent_at` on every attempt, so a retried event's
-     * `created_at` → `sent_at` skew shows its real offline latency. An
-     * unparseable entry is sent verbatim rather than dropped.
-     */
+    // sent_at is restamped per attempt, so created_at → sent_at shows a retried event's real latency.
     private fun buildBody(entries: List<String>): String {
         val sentAt = EnvelopeBuilder.isoMillis(clock.wallMillis())
         return entries.joinToString(prefix = "{\"data\":[", separator = ",", postfix = "]}") { line ->
@@ -153,7 +131,7 @@ internal class FlushController(
     }
 
     companion object {
-        /** Keeps a request well under the collector's 3 MB cap. */
+        // Keeps a request well under the collector's 3 MB cap.
         const val MAX_BATCH_SIZE = 50
 
         const val INITIAL_BACKOFF_MS = 1_000L

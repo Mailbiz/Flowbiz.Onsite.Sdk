@@ -2,10 +2,6 @@ package br.com.flowbiz.onsite
 
 import org.json.JSONArray
 
-/**
- * The captured UTMs as `[[key, value], …]` (an array: their order is part of
- * `context.utm`), kept until 30 days after the last [save].
- */
 internal class UtmStore(
     private val store: KeyValueStore,
     private val clock: Clock,
@@ -21,6 +17,7 @@ internal class UtmStore(
     }
 
     fun save(utms: Map<String, String>) {
+        // Rows, not an object: org.json objects lose key order, which is part of `context.utm`.
         val rows = JSONArray()
         for ((key, value) in utms) rows.put(JSONArray().put(key).put(value))
         store.putString(StorageKeys.UTM_DATA, CanonicalJson.render(rows))

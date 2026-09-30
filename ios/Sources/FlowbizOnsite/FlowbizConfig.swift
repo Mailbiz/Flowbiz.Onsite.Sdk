@@ -1,37 +1,28 @@
 import Foundation
 
-/// Configuration for `Flowbiz.initialize`. Invalid values never throw: a
-/// blank `appId` makes initialize a no-op, and other invalid values are
-/// replaced or clamped, with a debug warning.
+/// Invalid values never throw: a blank `appId` makes initialize a no-op, others are replaced or clamped.
 public struct FlowbizConfig: Sendable, Equatable {
 
     public static let defaultCollectorUrl = "https://collector.mailbiz.one"
 
     static let defaultHeartbeatInterval: TimeInterval = 60
     static let minHeartbeatInterval: TimeInterval = 15
-    /// Defensive ceiling — keeps millisecond conversion overflow-proof.
+    // Keeps the Int64 millisecond conversion from overflowing.
     static let maxHeartbeatInterval: TimeInterval = 24 * 60 * 60
 
-    /// Tenant ID, same value as the web `app_id`. Required, non-blank.
+    /// Same value as the web tag's `app_id`.
     public let appId: String
 
-    /// Store origin (`https://store.com`), same value as the web `baseuri`.
-    /// Required; prepended to path-only URLs and sent as `context.baseuri`.
-    /// An https origin without path, query or fragment; `""` when invalid.
+    /// The store's https origin, as the web tag's `baseuri`; path-only URLs are resolved against it.
     public let baseUri: String
 
-    /// Full collector base URL; must be HTTPS, else the default is used.
     public let collectorUrl: String
-
-    /// Verbose logging; never prints PII.
     public let debug: Bool
 
-    /// `page.ping` cadence in seconds; clamped to 15 s...24 h.
+    /// `page.ping` cadence, clamped to 15 s…24 h.
     public let heartbeatInterval: TimeInterval
 
-    /// Absolute https URL the backend targets with cart-recovery links
-    /// (`context.recoveryUrl`, web `setRecoveryUrl`). Must be on a domain
-    /// the app claims via Universal Links. Optional; nil when invalid.
+    /// Where cart-recovery links point (web `setRecoveryUrl`); an https URL the app claims via Universal Links.
     public let recoveryUrl: String?
 
     public init(
@@ -99,8 +90,7 @@ enum ConfigSanitizer {
         )
     }
 
-    /// Requires a host: `https://` alone parses, on both platforms. As strict
-    /// as the Android `ConfigSanitizer`.
+    // The host check matters: `https://` alone parses.
     static func isValidCollectorUrl(_ url: String) -> Bool {
         guard let parsed = URL(string: url),
               parsed.scheme?.lowercased() == "https",

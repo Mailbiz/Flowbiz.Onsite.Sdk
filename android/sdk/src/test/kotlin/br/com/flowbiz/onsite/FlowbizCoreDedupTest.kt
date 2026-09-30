@@ -27,15 +27,14 @@ class FlowbizCoreDedupTest {
     fun identicalPayloadAfterWindowSendsAgain() {
         val h = harness()
         h.core.track(Event.PageView("home"))
-        h.clock.advance(DedupStore.WINDOW_MS) // boundary: exactly 20 min → expired
+        h.clock.advance(DedupStore.WINDOW_MS)
         h.core.track(Event.PageView("home"))
         assertEquals(2, h.sentEntries().size)
     }
 
     @Test
     fun renewOnDuplicateSemanticsPinned() {
-        // Web EventsState parity: a suppressed duplicate renews the window, so
-        // the t=30 duplicate is still suppressed (15 min after the last one).
+        // t=30 is past a fixed 20-min window from the send but inside the one the t=15 duplicate renewed.
         val h = harness()
         h.core.track(Event.PageView("home"))
         h.clock.advance(15 * MINUTE_MS)
@@ -68,7 +67,6 @@ class FlowbizCoreDedupTest {
 
     @Test
     fun emptyCartSyncIsNeverSpeciallySuppressed() {
-        // Emptying the cart is a signal: no empty-cart suppression.
         val emptyCart = Event.CartSync(
             Cart(cartId = "c1", subtotal = 0.0, total = 0.0, freight = 0.0, tax = 0.0, discounts = 0.0)
         )
@@ -118,7 +116,6 @@ class FlowbizCoreDedupTest {
 
     @Test
     fun suppressedDuplicateStillTouchesSession() {
-        // Dedup drops the wire event, but the user activity is real.
         val h = harness()
         h.core.track(Event.PageView("home"))
         val first = h.lastEntry().getJSONObject("identity")
@@ -126,7 +123,7 @@ class FlowbizCoreDedupTest {
             h.clock.advance(15 * MINUTE_MS)
             h.core.track(Event.PageView("home"))
         }
-        h.clock.advance(20 * MINUTE_MS) // dedup expired; 20 < 30 session idle
+        h.clock.advance(20 * MINUTE_MS)
         h.core.track(Event.PageView("home"))
         val last = h.lastEntry().getJSONObject("identity")
         assertTrue(h.sentEntries().size == 2)

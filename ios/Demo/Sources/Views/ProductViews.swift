@@ -1,7 +1,6 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Product list — the store's home screen.
 struct ProductListView: View {
 
     @EnvironmentObject var store: DemoStore
@@ -42,7 +41,6 @@ struct ProductListView: View {
     }
 }
 
-/// Product detail — tracks `product.view` on open, `cart.add` on add.
 struct ProductDetailView: View {
 
     @EnvironmentObject var store: DemoStore
@@ -60,7 +58,7 @@ struct ProductDetailView: View {
             Section {
                 Button("Adicionar ao carrinho") {
                     store.add(product)
-                    // cart.add carries only the added line, cart.sync the whole cart.
+                    // cart.add carries only the added line; cart.sync then sends the whole cart.
                     Flowbiz.track(.addToCart(products: [store.cartItem(product, quantity: 1)]))
                     Flowbiz.track(.cartSync(cart: store.cart()))
                 }

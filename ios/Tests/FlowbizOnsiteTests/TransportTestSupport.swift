@@ -1,9 +1,6 @@
 import Foundation
 @testable import FlowbizOnsite
 
-/// Manually-driven `TaskScheduler`: `execute` runs inline, delayed/repeating
-/// tasks are recorded for the test to fire explicitly. `allScheduleDelays`
-/// is the backoff-sequence probe.
 final class FakeTaskScheduler: TaskScheduler, @unchecked Sendable {
 
     final class FakeHandle: ScheduledHandle, @unchecked Sendable {
@@ -23,7 +20,6 @@ final class FakeTaskScheduler: TaskScheduler, @unchecked Sendable {
 
     var scheduled: [FakeHandle] = []
 
-    /// Every `schedule()` delay in call order, including later-cancelled ones.
     var allScheduleDelays: [Int64] {
         scheduled.filter { !$0.repeating }.map(\.delayMillis)
     }
@@ -44,12 +40,10 @@ final class FakeTaskScheduler: TaskScheduler, @unchecked Sendable {
         return handle
     }
 
-    /// Fires the most recently scheduled, still-pending one-shot task.
     func runLastScheduled() {
         scheduled.last { !$0.repeating && !$0.cancelled }!.task()
     }
 
-    /// The live repeating task (heartbeat), or nil.
     func activeRepeating() -> FakeHandle? {
         scheduled.last { $0.repeating && !$0.cancelled }
     }
@@ -60,9 +54,6 @@ final class FakeTaskScheduler: TaskScheduler, @unchecked Sendable {
     }
 }
 
-/// Scripted `HttpSender`: captures every body, answers from `results` (then
-/// `defaultResult`), or via `resultFor` when set. `maxDepth` detects
-/// nested/concurrent sends; `onSend` lets tests trigger re-entrancy.
 final class FakeHttpSender: HttpSender, @unchecked Sendable {
 
     var bodies: [String] = []
@@ -85,8 +76,6 @@ final class FakeHttpSender: HttpSender, @unchecked Sendable {
     }
 }
 
-/// Fresh temp directory per test; caller never cleans up (the OS temp dir is
-/// reaped by the system, and tests must not fail on cleanup races).
 func temporaryQueueFile() -> URL {
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("flowbiz-tests-\(UUID().uuidString)", isDirectory: true)

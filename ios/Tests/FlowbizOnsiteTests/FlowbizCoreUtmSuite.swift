@@ -1,5 +1,3 @@
-// Campaign UTMs through the core, as the app drives it: links and push taps
-// in, the web's exact `context.utm` string out, with its 30-day expiry.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -19,7 +17,7 @@ import Testing
         CoreHarness(config: FlowbizConfig(appId: appId, baseUri: "https://store.com"), store: store, clock: clock)
     }
 
-    /// Tracks a payload never sent before (so never deduped); its `context.utm`.
+    // A new coupon per probe: dedup would suppress a repeated payload.
     private func trackProbe(_ h: CoreHarness) throws -> String? {
         probe += 1
         h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "probe-\(probe)"))
@@ -83,7 +81,6 @@ import Testing
         #expect(utm(entry) == journey.expected)
     }
 
-    /// A url step is a link, a null one a foreground edge.
     @Test func everySequenceVectorHoldsThroughTheCoreAndARestart() throws {
         for sequence in try #require(try UtmLinkParserSuite.vectors()["sequences"] as? [[String: Any]]) {
             let name = sequence["name"] as? String ?? "?"
@@ -179,7 +176,6 @@ import Testing
         }
     }
 
-    /// On iOS 17+ a `URL` of this deep link re-encodes its `%20` to `%2520`.
     @Test func handlePushOpenedCapturesTheRawDeepLinkAndHandlePushNothing() throws {
         let link = journey.url.replacingOccurrences(of: "carrinho-abandonado", with: "carrinho%20abandonado")
         try #require(link != journey.url)

@@ -3,13 +3,6 @@ package br.com.flowbiz.onsite
 import android.content.Context
 import android.content.SharedPreferences
 
-/**
- * [KeyValueStore] over an appId-scoped [SharedPreferences] file, so distinct
- * tenants in one host app never collide and the host app's default
- * preferences are never touched. Every access is wrapped: a value persisted
- * with a different type (`ClassCastException`) degrades to `null`. Writes
- * use [SharedPreferences.Editor.apply], which never blocks the caller.
- */
 internal class SharedPreferencesStore(context: Context, appId: String) : KeyValueStore {
 
     private val prefs: SharedPreferences = context.applicationContext

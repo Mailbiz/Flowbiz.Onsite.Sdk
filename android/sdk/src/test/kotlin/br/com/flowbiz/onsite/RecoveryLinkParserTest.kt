@@ -35,7 +35,7 @@ class RecoveryLinkParserTest {
 
     @Test
     fun plusTurnedIntoSpaceStillDecodes() {
-        val json = """{"t":"77777","u":"u","c":"c","its":[["1","P>>1","S"]]}"""   // '>' forces a '+' in base64
+        val json = """{"t":"77777","u":"u","c":"c","its":[["1","P>>1","S"]]}"""
         val b64 = Base64.getEncoder().encodeToString(json.toByteArray())
         assertTrue(b64.contains("+"))
         val link = "https://store.com/c?utm_source=flowbiz&_mb_cr_=" + b64.replace('+', ' ')
@@ -49,7 +49,6 @@ class RecoveryLinkParserTest {
         assertNull(RecoveryLinkParser.parse("?&&=&_mb_cr_&utm_source"))
     }
 
-    /** Seeded fuzz over the *decoded* hash JSON, not just the URL bytes. */
     @Test
     fun adversarialDecodedHashesNeverThrow() {
         val generator = SplitMix64(20260902L)
@@ -131,7 +130,6 @@ class RecoveryLinkParserTest {
     }
 }
 
-/** Tiny deterministic PRNG mirroring iOS's `SplitMix64` (`PushParserSuite.swift`). */
 private class SplitMix64(seed: Long) {
     private var state = seed.toULong()
 

@@ -79,7 +79,6 @@ class PushTokenPipelineTest {
         assertEquals(0, harness.sentEntries().count { it.getString("event") == "push.token.remove" })
     }
 
-    /** The token cell tracks the real registration even while disabled, so a later enable acts on it. */
     @Test
     fun disabledDropsEventsButStillPersistsAndClearsTheToken() {
         val harness = harness()
@@ -95,7 +94,6 @@ class PushTokenPipelineTest {
         assertFalse(harness.store.values.containsKey(StorageKeys.PUSH_TOKEN))
     }
 
-    /** After a removal the collector no longer associates the token, so the same one must re-sync. */
     @Test
     fun removeClearsTheSyncDedupAnchorSoTheSameTokenResyncs() {
         val harness = harness()
@@ -114,7 +112,6 @@ class PushTokenPipelineTest {
         assertEquals(2, harness.sentEntries().count { it.getString("event") == "push.token.sync" })
     }
 
-    /** Covers a token registered while disabled: persisted, but its sync was dropped. */
     @Test
     fun reEnableReEmitsSyncForTheStoredToken() {
         val harness = harness()

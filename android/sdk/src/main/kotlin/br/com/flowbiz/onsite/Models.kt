@@ -1,6 +1,5 @@
 package br.com.flowbiz.onsite
 
-/** User payload for `accountLogin` / `accountSync`. */
 data class User(
     val userId: String,
     val email: String,
@@ -10,7 +9,6 @@ data class User(
     val createdAt: String? = null,
 )
 
-/** A purchasable variant of a [Product]. */
 data class ProductVariant(
     val sku: String,
     val price: Double,
@@ -20,13 +18,11 @@ data class ProductVariant(
     val priceFrom: Double? = null,
     val stock: Int? = null,
     val available: Boolean? = null,
-    /** Free-form: keys ship as-is; values String, Number, Boolean, List, Map or null (dropped from maps). */
+    /** Keys ship as-is; values: String, Number, Boolean, List, Map or null (null map values are dropped). */
     val properties: Map<String, Any?>? = null,
-    /** Same rules as [properties]. */
     val recoveryProperties: Map<String, Any?>? = null,
 )
 
-/** Product payload for `productView`. */
 data class Product(
     val productId: String,
     val url: String? = null,
@@ -35,7 +31,6 @@ data class Product(
     val variants: List<ProductVariant>,
 )
 
-/** A line item inside a [Cart], `addToCart` or an [Order]. */
 data class CartItem(
     val productId: String,
     val sku: String,
@@ -47,13 +42,11 @@ data class CartItem(
     val brand: String? = null,
     val url: String? = null,
     val imageUrl: String? = null,
-    /** Free-form: keys ship as-is; values String, Number, Boolean, List, Map or null (dropped from maps). */
+    /** Keys ship as-is; values: String, Number, Boolean, List, Map or null (null map values are dropped). */
     val properties: Map<String, Any?>? = null,
-    /** Same rules as [properties]. */
     val recoveryProperties: Map<String, Any?>? = null,
 )
 
-/** Delivery address for [Cart] / [Order]. */
 data class Address(
     val postalCode: String? = null,
     val addressLine1: String? = null,
@@ -65,7 +58,7 @@ data class Address(
     val neighborhood: String? = null,
 )
 
-/** Cart payload for `cartSync`. Unlike on web, an empty cart is not suppressed: emptying a cart is signal. */
+/** Unlike on web, an empty cart is still sent: emptying a cart is signal. */
 data class Cart(
     val cartId: String,
     val subtotal: Double,
@@ -79,7 +72,6 @@ data class Cart(
     val deliveryAddress: Address? = null,
 )
 
-/** Checkout progress payload for `checkoutStep`. */
 data class Checkout(
     val cartId: String,
     val step: Int,
@@ -87,19 +79,16 @@ data class Checkout(
     val stepName: String,
 )
 
-/** A payment method entry on an [Order]. */
 data class PaymentMethod(
     val type: String,
     val amount: Double,
 )
 
-/** A delivery method entry on an [Order]. */
 data class DeliveryMethod(
     val type: String,
     val amount: Double,
 )
 
-/** Order payload for `orderComplete`. */
 data class Order(
     val cartId: String,
     val orderId: String? = null,

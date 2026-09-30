@@ -1,5 +1,3 @@
-// The Kotlin suite runs the same `shared/fixtures/`: if the two SDKs
-// disagree, the code is wrong, never the fixture.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -32,8 +30,6 @@ import Testing
                     failures.append("\(file.lastPathComponent): wire_event expected '\(expectedWireEvent)' but was '\(wireName)'")
                 }
 
-                // Serialize to the wire string, then parse it back — the wire
-                // string is what actually ships.
                 let wireString = try EventSerializer.dataJSONString(event, baseUri: baseUri)
                 guard let wireData = wireString.data(using: .utf8),
                       let produced = try JSONSerialization.jsonObject(with: wireData) as? [String: Any]
@@ -45,9 +41,6 @@ import Testing
                     failures.append("\(file.lastPathComponent): \(difference)")
                 }
 
-                // Byte-for-byte pin of the canonical wire string (sorted
-                // keys, JSON.stringify-compatible numbers and escaping) —
-                // any future number/escaping divergence fails here.
                 guard let canonical = expected["data_canonical"] as? String else {
                     failures.append("\(file.lastPathComponent): missing expected.data_canonical")
                     continue
@@ -87,7 +80,6 @@ import Testing
         }
     }
 
-    /// The serializer throws, as on Kotlin; `FlowbizCore` is the never-throw boundary.
     @Test func nonFiniteNumbersThrow() {
         for garbage in [Double.nan, .infinity, -.infinity] {
             let event = Event.cartSync(

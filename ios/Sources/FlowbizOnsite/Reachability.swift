@@ -2,14 +2,11 @@ import Foundation
 import Network
 
 protocol ReachabilityMonitor {
-    /// Idempotent; the callback may fire on the monitor queue.
     func start(onNetworkAvailable: @escaping @Sendable () -> Void)
 
     func stop()
 }
 
-/// Fires on transitions to satisfied, including the initial update when the
-/// network is already up: one extra, harmless flush.
 final class PathMonitorReachability: ReachabilityMonitor, @unchecked Sendable {
 
     private let queue: DispatchQueue

@@ -1,10 +1,6 @@
 package br.com.flowbiz.onsite
 
-/**
- * Port of the web tag's `Url.getQueryParameters` and the allowlist walk of
- * `setUtmNavigationContext`, quirks included; pinned by
- * `shared/utm-links/vectors.json`. Works on UTF-16 code units, like JS strings.
- */
+// Port of the web tag's `Url.getQueryParameters` + `setUtmNavigationContext`, quirks included (vectors.json).
 internal object UtmLinkParser {
 
     val ALLOWLIST = listOf(
@@ -29,7 +25,6 @@ internal object UtmLinkParser {
     private fun queryParameters(url: String): Map<String, String> {
         val query = url.split('?').getOrNull(1)?.substringBefore("/#")?.substringBefore('#') ?: return emptyMap()
         val params = HashMap<String, String>()
-        // Kotlin's split(Char) keeps empty parts, like JS split.
         for (pair in query.split('&')) {
             val parts = pair.split('=')
             val key = parts[0]
@@ -44,12 +39,7 @@ internal object UtmLinkParser {
         return params
     }
 
-    /**
-     * ECMA-262 `decodeURIComponent`, or [value] unchanged where it throws a
-     * `URIError`. Hand-rolled because `URLDecoder` turns `+` into a space and
-     * `Uri.decode` substitutes U+FFFD for bad UTF-8, where the web keeps the
-     * raw value.
-     */
+    // Hand-rolled: URLDecoder turns `+` into a space and Uri.decode swaps bad UTF-8 for U+FFFD.
     fun decodeURIComponentOrRaw(value: String): String {
         if ('%' !in value) return value
         val out = StringBuilder(value.length)
@@ -65,7 +55,7 @@ internal object UtmLinkParser {
                 in 0xC0..0xDF -> 2
                 in 0xE0..0xEF -> 3
                 in 0xF0..0xF7 -> 4
-                else -> return value // a continuation byte or no UTF-8 lead at all
+                else -> return value
             }
             var codePoint = if (size == 1) lead else lead and (0x7F shr size)
             for (k in 1 until size) {
@@ -79,7 +69,6 @@ internal object UtmLinkParser {
         return out.toString()
     }
 
-    /** Smallest code point per UTF-8 sequence length; below it is an overlong encoding. */
     private val MIN_CODE_POINT = intArrayOf(0, 0, 0x80, 0x800, 0x10000)
 
     private fun escapedByte(value: String, at: Int): Int? {

@@ -1,6 +1,5 @@
 import Foundation
 
-/// The persisted `Flowbiz.setEnabled` switch.
 final class EnabledState: @unchecked Sendable {
 
     private let store: any KeyValueStore

@@ -1,22 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-  Pending legal review before 1.0:
-  - NSPrivacyTracking is false: data goes only to the first-party Flowbiz
-    collector, is not linked with third-party data for advertising, and no
-    ATT tracking domains are contacted.
-  - Purposes are Analytics + App Functionality (cart state powers cart
-    recovery); confirm whether Developer's Advertising must be added for the
-    contact fields, given cart-recovery messaging.
-  - Every type is linked to identity: each envelope carries anonymous_id,
-    and user_id/email follow account events.
-  - Push tokens are not declared: Apple's FAQ generally exempts tokens used
-    only to deliver pushes.
-  - context.language, context.screen and timings.timezone are device
-    metadata, not a declared collection type.
-  - context.utm (kept 30 days in UserDefaults) rides with Analytics.
-  UserDefaults holds identity, session, opt-out and UTM state: reason CA92.1.
--->
+<!-- Pending legal review before 1.0. Every type is linked: each envelope carries anonymous_id. -->
 <plist version="1.0">
 <dict>
 	<key>NSPrivacyTracking</key>
@@ -34,9 +18,9 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Push tokens are not declared: Apple exempts tokens used only to deliver pushes. -->
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
-		<!-- accountLogin/accountSync: user.email -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
@@ -50,7 +34,6 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- accountLogin/accountSync: user.phone -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePhoneNumber</string>
@@ -64,7 +47,6 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- accountLogin/accountSync: user.name -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeName</string>
@@ -78,7 +60,6 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- cartSync/orderComplete/orderCancel: carts, orders, payment methods -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
@@ -92,7 +73,6 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- pageView/productView/cart.*/checkoutStep + page.ping heartbeat -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
@@ -106,8 +86,6 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- cartSync/orderComplete: delivery_address street/city/state/postal;
-		     cartSetPostalCode: data.postal_code -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePhysicalAddress</string>
@@ -121,7 +99,6 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- identity.user_id, set by account events -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeUserID</string>

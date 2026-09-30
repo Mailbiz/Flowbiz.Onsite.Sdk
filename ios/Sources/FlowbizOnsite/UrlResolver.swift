@@ -1,6 +1,5 @@
 import Foundation
 
-/// Resolves app-supplied URLs against `FlowbizConfig.baseUri`.
 enum UrlResolver {
 
     static func resolve(_ value: String?, baseUri: String?) -> String? {

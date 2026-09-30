@@ -1,7 +1,5 @@
 import Foundation
 
-/// The merged UTM set as `[key, value]` pairs (an array: the order is part of
-/// `context.utm`) with a 30-day wall-clock expiry, slid by every `save`.
 final class UtmStore: @unchecked Sendable {
 
     static let ttlMillis: Int64 = 30 * 24 * 60 * 60 * 1000
@@ -25,6 +23,7 @@ final class UtmStore: @unchecked Sendable {
         return rows.map { (key: $0[0], value: $0[1]) }
     }
 
+    // [key, value] rows, not an object: the order is part of context.utm.
     func save(_ pairs: UtmLinkParser.Pairs) throws {
         store.set(try CanonicalJSON.render(pairs.map { [$0.key, $0.value] }), forKey: StorageKeys.utmData)
         store.set(clock.wallMillis() &+ Self.ttlMillis, forKey: StorageKeys.utmExpiresAtWallMs)

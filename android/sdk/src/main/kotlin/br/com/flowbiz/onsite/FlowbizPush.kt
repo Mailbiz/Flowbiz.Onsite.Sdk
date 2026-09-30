@@ -3,27 +3,18 @@ package br.com.flowbiz.onsite
 import android.net.Uri
 import org.json.JSONObject
 
-/**
- * A decoded Flowbiz push, returned by [Flowbiz.handlePush]. [type] is
- * free-form, so new push kinds need no SDK update; unknown [version]s parse
- * best-effort.
- */
 class FlowbizPush internal constructor(
-    /** Contract version (`v`); absent/malformed defaults to 1. */
+    /** Contract version (`v`); 1 when absent or malformed. */
     val version: Int,
-    /** Free-form push kind, e.g. `"cart_recovery"`. Always non-empty. */
+    /** Free-form push kind; never empty. */
     val type: String,
     val title: String?,
     val body: String?,
-    /** `data` object of the decoded payload; empty when absent. */
     val data: Map<String, Any?>,
-    // Not a data class: this raw string stays internal, and [deepLink] is
-    // derived lazily so the type is constructible where `android.net.Uri`
-    // does not exist (JVM tests).
+    // A string, with deepLink derived: JVM tests construct pushes where android.net.Uri does not exist.
     internal val deepLinkString: String?,
 ) {
 
-    /** `deep_link` as a [Uri], or null when absent (`Uri.parse` validates nothing). */
     val deepLink: Uri?
         get() = try {
             deepLinkString?.let(Uri::parse)
@@ -31,20 +22,11 @@ class FlowbizPush internal constructor(
             null
         }
 
-    /**
-     * The cart-recovery payload of [deepLink], if it carries a decodable
-     * `_mb_cr_`. Pure: no UTM capture and no tenant check; on tap, call
-     * [Flowbiz.handlePushOpened] instead.
-     */
+    /** Pure decode (no UTM capture, no tenant check); on tap, call [Flowbiz.handlePushOpened] instead. */
     val recoveryPayload: RecoveryPayload?
         get() = RecoveryLinkParser.parse(deepLinkString)
 }
 
-/**
- * Decodes the `"flowbiz"` value: a JSON-encoded *string*, since FCM data
- * messages are a flat `Map<String, String>`. Unknown `v` values and fields
- * parse best-effort; null for undecodable JSON or a missing/empty `type`.
- */
 internal object PushPayloadParser {
 
     const val MARKER_KEY = "flowbiz"

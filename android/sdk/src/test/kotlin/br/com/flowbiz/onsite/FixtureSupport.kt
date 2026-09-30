@@ -6,7 +6,6 @@ import java.io.File
 
 object FixtureSupport {
 
-    /** Walks up from the working directory until `shared/<name>` is found. */
     fun sharedDir(name: String): File {
         var dir: File? = File(System.getProperty("user.dir")!!).absoluteFile
         while (dir != null) {
@@ -22,7 +21,6 @@ object FixtureSupport {
     fun fixtureFiles(): List<File> =
         fixturesDir().listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
 
-    /** A `shared/utm-links` step: a link (null: a foreground edge) and the web's `context.utm` after it. */
     data class UtmStep(val url: String?, val expected: String?)
 
     private val utmVectors by lazy { JSONObject(File(sharedDir("utm-links"), "vectors.json").readText()) }
@@ -165,10 +163,6 @@ object FixtureSupport {
         },
     )
 
-    /**
-     * First structural difference, or null. Key order is ignored and numbers
-     * compare as doubles (`0` == `0.0`).
-     */
     fun diff(expected: Any?, actual: Any?, path: String): String? {
         val exp = if (expected == JSONObject.NULL) null else expected
         val act = if (actual == JSONObject.NULL) null else actual
@@ -202,8 +196,6 @@ object FixtureSupport {
         }
     }
 
-    // --- JSON extraction helpers (org.json opt* return sentinel defaults, we want nulls) ---
-
     private fun JSONObject.stringOrNull(key: String): String? =
         if (has(key) && !isNull(key)) getString(key) else null
 
@@ -222,7 +214,6 @@ object FixtureSupport {
     private fun JSONArray.objects(): List<JSONObject> =
         (0 until length()).map { getJSONObject(it) }
 
-    /** Android's org.json has no `keySet()`; `keys()` exists on both implementations. */
     private fun JSONObject.keyNames(): Set<String> {
         val result = linkedSetOf<String>()
         val iterator = keys()

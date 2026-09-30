@@ -1,7 +1,6 @@
 import Foundation
 
-/// Debug log, a no-op until `debug` sets a sink. Never log PII: counts, codes
-/// and reasons only.
+// Never log PII: counts, codes and reasons only.
 enum SdkLog {
 
     private final class SinkBox: @unchecked Sendable {

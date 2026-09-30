@@ -1,10 +1,6 @@
 import Foundation
 
-/// Port of the web tag's `Url.getQueryParameters` + `setUtmNavigationContext`,
-/// quirks included; pinned by `shared/utm-links/vectors.json`.
-///
-/// Links are split on UTF-16 code units, as JS `split` does, never on
-/// `Character`s: a combining mark after a delimiter would fuse with it.
+// Port of the web Url.getQueryParameters + setUtmNavigationContext, quirks included.
 enum UtmLinkParser {
 
     typealias Pairs = [(key: String, value: String)]
@@ -29,7 +25,7 @@ enum UtmLinkParser {
         return allowlist.compactMap { key in params[key].flatMap { $0.isEmpty ? nil : (key: key, value: $0) } }
     }
 
-    /// `href.split('?')[1].split('/#')[0].split('#')[0]`
+    // href.split('?')[1].split('/#')[0].split('#')[0]
     private static func query(_ url: [UInt16]) -> ArraySlice<UInt16> {
         guard let mark = url.firstIndex(of: unit("?")) else { return [] }
         var query = url[(mark + 1)...].prefix { $0 != unit("?") }
@@ -40,7 +36,7 @@ enum UtmLinkParser {
         return query
     }
 
-    /// `{...stored, ...current}`
+    // {...stored, ...current}
     static func merge(stored: Pairs, current: Pairs) -> Pairs {
         var merged = stored
         for pair in current {
@@ -53,9 +49,7 @@ enum UtmLinkParser {
         return merged
     }
 
-    /// `decodeURIComponent(raw)`, or `raw` where it throws. Hand-rolled:
-    /// `removingPercentEncoding` is lenient (a lone `%A9` becomes U+FFFD) and
-    /// drops a leading BOM, as `String(bytes:encoding:)` does on iOS 26.
+    // Not removingPercentEncoding (a lone %A9 becomes U+FFFD) or String(bytes:encoding:): both drop a BOM.
     static func decodeURIComponentOrRaw(_ raw: String) -> String {
         var bytes: [UInt8] = []
         var rest = raw.utf8[...]
@@ -68,7 +62,7 @@ enum UtmLinkParser {
         return invalid ? raw : String(decoding: bytes, as: UTF8.self)
     }
 
-    /// ASCII only: `UInt8(_:radix:)` would also accept a sign.
+    // Not UInt8(_:radix:), which also accepts a sign.
     private static func hexValue(_ byte: UInt8?) -> UInt8? {
         guard let byte else { return nil }
         switch byte {
@@ -79,6 +73,7 @@ enum UtmLinkParser {
         }
     }
 
+    // UTF-16 units, as JS split: split as Characters, a combining mark would fuse with the delimiter.
     private static func split<C: Collection>(_ units: C, _ separator: Unicode.Scalar) -> [C.SubSequence] where C.Element == UInt16 {
         units.split(separator: unit(separator), omittingEmptySubsequences: false)
     }

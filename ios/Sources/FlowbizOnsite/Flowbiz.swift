@@ -4,9 +4,7 @@ import os.log
 import UIKit
 #endif
 
-/// The SDK entry point. Every call is safe from any thread, returns
-/// immediately and never throws. Before `initialize`, calls are no-ops,
-/// except that `handlePush`, `handleLink` and `handlePushOpened` still decode.
+/// Every call is thread-safe, returns at once and never throws; before `initialize` only the decoders work.
 public enum Flowbiz {
 
     private final class State: @unchecked Sendable {
@@ -20,13 +18,11 @@ public enum Flowbiz {
             return core
         }
 
-        /// Builds the core only after winning the slot: a losing concurrent
-        /// `initialize` must not leave a started `NWPathMonitor` behind. The
-        /// factory does no I/O, so holding the lock across it is safe.
         func installIfAbsent(_ makeCore: () -> FlowbizCore) -> FlowbizCore? {
             lock.lock()
             defer { lock.unlock() }
             guard core == nil else { return nil }
+            // Built under the lock so a losing initialize never starts an NWPathMonitor; it does no I/O.
             let newCore = makeCore()
             core = newCore
             return newCore
@@ -69,15 +65,12 @@ public enum Flowbiz {
 
     private static let debugSinkBox = DebugSinkBox()
 
-    /// The `debug` log sink; tests swap it to capture what `initialize` logs.
     static var debugSink: @Sendable (String) -> Void {
         get { debugSinkBox.current }
         set { debugSinkBox.current = newValue }
     }
 
-    /// Starts the SDK. Call once, ideally from
-    /// `application(_:didFinishLaunchingWithOptions:)` on the main thread;
-    /// later calls are ignored. A blank `appId` makes it a no-op.
+    /// Call once, from `application(_:didFinishLaunchingWithOptions:)`; later calls are ignored.
     public static func initialize(_ config: FlowbizConfig) {
         guard !state.isInitialized else {
             SdkLog.debug("initialize ignored: already initialized (first config wins)")
@@ -88,8 +81,7 @@ public enum Flowbiz {
             return
         }
         let serialQueue = DispatchQueue(label: "br.com.flowbiz.onsite")
-        // Only the winning initialize may set the sink, and before
-        // `sanitize` so its warnings are logged.
+        // Only the winning initialize sets the sink, before sanitize so its warnings are logged.
         guard let core = state.installIfAbsent({
             if config.debug {
                 SdkLog.sink = Flowbiz.debugSink
@@ -106,7 +98,6 @@ public enum Flowbiz {
                 reachability: PathMonitorReachability(queue: serialQueue)
             )
         }) else {
-            // Raced with a concurrent initialize; the winner's config stands.
             SdkLog.debug("initialize ignored: already initialized (first config wins)")
             return
         }
@@ -114,30 +105,24 @@ public enum Flowbiz {
         SdkLog.debug("initialized (appId=\(config.appId))")
     }
 
-    /// Queues a typed event for delivery.
     public static func track(_ event: Event) {
         withCore("track") { $0.track(event) }
     }
 
-    /// Unregisters the stored push token, clears the user identity and starts
-    /// a new session.
+    /// Clears the user identity, starts a new session and removes the registered push token.
     public static func logout() {
         withCore("logout") { $0.logout() }
     }
 
-    /// Opt-out switch, persisted across launches: while disabled nothing is
-    /// tracked or sent.
+    /// Opt-out switch, persisted across launches; while disabled nothing is tracked or sent.
     public static func setEnabled(_ enabled: Bool) {
         withCore("setEnabled") { $0.setEnabled(enabled) }
     }
 
-    /// Sends queued events now. Fire-and-forget.
     public static func flush() {
         withCore("flush") { $0.flush() }
     }
 
-    /// Registers the device's push token (`push.token.sync`). Requires
-    /// `initialize`; a blank token is ignored.
     public static func setPushToken(_ token: String) {
         guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             SdkLog.debug("Flowbiz.setPushToken ignored: blank token")
@@ -146,16 +131,11 @@ public enum Flowbiz {
         withCore("setPushToken") { $0.setPushToken(token) }
     }
 
-    /// Unregisters the stored push token (`push.token.remove`) and forgets
-    /// it; a no-op without one. Requires `initialize`.
     public static func removePushToken() {
         withCore("removePushToken") { $0.removePushToken() }
     }
 
-    /// Decodes a Flowbiz push from its `userInfo`, or nil when the push is not
-    /// Flowbiz's. Pure; callable before `initialize`. Receiving a push is not
-    /// a click, so it captures no UTMs: on tap, also call
-    /// `handlePushOpened(push)`.
+    /// Decodes a Flowbiz push (nil if not ours); captures no UTMs, so on tap call `handlePushOpened`.
     public static func handlePush(_ payload: [AnyHashable: Any]?) -> FlowbizPush? {
         guard let marker = payload?[PushPayloadParser.markerKey] else { return nil }
         if let string = marker as? String {
@@ -167,27 +147,19 @@ public enum Flowbiz {
         return nil
     }
 
-    /// Decodes the cart-recovery payload of an incoming link; nil when it has
-    /// none, its `utm_source` is not a Flowbiz one, or (once initialized) it
-    /// belongs to another `appId`.
-    ///
-    /// Once initialized it also captures the link's campaign UTMs, whatever
-    /// the decode returns, so forward every incoming link; a `track` issued
-    /// afterwards from the same thread carries them.
+    /// Decodes a cart-recovery link and captures its campaign UTMs; forward every incoming link.
     @discardableResult
     public static func handleLink(_ url: URL?) -> RecoveryPayload? {
         handleLink(url?.absoluteString, core: currentCore)
     }
 
-    /// The user tapped this push: `handleLink` over its raw `deep_link`
-    /// (which the `deepLink` URL may have altered), with the same result;
-    /// nil also for a nil push or one without `deep_link`.
+    /// Call on notification tap: `handleLink` over the push's raw deep link.
     @discardableResult
     public static func handlePushOpened(_ push: FlowbizPush?) -> RecoveryPayload? {
         handleLink(push?.deepLinkString, core: currentCore)
     }
 
-    /// Not `withCore`: without a core the link is still decoded, silently.
+    // Not withCore: without a core the link is still decoded.
     static func handleLink(_ link: String?, core: FlowbizCore?) -> RecoveryPayload? {
         guard let link else { return nil }
         core?.captureUtm(fromLink: link)
@@ -195,8 +167,7 @@ public enum Flowbiz {
     }
 
     #if DEBUG
-    /// Test seam: a core seen by the public API on the current task only, so
-    /// suites running in parallel never see it.
+    // Task-local so test suites running in parallel never see each other's core.
     @TaskLocal static var taskCore: FlowbizCore?
     #endif
 
@@ -215,8 +186,6 @@ public enum Flowbiz {
         action(core)
     }
 
-    // MARK: - Production wiring
-
     private static func queueFileURL(appId: String) -> URL {
         EventQueue.defaultFileURL(appId: appId)
             ?? FileManager.default.temporaryDirectory
@@ -225,11 +194,10 @@ public enum Flowbiz {
                 .appendingPathComponent("queue.jsonl")
     }
 
-    /// `UIScreen` is main-actor only: read synchronously when initialize runs
-    /// on the main thread, else after a hop, meanwhile reporting `0x0`.
     private static func makeDeviceContext() -> DeviceContext {
         let language = Locale.preferredLanguages.first ?? "en"
         #if canImport(UIKit)
+        // UIScreen is main-actor only: read now on the main thread, else after a hop (0x0 meanwhile).
         let screenBox = ScreenBox()
         if Thread.isMainThread {
             MainActor.assumeIsolated {
@@ -242,7 +210,6 @@ public enum Flowbiz {
         }
         let screen: @Sendable () -> String = { screenBox.value }
         #else
-        // Non-UIKit hosts (macOS test runs): no meaningful device screen.
         let screen: @Sendable () -> String = { "0x0" }
         #endif
         let timezoneOffsetMinutes: @Sendable (Int64) -> Int = { wallMillis in
@@ -275,23 +242,19 @@ public enum Flowbiz {
         }
     }
 
-    /// Physical pixels; `nativeBounds` is portrait-oriented and
-    /// scale-adjusted.
     @MainActor
     private static func currentScreenPixels() -> String {
         let bounds = UIScreen.main.nativeBounds
         return "\(Int(bounds.width))x\(Int(bounds.height))"
     }
 
-    /// `didBecomeActive` covers the cold launch, which has no foreground
-    /// transition; `FlowbizCore`'s foreground handling is idempotent, so
-    /// overlapping signals are safe.
     private static func startLifecycleTracking(_ core: FlowbizCore) {
         let center = NotificationCenter.default
         var tokens: [NSObjectProtocol] = []
         tokens.append(center.addObserver(
             forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil
         ) { _ in core.onForeground() })
+        // Covers the cold launch, which has no foreground transition; onForeground is idempotent.
         tokens.append(center.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: nil
         ) { _ in core.onForeground() })
@@ -299,8 +262,7 @@ public enum Flowbiz {
             forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil
         ) { _ in core.onBackground() })
         state.retain(observers: tokens)
-        // Initialize-while-already-foregrounded: no notification will fire
-        // for the current foreground session, so probe the live state once.
+        // Initialized while already active: no notification fires for this session, so probe once.
         Task { @MainActor in
             if UIApplication.shared.applicationState != .background {
                 core.onForeground()
@@ -308,8 +270,6 @@ public enum Flowbiz {
         }
     }
     #else
-    /// Non-UIKit hosts (macOS test runs): no lifecycle source — the
-    /// heartbeat only runs where UIKit exists.
     private static func startLifecycleTracking(_ core: FlowbizCore) {}
     #endif
 }

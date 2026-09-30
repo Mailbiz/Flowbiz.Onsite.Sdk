@@ -8,8 +8,6 @@
         android:name=".DemoApplication"
         android:label="Flowbiz Demo">
 
-        <!-- singleTop so a deep link arriving while the demo is open lands in
-             onNewIntent instead of relaunching the activity. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -18,10 +16,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- A custom scheme keeps the demo self-contained; a real integration
-                 uses verified App Links so the same URL falls back to web recovery.
-                 The outer single quotes keep the device shell off '&' and '|':
-                 adb shell 'am start -a android.intent.action.VIEW -d "flowbizdemo://recover?_mb_cr_=<hash>&utm_source=flowbiz&utm_campaign=jornadas|cart|carrinho-abandonado"' -->
+            <!-- Demo only: recovery links need verified App Links; a custom scheme has no web fallback. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

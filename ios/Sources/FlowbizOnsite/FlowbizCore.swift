@@ -1,10 +1,6 @@
 import Foundation
 
-/// Every entry point hops onto the serial `scheduler` and returns at once;
-/// the pipeline state (`lastPage`, `foregrounded`, `utmContext`) is confined
-/// to it. A failing step drops its event with a debug log. The queue is built
-/// on first use: its init reads the file, which must stay off the caller's
-/// thread at initialize.
+// Pipeline state (lastPage, foregrounded, utmContext) is confined to the serial scheduler.
 final class FlowbizCore: @unchecked Sendable {
 
     static let platform = "ios"
@@ -23,6 +19,7 @@ final class FlowbizCore: @unchecked Sendable {
     private let reachability: any ReachabilityMonitor
     private let heartbeatIntervalMillis: Int64
 
+    // Lazy: EventQueue's init reads the file, which must stay off the caller's thread at initialize.
     private let queueFactory: () -> EventQueue
     private let transportLock = NSLock()
     private var lazyQueue: EventQueue?
@@ -32,14 +29,9 @@ final class FlowbizCore: @unchecked Sendable {
         self?.buildPingEntry()
     }
 
-    /// Feeds `context.url` and the ping `page`; set by every `pageView` with a
-    /// path or title, even a suppressed duplicate (the user *is* on that screen).
     struct PageState { let title: String?; let url: String? }
     private var lastPage: PageState?
-
     private var foregrounded = false
-
-    /// `context.utm` of every envelope built from now on; nil omits it.
     private var utmContext: String?
 
     init(
@@ -72,12 +64,9 @@ final class FlowbizCore: @unchecked Sendable {
             self.flushController.requestFlush(.networkRestored)
         }
 
-        // A process start may be a push or background wake, not a visit:
-        // load the stored UTMs without sliding their expiry.
+        // A process start may be a push or background wake, not a visit: don't slide the UTM expiry.
         submit { core in core.refreshUtm(link: nil, slideExpiry: false) }
     }
-
-    // MARK: - Facade entry points (any thread, return immediately, never throw)
 
     func track(_ event: Event) {
         submit { core in
@@ -97,6 +86,7 @@ final class FlowbizCore: @unchecked Sendable {
             do {
                 let wireName = EventSerializer.wireName(event)
                 let dataJSON = try EventSerializer.dataJSONString(event, baseUri: core.config.baseUriOrNil)
+                // Before the dedup check: a suppressed duplicate still means the user is on that screen.
                 if case .pageView(let path, let title) = event, path != nil || title != nil {
                     core.lastPage = PageState(title: title, url: UrlResolver.resolve(path, baseUri: core.config.baseUriOrNil))
                 }
@@ -133,18 +123,13 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// Queued like `track`, so a `track` issued afterwards from the same
-    /// thread carries the link's UTMs.
     func captureUtm(fromLink link: String) {
         submit { core in core.refreshUtm(link: link, slideExpiry: true) }
     }
 
-    /// `push.token.remove` goes out before the identity is cleared so it
-    /// carries the outgoing `user_id`: the backend must know whose token to
-    /// drop. Local state is cleared even while disabled; captured UTMs are
-    /// kept, as on web.
     func logout() {
         submit { core in
+            // Before clearUser: the backend needs the outgoing user_id. UTMs are kept, as on web.
             if let token = core.pushTokenStore.token {
                 core.emitTokenRemoval(token)
             }
@@ -155,16 +140,14 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// Persisted even while disabled (the event is dropped), so a later
-    /// enable and logout can remove the token actually registered with APNs.
     func setPushToken(_ token: String) {
         submit { core in
+            // Stored even while disabled, so re-enabling syncs it and logout can still remove it.
             core.pushTokenStore.set(token)
             core.emitInternal(wireName: "push.token.sync", dataJSON: Self.tokenDataJSON(token))
         }
     }
 
-    /// While disabled the event is dropped but the token still cleared.
     func removePushToken() {
         submit { core in
             guard let token = core.pushTokenStore.token else {
@@ -181,16 +164,13 @@ final class FlowbizCore: @unchecked Sendable {
             let wasEnabled = core.enabledState.isEnabled
             core.enabledState.setEnabled(enabled)
             if !enabled {
-                // Idempotent: stopping an already-stopped heartbeat is
-                // harmless, so a repeated disable needs no guard.
                 core.heartbeat.stop()
                 SdkLog.debug("SDK disabled: heartbeat stopped, events dropped, network gated")
             } else if !wasEnabled {
                 if core.foregrounded {
                     core.heartbeat.start(intervalMillis: core.heartbeatIntervalMillis)
                 }
-                // A token set while disabled was stored but never synced;
-                // dedup still skips one synced < 20 min ago.
+                // A token set while disabled was never synced; dedup skips one synced < 20 min ago.
                 if let token = core.pushTokenStore.token {
                     core.emitInternal(wireName: "push.token.sync", dataJSON: Self.tokenDataJSON(token))
                 }
@@ -210,17 +190,12 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    // MARK: - Lifecycle (wired by the facade's UIApplication observers)
-
-    /// App entered foreground. Idempotent — a redundant call (already
-    /// foregrounded, e.g. `didBecomeActive` after the initialize-time state
-    /// probe) is ignored so heartbeat cadence isn't reset.
     func onForeground() {
         submit { core in
             guard !core.foregrounded else { return }
             core.foregrounded = true
             core.sessionManager.onForeground()
-            core.refreshUtm(link: nil, slideExpiry: true) // before the first ping
+            core.refreshUtm(link: nil, slideExpiry: true)
             if core.enabledState.isEnabled {
                 core.heartbeat.start(intervalMillis: core.heartbeatIntervalMillis)
                 core.flushController.requestFlush(.appForeground)
@@ -235,12 +210,9 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    // MARK: - Heartbeat
-
-    /// A ping counts as session activity and, like web pings, describes the
-    /// current page.
     private func buildPingEntry() -> String? {
         guard enabledState.isEnabled else { return nil }
+        // As on web, a ping counts as session activity and describes the current page.
         sessionManager.touch()
         let session = sessionManager.currentSession()
         let now = clock.wallMillis()
@@ -275,21 +247,16 @@ final class FlowbizCore: @unchecked Sendable {
         return (try? CanonicalJSON.render(["page": object])) ?? "{}"
     }
 
-    // MARK: - Internal raw events
-
-    /// Sorted keys, byte-identical to the Kotlin SDK's rendering.
     private static func tokenDataJSON(_ token: String) -> String {
         (try? CanonicalJSON.render(["token": token, "platform": platform])) ?? "{}"
     }
 
-    /// Clears the `push.token.sync` dedup anchor even when the removal is
-    /// dropped: re-registering the same token must sync again.
     private func emitTokenRemoval(_ token: String) {
         emitInternal(wireName: "push.token.remove", dataJSON: Self.tokenDataJSON(token))
+        // Even when the removal was dropped: re-registering the same token must sync again.
         dedupStore.clear(wireName: "push.token.sync")
     }
 
-    /// `track`'s pipeline for wire names outside `Event`.
     private func emitInternal(wireName: String, dataJSON: String) {
         guard enabledState.isEnabled else {
             SdkLog.debug("\(wireName) dropped: SDK disabled")
@@ -331,11 +298,7 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    // MARK: - UTM attribution
-
-    /// Web `setUtmNavigationContext`: the link's UTMs merged over the stored
-    /// set become `context.utm`; every visit (a link, a foreground) slides
-    /// the expiry.
+    // Web setUtmNavigationContext: the link's UTMs merged over the stored set; a visit slides the expiry.
     private func refreshUtm(link: String?, slideExpiry: Bool) {
         let stored = utmStore.load()
         let current = link.map(UtmLinkParser.extract) ?? []
@@ -352,8 +315,6 @@ final class FlowbizCore: @unchecked Sendable {
             SdkLog.debug("utm refresh failed: \(type(of: error))")
         }
     }
-
-    // MARK: - Plumbing
 
     private func submit(_ task: @escaping @Sendable (FlowbizCore) -> Void) {
         scheduler.execute { [weak self] in
@@ -394,7 +355,6 @@ final class FlowbizCore: @unchecked Sendable {
         return controller
     }
 
-    /// From minutes, not hours: zones like +05:30 and +05:45 exist.
     static func formatTimezoneOffset(minutes: Int) -> String {
         let sign = minutes < 0 ? "-" : "+"
         let absMinutes = abs(minutes)

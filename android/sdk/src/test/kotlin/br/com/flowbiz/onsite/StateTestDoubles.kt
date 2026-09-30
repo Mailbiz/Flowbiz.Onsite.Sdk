@@ -1,9 +1,5 @@
 package br.com.flowbiz.onsite
 
-/**
- * In-memory [KeyValueStore] (the project runs without Robolectric). Like the
- * hardened [SharedPreferencesStore], a wrong-typed value reads as null.
- */
 internal class FakeKeyValueStore : KeyValueStore {
 
     val values = mutableMapOf<String, Any>()
@@ -21,17 +17,14 @@ internal class FakeKeyValueStore : KeyValueStore {
     override fun remove(key: String) { values.remove(key) }
 }
 
-/** Manually-driven [Clock]; monotonic and wall time are independently mutable. */
 internal class FakeClock(
     var monotonic: Long = 500_000L,
-    // 2023-11-14T22:13:20 UTC
     var wall: Long = 1_700_000_000_000L,
 ) : Clock {
 
     override fun monotonicMillis(): Long = monotonic
     override fun wallMillis(): Long = wall
 
-    /** Real time passing: both clocks advance in lockstep. */
     fun advance(millis: Long) {
         monotonic += millis
         wall += millis

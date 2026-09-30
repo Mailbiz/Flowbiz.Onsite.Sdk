@@ -1,6 +1,5 @@
 import Foundation
 
-/// Batch-level: the collector accepts or rejects the whole request.
 enum SendResult: Equatable, Sendable {
     case success
     case retriableError
@@ -8,17 +7,11 @@ enum SendResult: Equatable, Sendable {
     case payloadTooLarge
 }
 
-/// Blocking by design: only ever called on the SDK's serial queue, never the
-/// caller's thread.
+// Blocking by design: only ever called on the SDK's serial queue, never the caller's thread.
 protocol HttpSender {
     func send(body: String) -> SendResult
 }
 
-/// `URLSession` has no connect timeout (Android: 5 s connect, 10 s read), and
-/// `timeoutIntervalForRequest` is an idle timeout that resets on every byte,
-/// so the 30 s semaphore wait in `send` is the hard cap. A malformed
-/// `collectorUrl` fails every send permanently, so the queue cannot grow
-/// forever.
 final class URLSessionHttpSender: NSObject, HttpSender, URLSessionTaskDelegate, @unchecked Sendable {
 
     static let requestTimeoutSeconds: TimeInterval = 10
@@ -45,12 +38,9 @@ final class URLSessionHttpSender: NSObject, HttpSender, URLSessionTaskDelegate, 
     private let platform: String
     private var session: URLSession!
 
-    /// Ephemeral by default: no cookies or cache shared with the host app.
     init(collectorUrl: String, platform: String, configuration: URLSessionConfiguration = .ephemeral) {
         var base = collectorUrl
         while base.hasSuffix("/") { base.removeLast() }
-        // URL(string:) is lenient; require a scheme + host so garbage cannot
-        // masquerade as an endpoint.
         if let url = URL(string: base + "/collect"), url.scheme != nil, url.host != nil {
             self.endpoint = url
         } else {
@@ -60,12 +50,11 @@ final class URLSessionHttpSender: NSObject, HttpSender, URLSessionTaskDelegate, 
         self.platform = platform
         super.init()
         configuration.timeoutIntervalForRequest = Self.requestTimeoutSeconds
-        // The session retains its delegate (self): fine, the sender lives as
-        // long as the SDK.
         self.session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     }
 
     func send(body: String) -> SendResult {
+        // Permanent, so a malformed collectorUrl cannot grow the queue forever.
         guard let endpoint else { return .permanentError }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -87,8 +76,7 @@ final class URLSessionHttpSender: NSObject, HttpSender, URLSessionTaskDelegate, 
             semaphore.signal()
         }
         task.resume()
-        // Safety net well beyond the request timeout: the semaphore must
-        // never wedge the SDK queue.
+        // The hard cap: URLSession has no connect timeout and its request timeout resets on every byte.
         if semaphore.wait(timeout: .now() + 30) == .timedOut {
             task.cancel()
             SdkLog.debug("collect POST wedged; cancelled")
@@ -97,7 +85,7 @@ final class URLSessionHttpSender: NSObject, HttpSender, URLSessionTaskDelegate, 
         return box.value
     }
 
-    /// Refuse redirects so the 3xx is delivered and classified honestly.
+    // Refuses redirects so the 3xx reaches classify.
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -115,7 +103,7 @@ final class URLSessionHttpSender: NSObject, HttpSender, URLSessionTaskDelegate, 
         case 413: return .payloadTooLarge
         case 408, 429: return .retriableError
         case 400...499: return .permanentError
-        default: return .retriableError // 5xx and anything unexpected
+        default: return .retriableError
         }
     }
 }

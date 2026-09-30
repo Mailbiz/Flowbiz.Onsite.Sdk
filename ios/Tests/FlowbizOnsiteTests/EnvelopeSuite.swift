@@ -5,7 +5,6 @@ import Testing
 
 @Suite struct EnvelopeSuite {
 
-    // 2023-11-14T22:13:20 UTC
     private let createdAtMillis: Int64 = 1_700_000_000_000
     private let sentAtMillis: Int64 = 1_700_000_000_123
 

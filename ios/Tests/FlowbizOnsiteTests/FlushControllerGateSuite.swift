@@ -32,7 +32,7 @@ import Testing
 
         active.value = false
         let scheduledBefore = scheduler.scheduled.count
-        scheduler.runLastScheduled() // pending backoff retry fires → gated
+        scheduler.runLastScheduled()
         #expect(sender.bodies.count == 1)
         #expect(scheduler.scheduled.count == scheduledBefore)
 
@@ -46,7 +46,6 @@ import Testing
         #expect(queue.size == 0)
     }
 
-    /// Waits out the real ~1 s backoff delay.
     @Test func drainsRetriesAndSettlesOnARealSerialDispatchQueue() {
         let serialQueue = DispatchQueue(label: "br.com.flowbiz.onsite.tests")
         let scheduler = DispatchTaskScheduler(queue: serialQueue)
@@ -57,7 +56,7 @@ import Testing
         serialQueue.sync {
             queue.append(self.entry(1))
             queue.append(self.entry(2))
-            sender.results = [.retriableError] // first attempt fails → real backoff
+            sender.results = [.retriableError]
             sender.onSend = { _ in sendsSeen.signal() }
         }
 

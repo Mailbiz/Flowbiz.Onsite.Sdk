@@ -3,11 +3,6 @@ package br.com.flowbiz.onsite
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Without Robolectric only the pre-initialize paths are reachable:
- * [Flowbiz.initialize] needs a real `Context`. Its production wiring runs in
- * the demo app; the behavior behind it is pinned on [FlowbizCore].
- */
 class FlowbizFacadeSmokeTest {
 
     @Test
@@ -28,13 +23,12 @@ class FlowbizFacadeSmokeTest {
             Flowbiz.setPushToken("fcm-token-1")
             Flowbiz.removePushToken()
             assertTrue(warnings.all { it.contains("ignored") })
-            assertTrue(warnings.size == 8) // each call logged a debug warning
+            assertTrue(warnings.size == 8)
         } finally {
             SdkLog.sink = null
         }
     }
 
-    /** Java callers can pass null; `FlowbizJavaNullSafetyTest` proves it from Java source. */
     @Test
     fun nullArgumentsAreLoggedNoOpsAndNeverThrow() {
         val warnings = mutableListOf<String>()
@@ -52,7 +46,6 @@ class FlowbizFacadeSmokeTest {
         }
     }
 
-    /** A real `Uri` needs Android; `RecoveryLinkParserTest` covers `handleLink` on strings. */
     @Test
     fun pureHandlersWorkBeforeInitialize() {
         val warnings = mutableListOf<String>()

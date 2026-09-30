@@ -1,6 +1,5 @@
 package br.com.flowbiz.onsite
 
-/** The last registered push token, kept so `logout()` can emit `push.token.remove` with it. */
 internal class PushTokenStore(private val store: KeyValueStore) {
 
     val token: String?

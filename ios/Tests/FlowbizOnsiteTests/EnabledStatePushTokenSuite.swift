@@ -7,8 +7,6 @@ import Testing
 
     private let store = FakeKeyValueStore()
 
-    // MARK: EnabledState
-
     @Test func enabledDefaultsToTrue() {
         #expect(EnabledState(store: store).isEnabled)
     }
@@ -26,11 +24,9 @@ import Testing
     }
 
     @Test func corruptEnabledValueReadsAsEnabled() {
-        store[StorageKeys.enabled] = "yes" // wrong type -> silent default
+        store[StorageKeys.enabled] = "yes"
         #expect(EnabledState(store: store).isEnabled)
     }
-
-    // MARK: PushTokenStore
 
     @Test func pushTokenDefaultsToNil() {
         #expect(PushTokenStore(store: store).token == nil)

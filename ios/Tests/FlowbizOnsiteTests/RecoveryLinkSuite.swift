@@ -40,8 +40,7 @@ import Testing
     }
 
     @Test func plusTurnedIntoSpaceStillDecodes() throws {
-        // Base64 alphabet contains '+'; a naive decoder turns it into ' '.
-        let json = #"{"t":"77777","u":"u","c":"c","its":[["1","P>>1","S"]]}"#   // '>' forces a '+' in base64
+        let json = #"{"t":"77777","u":"u","c":"c","its":[["1","P>>1","S"]]}"#
         let b64 = Data(json.utf8).base64EncodedString()
         #expect(b64.contains("+"))
         let mangled = b64.replacingOccurrences(of: "+", with: " ")
@@ -49,8 +48,6 @@ import Testing
         #expect(RecoveryLinkParser.parse(link)?.products.first?.productId == "P>>1")
     }
 
-    /// Seeded fuzz over the *decoded* hash JSON (not just URL bytes); passing
-    /// means `parse` returned instead of trapping.
     @Test func adversarialDecodedHashesNeverThrow() {
         var generator = SplitMix64(seed: 20260902)
         for _ in 0..<300 {
@@ -62,7 +59,6 @@ import Testing
         }
     }
 
-    /// One adversarial `{t, u, c, its}` hash.
     private static func randomHash(_ gen: inout SplitMix64) -> [String: Any] {
         ["t": randomField(&gen), "u": randomField(&gen), "c": randomField(&gen), "its": randomIts(&gen)]
     }
@@ -100,7 +96,6 @@ import Testing
         return item
     }
 
-    /// One `its[i]` slot: quantity, product id, sku or recovery properties.
     private static func randomSlot(_ gen: inout SplitMix64) -> Any {
         switch gen.next() % 9 {
         case 0: return 1e30

@@ -1,11 +1,6 @@
-// In memory: real UserDefaults would leak state between tests and onto the host.
 import Foundation
 @testable import FlowbizOnsite
 
-/// In-memory `KeyValueStore` mimicking the hardened `UserDefaultsStore`
-/// semantics: a value read back as the wrong type degrades to nil, never a
-/// throw. `values` is exposed so tests can plant corrupt entries and inspect
-/// persistence directly; `writes` records every key the SDK sets or removes.
 final class FakeKeyValueStore: KeyValueStore, @unchecked Sendable {
 
     private let lock = NSLock()
@@ -62,13 +57,12 @@ final class FakeKeyValueStore: KeyValueStore, @unchecked Sendable {
     func removeValue(forKey key: String) { write(key, nil) }
 }
 
-/// Manually-driven `Clock`; monotonic and wall time are independently mutable.
 final class FakeClock: Clock, @unchecked Sendable {
 
     var monotonic: Int64
     var wall: Int64
 
-    init(monotonic: Int64 = 500_000, wall: Int64 = 1_700_000_000_000 /* 2023-11-14T22:13:20Z */) {
+    init(monotonic: Int64 = 500_000, wall: Int64 = 1_700_000_000_000) {
         self.monotonic = monotonic
         self.wall = wall
     }
@@ -76,7 +70,6 @@ final class FakeClock: Clock, @unchecked Sendable {
     func monotonicMillis() -> Int64 { monotonic }
     func wallMillis() -> Int64 { wall }
 
-    /// Real time passing: both clocks advance in lockstep.
     func advance(_ millis: Int64) {
         monotonic += millis
         wall += millis

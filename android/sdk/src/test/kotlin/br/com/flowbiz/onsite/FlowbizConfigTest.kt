@@ -131,10 +131,6 @@ class FlowbizConfigTest {
         assertNull(FlowbizConfig("77777", "https://store.com").recoveryUrl)
     }
 
-    /**
-     * `initialize` installs the debug sink before sanitizing, so these warnings
-     * reach the first call; that path needs a `Context`, this pins the rest.
-     */
     @Test
     fun invalidBaseUriWarningReachesAnInstalledSink() {
         val captured = mutableListOf<String>()

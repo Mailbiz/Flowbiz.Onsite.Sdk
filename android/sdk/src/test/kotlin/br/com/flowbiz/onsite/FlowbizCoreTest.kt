@@ -192,12 +192,12 @@ class FlowbizCoreTest {
     @Test
     fun timezoneOffsetsRenderAsSignedHoursMinutes() {
         val cases = mapOf(
-            0 to "+00:00",       // UTC
-            -180 to "-03:00",    // São Paulo
-            330 to "+05:30",     // India (half-hour zone)
-            -570 to "-09:30",    // Marquesas (negative half-hour)
-            345 to "+05:45",     // Nepal (quarter-hour)
-            840 to "+14:00",     // Line Islands
+            0 to "+00:00",
+            -180 to "-03:00",
+            330 to "+05:30",
+            -570 to "-09:30",
+            345 to "+05:45",
+            840 to "+14:00",
         )
         val h = harness()
         for ((minutes, expected) in cases) {

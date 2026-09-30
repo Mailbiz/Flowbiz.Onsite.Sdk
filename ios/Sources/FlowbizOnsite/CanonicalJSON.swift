@@ -1,10 +1,6 @@
 import Foundation
 
-/// The web `JSON.stringify` form: `JSONSerialization` would render `19.99` as
-/// `19.989999999999998` and escape `/`. Keys sort by UTF-16 code units, like
-/// JS `sort`. Pinned with the Kotlin `CanonicalJson` by `shared/fixtures/`;
-/// Kotlin differs only at extreme magnitudes on JDK ≤ 18 (JDK-4511638).
-/// Throws on non-finite numbers, like org.json.
+// The web's JSON.stringify form; JSONSerialization renders 19.99 as 19.989999999999998 and escapes `/`.
 enum CanonicalJSON {
 
     struct WriteError: Error, CustomStringConvertible {
@@ -18,7 +14,7 @@ enum CanonicalJSON {
         return out
     }
 
-    /// A JSON object with the keys in the given order, not sorted.
+    // Keys in the given order, not sorted: context.utm keeps the web's insertion order.
     static func renderStringPairs(_ pairs: [(key: String, value: String)]) -> String {
         var out = "{"
         for (index, pair) in pairs.enumerated() {
@@ -44,6 +40,7 @@ enum CanonicalJSON {
             out += "null"
         case let object as [String: Any]:
             out += "{"
+            // UTF-16 code-unit order, like JS sort; String's own < differs.
             let keys = object.keys.sorted { $0.utf16.lexicographicallyPrecedes($1.utf16) }
             for (index, key) in keys.enumerated() {
                 if index > 0 { out += "," }
@@ -64,10 +61,7 @@ enum CanonicalJSON {
         }
     }
 
-    // MARK: - Strings
-
-    /// Minimal escaping, matching `JSON.stringify`: `"` and `\` plus control
-    /// characters; everything else (slashes, unicode) is emitted raw.
+    // As JSON.stringify: only quotes, backslashes and control characters are escaped.
     private static func writeString(_ string: String, into out: inout String) {
         out += "\""
         for scalar in string.unicodeScalars {
@@ -90,8 +84,6 @@ enum CanonicalJSON {
         out += "\""
     }
 
-    // MARK: - Numbers
-
     private static func numberToken(_ number: NSNumber) throws -> String {
         switch String(cString: number.objCType) {
         case "f", "d":
@@ -103,16 +95,13 @@ enum CanonicalJSON {
         }
     }
 
-    /// ECMAScript `Number::toString(10)` rendering of a finite double, built
-    /// from Swift's shortest-round-trip `"\(Double)"` digits.
+    // ECMAScript Number::toString(10), from Swift's shortest-round-trip digits.
     static func doubleToken(_ value: Double) throws -> String {
         guard value.isFinite else {
             throw WriteError("JSON does not allow non-finite numbers (\(value))")
         }
         if value == 0 { return "0" } // covers -0.0 → "0" (JSON.stringify(-0))
 
-        // Parse the shortest representation, e.g. "19.99", "10000000.0",
-        // "1e+21", "1e-07", into sign + digit string + decimal exponent.
         var repr = Substring("\(value)")
         var sign = ""
         if repr.first == "-" {
@@ -134,7 +123,6 @@ enum CanonicalJSON {
             digits = Array(mantissa)
             pointPosition = digits.count
         }
-        // `n` per ECMA-262 Number::toString: value == 0.digits × 10^n.
         var n = pointPosition + exp10
         var start = 0
         while start < digits.count - 1 && digits[start] == "0" {

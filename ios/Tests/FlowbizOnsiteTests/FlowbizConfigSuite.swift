@@ -37,7 +37,6 @@ import Testing
     }
 
     @Test func httpsWithEmptyHostFallsBackToDefault() {
-        // `https://` parses as a URL but has no host.
         let sanitized = ConfigSanitizer.sanitize(
             FlowbizConfig(appId: "77777", baseUri: "https://store.com", collectorUrl: "https://")
         )
@@ -75,8 +74,6 @@ import Testing
         )
         #expect(sanitized?.heartbeatInterval == FlowbizConfig.maxHeartbeatInterval)
     }
-
-    // MARK: baseUri / recoveryUrl
 
     @Test func baseUriOriginPassesThroughAndTrailingSlashIsStripped() {
         let a = ConfigSanitizer.sanitize(FlowbizConfig(appId: "77777", baseUri: "https://store.com"))

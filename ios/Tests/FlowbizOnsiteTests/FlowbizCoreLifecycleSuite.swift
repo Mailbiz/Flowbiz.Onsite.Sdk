@@ -9,8 +9,6 @@ import Testing
         try h.sentEntries().filter { $0["event"] as? String == "page.ping" }
     }
 
-    // MARK: Heartbeat lifecycle
-
     @Test func foregroundStartsHeartbeatWithConfiguredInterval() {
         let h = CoreHarness()
         #expect(h.scheduler.activeRepeating() == nil)
@@ -34,21 +32,21 @@ import Testing
     @Test func redundantForegroundDoesNotRestartHeartbeat() {
         let h = CoreHarness()
         h.core.onForeground()
-        h.core.onForeground() // e.g. didBecomeActive after the initial probe
+        h.core.onForeground()
         #expect(h.scheduler.scheduled.filter { $0.repeating && !$0.cancelled }.count == 1)
     }
 
     @Test func pingBypassesQueueAndDedupAndCarriesSessionIdentity() throws {
         let h = CoreHarness()
         h.core.onForeground()
-        h.scheduler.tickRepeating(2) // identical beats: dedup-exempt by design
+        h.scheduler.tickRepeating(2)
 
         let pings = try pingEntries(h)
         #expect(pings.count == 2)
         #expect(h.queue.size == 0)
 
         let ping = try #require(pings.first)
-        #expect(ping["data"] as? String == "{}") // no named pageView yet
+        #expect(ping["data"] as? String == "{}")
         let identity = object(ping, "identity")
         #expect(isUUIDShaped(identity["anonymous_id"]))
         #expect(isUUIDShaped(identity["session_id"]))
@@ -66,7 +64,6 @@ import Testing
                 == #"{"page":{"title":"checkout","url":"https://store.com/checkout"}}"#
         )
 
-        // An anonymous pageView does not clear the last named screen.
         h.core.track(.pageView())
         h.scheduler.tickRepeating()
         #expect(
@@ -88,8 +85,6 @@ import Testing
         #expect(context["baseuri"] as? String == "https://store.com")
         #expect(context["recoveryUrl"] as? String == "https://store.com/carrinho")
 
-        // push.token.sync goes through `emitInternal`, a third envelope path
-        // besides track and the ping.
         h.core.setPushToken("tok")
         let entries = try h.sentEntries()
         let sync = try #require(entries.last { $0["event"] as? String == "push.token.sync" })
@@ -131,7 +126,7 @@ import Testing
             h.clock.advance(25 * minuteMs)
             h.scheduler.tickRepeating()
         }
-        h.clock.advance(25 * minuteMs) // 25 < 30 since last ping
+        h.clock.advance(25 * minuteMs)
         h.core.track(.pageView(path: "later"))
         #expect(object(try h.lastEntry(), "identity")["session_id"] as? String == sessionBefore)
     }
@@ -145,12 +140,9 @@ import Testing
         #expect(h.queue.size == 0)
     }
 
-    // MARK: setEnabled
-
     @Test func setEnabledFalseStopsHeartbeatDropsEventsAndGatesNetwork() {
         let h = CoreHarness()
         h.core.onForeground()
-        // Build a retriable backlog first (a retry is now scheduled).
         h.sender.defaultResult = .retriableError
         h.core.track(.pageView(path: "home"))
         #expect(h.queue.size == 1)
@@ -164,7 +156,7 @@ import Testing
         #expect(h.queue.size == 1)
 
         h.core.flush()
-        h.scheduler.runLastScheduled() // pending backoff retry fires → gated
+        h.scheduler.runLastScheduled()
         #expect(h.sender.bodies.count == sendsBefore)
     }
 

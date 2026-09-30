@@ -53,15 +53,14 @@ class EventQueueTest {
         file = File(temp.newFolder(), "queue.jsonl")
         file.writeText(
             entry(1) + "\n" +
-                """{"event":"trunca""" + "\n" + // crash mid-write
+                """{"event":"trunca""" + "\n" +
                 "not json at all\n" +
                 "\n" +
                 entry(2) + "\n" +
-                """{"event":"e3","ha""" // truncated final line, no newline
+                """{"event":"e3","ha"""
         )
         val q = EventQueue(file)
         assertEquals(listOf(entry(1), entry(2)), q.peek(10))
-        // Garbage found at load forces an immediate compaction.
         assertEquals(entry(1) + "\n" + entry(2) + "\n", file.readText())
     }
 
@@ -122,7 +121,6 @@ class EventQueueTest {
     fun leftoverTmpFromCrashedCompactionIsIgnoredAndOriginalIntact() {
         file = File(temp.newFolder(), "queue.jsonl")
         file.writeText(entry(1) + "\n" + entry(2) + "\n")
-        // A crash between the tmp write and the rename.
         val tmp = File(file.parentFile, file.name + ".tmp")
         tmp.writeText(entry(99) + "\n")
         val q = EventQueue(file)
@@ -156,8 +154,7 @@ class EventQueueTest {
         q.append(entry(1))
         val dir = file.parentFile!!
         try {
-            // Sabotage: read-only file blocks appends; read-only directory
-            // blocks the healing compaction (tmp file creation).
+            // The read-only directory also blocks the healing compaction's tmp file.
             assertTrue(file.setWritable(false))
             assertTrue(dir.setWritable(false))
             q.append(entry(2))

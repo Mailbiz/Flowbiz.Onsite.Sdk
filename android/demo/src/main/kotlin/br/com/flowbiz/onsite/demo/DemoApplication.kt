@@ -4,11 +4,6 @@ import android.app.Application
 import br.com.flowbiz.onsite.Flowbiz
 import br.com.flowbiz.onsite.FlowbizConfig
 
-/**
- * Fake-store demo over the production wiring. Failed POSTs are harmless: the
- * events wait in the durable queue and retry with backoff. Logcat tag
- * `FlowbizOnsite`.
- */
 class DemoApplication : Application() {
 
     override fun onCreate() {

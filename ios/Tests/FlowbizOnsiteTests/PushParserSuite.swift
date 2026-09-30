@@ -1,4 +1,3 @@
-// Through the public facade: `handlePush` is pure and needs no initialize.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -20,7 +19,6 @@ import Testing
         for sample in try Self.samples() {
             let name = sample["name"] as? String ?? "?"
             let payload = sample["payload"] as? [String: Any] ?? [:]
-            // iOS override first (the dict-marker sample parses here, unlike Android).
             let expected = sample["expected_ios"] ?? sample["expected"]
             let push = Flowbiz.handlePush(payload)
             if expected == nil || expected is NSNull {
@@ -71,8 +69,6 @@ import Testing
         value is NSNull ? nil : value as? String
     }
 
-    // MARK: contract details beyond the shared samples
-
     @Test func wellFormedDeepLinkBecomesAURL() {
         let push = Flowbiz.handlePush(
             ["flowbiz": #"{"v":1,"type":"promo","deep_link":"https://store.com/promo"}"#]
@@ -80,8 +76,6 @@ import Testing
         #expect(push?.deepLink == URL(string: "https://store.com/promo"))
     }
 
-    /// The raw `deep_link` is kept for `handlePushOpened`; on iOS 17+ (this
-    /// host) `deepLink` is plain `URL(string:)` of it.
     @Test func deepLinkIsURLParsingOfTheKeptRawString() throws {
         for link in [
             "https://store.com/carrinho?utm_campaign=jornadas|cart|x&utm_medium=e%20mail",
@@ -96,16 +90,11 @@ import Testing
         }
     }
 
-    /// Stands in for iOS 13–16's `URL(string:)`, which rejects any character
-    /// outside RFC 3986 (iOS 17+ encodes them itself).
+    // iOS 13–16's URL(string:): CFURL rejects the non-RFC 3986 characters iOS 17+ encodes itself.
     private static func legacyParse(_ string: String) -> URL? {
         CFURLCreateWithString(nil, string as CFString, nil).map { $0 as URL }
     }
 
-    /// A link the iOS 13–16 parser accepts is kept as is; a rejected one gets
-    /// only its non-RFC 3986 characters encoded after `scheme://authority`,
-    /// so its UTMs and `_mb_cr_` read the same. What encoding cannot repair
-    /// (a non-ASCII or invalid host, a bare `%`, no scheme) stays nil.
     @Test func iOS13To16RepairEncodesOnlyInvalidCharactersAfterTheAuthority() throws {
         var cases: [(raw: String, repaired: String?)] = [
             ("https://store.com/p?utm_campaign=jornadas%7Ccart%7Cx#top", "https://store.com/p?utm_campaign=jornadas%7Ccart%7Cx#top"),
@@ -162,7 +151,7 @@ import Testing
     @Test func nilAndEmptyPayloadsAreNil() {
         #expect(Flowbiz.handlePush(nil) == nil)
         #expect(Flowbiz.handlePush([:]) == nil)
-        #expect(Flowbiz.handlePush(["flowbiz": 42]) == nil) // non-string, non-dict marker
+        #expect(Flowbiz.handlePush(["flowbiz": 42]) == nil)
     }
 
     @Test func randomGarbageMarkerNeverCrashes() {

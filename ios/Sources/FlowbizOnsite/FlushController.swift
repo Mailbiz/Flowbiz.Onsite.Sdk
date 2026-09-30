@@ -1,13 +1,7 @@
 import Foundation
 
-/// Drains the queue in order. A 413 or a permanent rejection bisects the
-/// batch until the poison entries are isolated and dropped alone: a 4xx
-/// rejects the whole POST, and dropping all of it would lose innocent events.
-/// A retriable error stops the drain and backs off; any `requestFlush` resets
-/// the backoff, scheduled retries do not.
 final class FlushController: @unchecked Sendable {
 
-    /// For debug logging only.
     enum FlushReason: String, Sendable {
         case eventTracked, appForeground, networkRestored, explicit
     }
@@ -16,6 +10,7 @@ final class FlushController: @unchecked Sendable {
         case proceed, stopAndRetry
     }
 
+    // Keeps a request well under the collector's 3 MB cap.
     static let maxBatchSize = 50
     static let initialBackoffMillis: Int64 = 1_000
     static let maxBackoffMillis: Int64 = 60_000
@@ -59,17 +54,14 @@ final class FlushController: @unchecked Sendable {
         scheduler.execute { [weak self] in self?.drain() }
     }
 
-    /// Runs on the serial scheduler queue only.
     private func drain() {
-        // Also ends a backoff retry scheduled before a disable.
         guard isActive() else {
             SdkLog.debug("drain skipped: SDK disabled")
             return
         }
         lock.lock()
         if draining {
-            // Re-entrant request (e.g. a trigger firing mid-drain with an
-            // inline executor): coalesce into one follow-up pass.
+            // Re-entrant with an inline executor (a trigger mid-drain): coalesce into one follow-up pass.
             drainAgain = true
             lock.unlock()
             return
@@ -94,7 +86,6 @@ final class FlushController: @unchecked Sendable {
         }
     }
 
-    /// Recursion depth ≤ log2(batch) ≈ 6.
     private func drainPrefix(_ count: Int) -> Outcome {
         let entries = queue.peek(count)
         if entries.isEmpty { return .proceed }
@@ -107,6 +98,7 @@ final class FlushController: @unchecked Sendable {
             return .stopAndRetry
 
         case .payloadTooLarge, .permanentError:
+            // A 4xx rejects the whole POST: bisect so only the poison entries are dropped.
             if entries.count == 1 {
                 SdkLog.debug("dropping poison event (rejected by collector)")
                 queue.removeOldest(1)
@@ -137,8 +129,7 @@ final class FlushController: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// `sent_at` is restamped at every attempt; `created_at` never changes. An
-    /// unparseable entry is sent verbatim rather than dropped.
+    // sent_at is restamped per attempt, so created_at → sent_at shows a retried event's real latency.
     private func buildBody(_ entries: [String]) -> String {
         let sentAt = EnvelopeBuilder.isoMillis(clock.wallMillis())
         let rendered = entries.map { line -> String in

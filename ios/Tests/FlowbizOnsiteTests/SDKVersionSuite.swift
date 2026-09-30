@@ -1,5 +1,3 @@
-// Swift Testing suite — mirrors SDKVersionTests.swift so the package tests
-// green on hosts that have the Testing framework but not XCTest.
 #if canImport(Testing)
 import Testing
 @testable import FlowbizOnsite

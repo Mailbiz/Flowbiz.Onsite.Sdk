@@ -1,8 +1,6 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Three-step checkout funnel: `checkout.step` per step, then
-/// `order.complete` or `order.cancel`.
 struct CheckoutView: View {
 
     @EnvironmentObject var store: DemoStore
@@ -34,7 +32,6 @@ struct CheckoutView: View {
                 }
                 if completedOrderId == nil {
                     Button("Cancelar pedido (order.cancel)", role: .destructive) {
-                        // order.cancel needs at least one of orderId/cartId.
                         Flowbiz.track(.orderCancel(orderId: nil, cartId: DemoStore.cartId))
                         presentationMode.wrappedValue.dismiss()
                     }

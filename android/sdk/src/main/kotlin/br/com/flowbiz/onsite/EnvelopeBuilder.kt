@@ -5,7 +5,6 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-/** Pure builder for one envelope entry: every runtime value is injected by the caller. */
 internal object EnvelopeBuilder {
 
     private val ISO_MILLIS_UTC: DateTimeFormatter =
@@ -13,11 +12,6 @@ internal object EnvelopeBuilder {
 
     fun isoMillis(epochMillis: Long): String = ISO_MILLIS_UTC.format(Instant.ofEpochMilli(epochMillis))
 
-    /**
-     * `data` and `context.utm` are JSON **strings**, as the web sends them,
-     * not nested objects; null or empty optional fields are omitted. Throws
-     * only for non-finite numbers in the payload.
-     */
     fun build(
         event: Event,
         hash: String,
@@ -59,7 +53,6 @@ internal object EnvelopeBuilder {
         sdkVersion = sdkVersion,
     )
 
-    /** A `page.ping` entry: the heartbeat is automatic, never an [Event] tracked by the app. */
     fun buildPing(
         hash: String,
         createdAtMillis: Long,
@@ -101,7 +94,6 @@ internal object EnvelopeBuilder {
         sdkVersion = sdkVersion,
     )
 
-    /** An entry for an internal wire event outside the public [Event] catalog (`push.token.*`). */
     fun buildRaw(
         wireName: String,
         dataJson: String,
@@ -195,7 +187,7 @@ internal object EnvelopeBuilder {
         return JSONObject()
             .put("event", wireName)
             .put("hash", hash)
-            .put("data", dataJson)
+            .put("data", dataJson) // a JSON string, not an object, as the web sends it (so is context.utm)
             .put("timings", timings)
             .put("identity", identity)
             .put("context", context)

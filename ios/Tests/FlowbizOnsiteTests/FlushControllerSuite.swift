@@ -20,7 +20,6 @@ import Testing
             + "{\"created_at\":\"\(iso)\",\"sent_at\":\"\(iso)\",\"timezone\":\"-03:00\"}}"
     }
 
-    /// Event names ("e1"…) of each entry in a captured `{"data":[...]}` body.
     private func eventsIn(_ body: String) -> [String] {
         let root = try! JSONSerialization.jsonObject(with: Data(body.utf8)) as! [String: Any]
         let data = root["data"] as! [[String: Any]]
@@ -32,8 +31,6 @@ import Testing
         let data = root["data"] as! [[String: Any]]
         return data[index]["timings"] as! [String: Any]
     }
-
-    // MARK: Batching
 
     @Test func drainBatchesAtMostFiftyPerRequestInOrder() {
         let c = controller()
@@ -52,8 +49,6 @@ import Testing
         (1...5).forEach { queue.append(entry($0)) }
         sender.results = [.success, .retriableError]
         c.requestFlush(.explicit)
-        // First batch (e1..e3) delivered and removed; second stopped by the
-        // retriable error and fully preserved.
         #expect(queue.peek(10) == [entry(4), entry(5)])
     }
 
@@ -63,8 +58,6 @@ import Testing
         #expect(sender.bodies.isEmpty)
         #expect(scheduler.allScheduleDelays.isEmpty)
     }
-
-    // MARK: 413 bisection
 
     @Test func payloadTooLargeSplitsInHalfUntilDeliverable() {
         let c = controller()
@@ -89,13 +82,10 @@ import Testing
             return events == ["e1"] ? .payloadTooLarge : .success
         }
         c.requestFlush(.explicit)
-        // e1 dropped (still 413 alone), e2 delivered; nothing left, no retry.
         #expect(queue.size == 0)
         #expect(scheduler.allScheduleDelays.isEmpty)
         #expect(eventsIn(sender.bodies.last!) == ["e2"])
     }
-
-    // MARK: Poison isolation on permanent 4xx
 
     @Test func permanentErrorBisectsToDropOnlyThePoisonEvent() {
         let c = controller()
@@ -105,8 +95,6 @@ import Testing
         }
         c.requestFlush(.explicit)
         #expect(queue.size == 0)
-        // Delivered bodies (successes) cover exactly e1,e2,e4,e5 — e3 never
-        // delivered alone, dropped as poison.
         let delivered = sender.bodies
             .filter { !eventsIn($0).contains("e3") }
             .flatMap { eventsIn($0) }
@@ -123,8 +111,6 @@ import Testing
         #expect(scheduler.allScheduleDelays.isEmpty)
     }
 
-    // MARK: Retriable stops the drain, order preserved
-
     @Test func retriableErrorStopsDrainPreservingOrderAndSchedulesRetry() {
         let c = controller(batchSize: 2)
         (1...5).forEach { queue.append(entry($0)) }
@@ -139,15 +125,12 @@ import Testing
     @Test func retryDuringBisectionStopsWithoutDroppingInnocents() {
         let c = controller()
         (1...4).forEach { queue.append(entry($0)) }
-        sender.results = [.permanentError] // full batch
-        sender.defaultResult = .retriableError // every sub-batch
+        sender.results = [.permanentError]
+        sender.defaultResult = .retriableError
         c.requestFlush(.explicit)
-        // Network died mid-bisection: nothing dropped, everything still queued.
         #expect(queue.size == 4)
         #expect(scheduler.allScheduleDelays.count == 1)
     }
-
-    // MARK: sent_at restamped per attempt, created_at stable
 
     @Test func sentAtIsRewrittenOnEachAttemptCreatedAtUntouched() {
         let c = controller()
@@ -175,8 +158,6 @@ import Testing
         #expect(queue.size == 0)
     }
 
-    // MARK: Backoff (1 s doubling to a 60 s cap, reset on any trigger)
-
     @Test func backoffDoublesToSixtySecondCap() {
         let c = controller()
         queue.append(entry(1))
@@ -195,8 +176,6 @@ import Testing
         scheduler.runLastScheduled()
         #expect(scheduler.allScheduleDelays == [1_000, 2_000, 4_000])
 
-        // A new trigger (e.g. network restored) resets to 1 s and cancels
-        // the pending 4 s retry.
         c.requestFlush(.networkRestored)
         #expect(scheduler.scheduled[2].cancelled)
         #expect(scheduler.allScheduleDelays == [1_000, 2_000, 4_000, 1_000])
@@ -214,8 +193,6 @@ import Testing
         #expect(sender.bodies.count == 2)
     }
 
-    // MARK: No concurrent flushes
-
     @Test func reentrantFlushRequestCoalescesInsteadOfNesting() {
         let c = controller()
         queue.append(entry(1))
@@ -223,13 +200,10 @@ import Testing
         sender.onSend = { _ in
             if !triggered {
                 triggered = true
-                // A track() firing mid-drain (inline executor = worst case).
                 c.requestFlush(.eventTracked)
             }
         }
         c.requestFlush(.explicit)
-        // The nested request never nested a drain (depth 1) and the
-        // follow-up pass found an empty queue — exactly one send.
         #expect(sender.maxDepth == 1)
         #expect(sender.bodies.count == 1)
         #expect(queue.size == 0)

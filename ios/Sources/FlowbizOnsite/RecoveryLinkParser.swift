@@ -1,10 +1,6 @@
 import Foundation
 
-/// Port of the web tag's `getRecoveryDataFromQuery`: `_mb_cr_` (next to a
-/// Flowbiz `utm_source`) is base64 of `{t, u, c, its: [[qty, product_id, sku,
-/// recovery_properties?]]}`. The value is tried raw, percent-decoded and with
-/// `' '` back to `'+'`; the first that decodes wins. When given,
-/// `expectedAppId` must equal `t`, like web `appId === hash.t`.
+// Web getRecoveryDataFromQuery: `_mb_cr_` is base64 of `{t, u, c, its: [[qty, product_id, sku, props?]]}`.
 enum RecoveryLinkParser {
 
     private static let param = "_mb_cr_"
@@ -15,8 +11,6 @@ enum RecoveryLinkParser {
         let pairs = queryPairs(url)
         guard let raw = pairs.first(where: { $0.key == param && !$0.value.isEmpty })?.value else { return nil }
         guard let utm = pairs.first(where: { $0.key == utmParam })?.value, isValidUtm(utm) else { return nil }
-        // Deduplicated in order, like Kotlin's `LinkedHashSet`, so each
-        // distinct candidate decodes (and logs a tenant mismatch) once.
         var candidates: [String] = []
         var seen = Set<String>()
         func add(_ candidate: String) {
@@ -35,8 +29,7 @@ enum RecoveryLinkParser {
         return nil
     }
 
-    /// The fragment is cut first: a `?` inside it (`#/cart?_mb_cr_=…`) is not
-    /// a query. Keys are percent-decoded, values left raw.
+    // Fragment cut first (`#/cart?_mb_cr_=…` holds no query); values stay raw for the base64 candidates.
     private static func queryPairs(_ url: String) -> [(key: String, value: String)] {
         var beforeFragment = Substring(url)
         if let fragmentStart = url.firstIndex(of: "#") { beforeFragment = url[..<fragmentStart] }
@@ -51,7 +44,7 @@ enum RecoveryLinkParser {
         }
     }
 
-    /// Web `isValidUtm`: contains "mailbiz" or "flowbiz", case-insensitive.
+    // Web isValidUtm, "mailbiz" included.
     private static func isValidUtm(_ raw: String) -> Bool {
         let value = (percentDecode(raw) ?? raw).lowercased()
         return value.contains("mailbiz") || value.contains("flowbiz")
@@ -62,7 +55,6 @@ enum RecoveryLinkParser {
         return value.removingPercentEncoding
     }
 
-    /// Standard or URL-safe base64, padding optional → UTF-8 string.
     private static func decodeBase64(_ value: String) -> String? {
         var normalized = value.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         let remainder = normalized.count % 4
@@ -71,8 +63,6 @@ enum RecoveryLinkParser {
         guard let data = Data(base64Encoded: normalized) else { return nil }
         return String(data: data, encoding: .utf8)
     }
-
-    // MARK: hash → payload
 
     private static func mapHash(_ json: String, expectedAppId: String?) -> RecoveryPayload? {
         guard
@@ -110,15 +100,13 @@ enum RecoveryLinkParser {
         case let string as String:
             return string.isEmpty ? nil : string
         case let number as NSNumber:
-            // A numeric id passes through the JS untouched; stringified here
-            // to fit the typed payload.
+            // The web passes a numeric id through untouched; stringified here to fit the typed payload.
             return JSONValue.isBoolean(number) ? (number.boolValue ? "true" : "false") : number.stringValue
         default:
             return nil
         }
     }
 
-    /// Web `it[idx] || ''`: missing/null/empty → `""`; numbers stringified.
     private static func itemString(_ item: [Any], _ index: Int) -> String {
         guard index < item.count else { return "" }
         switch item[index] {
@@ -131,9 +119,7 @@ enum RecoveryLinkParser {
         }
     }
 
-    /// Web `parseInt(it[0]) || 1`: leading decimal integer of a string (JS
-    /// `parseInt` semantics — leading whitespace/sign, trailing junk
-    /// ignored), numbers truncated toward zero; `NaN` *and* `0` (falsy) → 1.
+    // Web `parseInt(it[0]) || 1`: JS parseInt semantics, and NaN *and* 0 become 1.
     private static func webQuantity(_ value: Any?) -> Int {
         let parsed: Int?
         switch value {
@@ -142,10 +128,7 @@ enum RecoveryLinkParser {
             if double.isNaN {
                 parsed = nil
             } else {
-                // `Int(double)` traps when the value is outside Int's range
-                // (e.g. a decoded hash quantity of 1e30); clamp to Int32's
-                // range first, matching `parseIntLeading` and Kotlin's
-                // saturating `toDouble().toInt()`.
+                // Clamped: Int(double) traps out of range; Int32 bounds match Kotlin's saturating toInt().
                 let truncated = double.rounded(.towardZero)
                 let clamped = min(max(truncated, Double(Int32.min)), Double(Int32.max))
                 parsed = Int(clamped)
@@ -182,9 +165,7 @@ enum RecoveryLinkParser {
         return Int(min(max(sign * accumulated, Int64(Int32.min)), Int64(Int32.max)))
     }
 
-    /// 4th `its` element → properties map. Web parity: a JSON-object
-    /// *string* (`tryToParseJson`); a nested object is additionally
-    /// tolerated. Garbage → nil (web emits `{}` — same meaning).
+    // Web tryToParseJson of a JSON-object string; a nested object is tolerated, garbage is nil (web `{}`).
     private static func recoveryProperties(_ value: Any?) -> [String: JSONValue]? {
         switch value {
         case let string as String:

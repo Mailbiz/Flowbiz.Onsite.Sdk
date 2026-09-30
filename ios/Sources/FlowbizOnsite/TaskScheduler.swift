@@ -1,17 +1,16 @@
 import Foundation
 
-/// Cancelling twice is harmless.
 protocol ScheduledHandle {
     func cancel()
 }
 
-/// Serial: `EventQueue` and `DedupStore` rely on it instead of locks.
+// Must be serial: EventQueue and DedupStore rely on it instead of locks.
 protocol TaskScheduler {
     func execute(_ task: @escaping @Sendable () -> Void)
 
     func schedule(afterMillis: Int64, _ task: @escaping @Sendable () -> Void) -> any ScheduledHandle
 
-    /// First fires one full interval after scheduling.
+    // First fires one full interval after scheduling, like the web pagePingDelay.
     func scheduleRepeating(intervalMillis: Int64, _ task: @escaping @Sendable () -> Void) -> any ScheduledHandle
 }
 
@@ -31,7 +30,6 @@ final class DispatchTaskScheduler: TaskScheduler, @unchecked Sendable {
 
     private let queue: DispatchQueue
 
-    /// `queue` must be serial.
     init(queue: DispatchQueue) {
         self.queue = queue
     }

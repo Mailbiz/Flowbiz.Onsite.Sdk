@@ -19,15 +19,10 @@ import br.com.flowbiz.onsite.Event
 import br.com.flowbiz.onsite.Flowbiz
 import br.com.flowbiz.onsite.RecoveryPayload
 
-/**
- * Only a fresh launch forwards its intent's link: a recreation or a relaunch
- * from Recents hands back an already handled link, whose old UTMs would be
- * captured again over newer ones.
- */
+// Forward the launch link once: a recreation or Recents relaunch replays it, re-capturing stale UTMs.
 internal fun isFreshLinkLaunch(restoring: Boolean, intentFlags: Int): Boolean =
     !restoring && (intentFlags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
 
-/** Plain programmatic Views, no extra dependencies: the point is the SDK call sites, not UX. */
 class MainActivity : Activity() {
 
     private sealed interface Screen {
@@ -73,7 +68,6 @@ class MainActivity : Activity() {
     private val backStack = ArrayDeque<Screen>()
     private var current: Screen? = null
 
-    /** Demo-local mirror of the opt-out switch (the SDK persists the real state internally). */
     private var trackingEnabled = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,15 +78,13 @@ class MainActivity : Activity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Keep getIntent() on the latest link, not the one that launched us.
         setIntent(intent)
         handleDeepLink(intent)
     }
 
     private fun handleDeepLink(intent: Intent?): Boolean {
         val uri = intent?.data ?: return false
-        // Null: no decodable _mb_cr_ for this tenant. The UTMs are captured
-        // either way and ride on the page.view that show() tracks below.
+        // Forward every link before its page.view: the UTMs are captured even when no payload decodes.
         val payload = Flowbiz.handleLink(uri)
         show(RecoveryScreen(uri.toString(), payload))
         return true
@@ -114,7 +106,6 @@ class MainActivity : Activity() {
             return
         }
         current = previous
-        // Back navigation is a screen change too.
         Flowbiz.track(Event.PageView(path = previous.path, title = previous.title))
         render(previous)
     }
@@ -175,7 +166,6 @@ class MainActivity : Activity() {
             }
             action("-1") {
                 DemoCart.setQuantity(product.sku, qty - 1)
-                // Quantity 0 removes the line store-side.
                 Flowbiz.track(Event.CartItemUpdate(DemoCart.CART_ID, product.productId, product.sku, qty - 1))
                 renderCart()
             }
@@ -206,7 +196,6 @@ class MainActivity : Activity() {
             bold = true,
         )
         action("Sincronizar carrinho (cart.sync)") {
-            // An empty cart still sends: emptying it is a signal.
             Flowbiz.track(Event.CartSync(DemoCart.toCart()))
             Toast.makeText(this@MainActivity, "cart.sync enfileirado", Toast.LENGTH_SHORT).show()
         }
@@ -230,7 +219,6 @@ class MainActivity : Activity() {
                 }
             }
             action("Cancelar pedido (order.cancel)") {
-                // order.cancel needs at least one of orderId/cartId.
                 Flowbiz.track(Event.OrderCancel(cartId = DemoCart.CART_ID))
                 show(CartScreen)
             }
@@ -317,15 +305,13 @@ class MainActivity : Activity() {
     }
 
     private fun simulatePush() {
-        // What FirebaseMessagingService.onMessageReceived hands over: a flat
-        // map whose "flowbiz" value is a JSON-encoded string.
+        // Stands in for RemoteMessage.data in FirebaseMessagingService.onMessageReceived.
         val payload = mapOf("flowbiz" to SIMULATED_PUSH_MARKER)
         val push = Flowbiz.handlePush(payload)
         if (push == null) {
             dialog("handlePush", "null — payload não é do Flowbiz")
             return
         }
-        // A cart-recovery push carries _mb_cr_ in its deep_link.
         val recovery = push.recoveryPayload
         val message = buildString {
             appendLine("FlowbizPush:")
@@ -350,7 +336,6 @@ class MainActivity : Activity() {
     }
 
     private fun simulateRecoveryLink() {
-        // Decodes to cart-abc-001 / user-123 / P100 + P200 — no adb needed.
         val uri = Uri.parse(DEMO_RECOVERY_LINK)
         val payload = Flowbiz.handleLink(uri)
         show(RecoveryScreen(uri.toString(), payload))
@@ -415,16 +400,13 @@ class MainActivity : Activity() {
 
         const val FAKE_PUSH_TOKEN = "fake-fcm-token-0123456789abcdef"
 
-        /** "basic" vector from shared/recovery-links/vectors.json. */
         const val RECOVERY_HASH =
             "eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19"
 
-        /** A journey cart-recovery link as MessageBuilder writes it: UTMs appended raw, `|` included. */
         const val DEMO_RECOVERY_LINK = "flowbizdemo://recover?_mb_cr_=$RECOVERY_HASH" +
             "&utm_journey=16&utm_journey_channel=email&utm_source=flowbiz&utm_medium=email" +
             "&utm_campaign=jornadas|cart|carrinho-abandonado&utm_journey_type=1"
 
-        /** Marker value from shared/push-samples/samples.json. */
         const val SIMULATED_PUSH_MARKER =
             """{"v":1,"type":"cart_recovery","title":"Sua sacola te espera!","body":"Finalize sua compra...","deep_link":"https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCIsIntcImNvclwiOlwiQXp1bFwiLFwidGFtYW5ob1wiOlwiUFwifSJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19","data":{"campaign_id":"cr-42"}}"""
     }

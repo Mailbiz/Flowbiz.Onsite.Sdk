@@ -7,23 +7,7 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-/**
- * Durable event queue: a JSON Lines file, one envelope entry per line, with
- * an in-memory deque of the pending lines. Appends are O(1); consumed,
- * capacity-dropped and garbage lines stay in the file as stale until
- * compaction rewrites it (at [COMPACT_STALE_THRESHOLD], whenever the queue
- * drains empty, and at load).
- *
- * A crash mid-append costs one truncated line, skipped at load. Compaction
- * writes a tmp file and renames it over the original, so a crash leaves the
- * original intact. Delivery is at-least-once (consumed lines not yet
- * compacted resend after a process death); `hash` is the collector-side
- * idempotency key.
- *
- * Confined to the SDK's serial [TaskScheduler] thread and single-process by
- * assumption, hence no locking. I/O failures degrade to memory-only
- * behavior; never throws.
- */
+// At-least-once: removed lines stay in the file until compaction; `hash` is the collector's idempotency key.
 internal class EventQueue(
     private val file: File,
     private val capacity: Int = DEFAULT_CAPACITY,
@@ -31,22 +15,14 @@ internal class EventQueue(
 
     private val pending = ArrayDeque<String>()
 
-    /** Lines present in the file but no longer pending (consumed/dropped/garbage). */
     private var staleLines = 0
 
-    /**
-     * Set when an append failed or may have written a torn tail line.
-     * While dirty, plain file appends are unsafe — a partially-written tail
-     * without its newline would merge with the next appended entry into one
-     * garbage line — so the next write goes through a full [compact]
-     * (rewrite from [pending]) instead; a successful compaction clears it.
-     */
+    // After a failed append the tail may be torn: appending would merge the next entry into it.
     private var fileDirty = false
 
     init {
         try {
-            // A leftover tmp means a compaction crashed between write and
-            // rename; the original is authoritative.
+            // A leftover tmp is a compaction that crashed before the rename; the original is authoritative.
             val tmp = tmpFile()
             if (tmp.exists()) tmp.delete()
             if (file.exists()) {
@@ -57,8 +33,6 @@ internal class EventQueue(
                         staleLines += 1
                     }
                 }
-                // Over-capacity file (e.g. cap lowered, or drop-oldest lines
-                // resurrected after a crash): drop-oldest to the cap.
                 while (pending.size > capacity) {
                     pending.removeFirst()
                     staleLines += 1
@@ -81,7 +55,6 @@ internal class EventQueue(
         return List(count) { pending[it] }
     }
 
-    /** At [capacity] the oldest pending entry is dropped first. */
     fun append(entry: String) {
         if (entry.isBlank() || entry.contains('\n') || entry.contains('\r')) {
             SdkLog.debug("queue rejected malformed entry")
@@ -94,7 +67,6 @@ internal class EventQueue(
         }
         pending.addLast(entry)
         if (fileDirty) {
-            // A previous append tore the tail — rewrite instead of appending.
             compact()
         } else {
             try {
@@ -105,7 +77,7 @@ internal class EventQueue(
             } catch (t: Throwable) {
                 SdkLog.debug("queue append I/O failed: ${t.javaClass.simpleName}")
                 fileDirty = true
-                compact() // heal immediately when possible
+                compact()
             }
         }
         compactIfNeeded()
@@ -140,8 +112,6 @@ internal class EventQueue(
             staleLines = 0
             fileDirty = false
         } catch (t: Throwable) {
-            // Original file untouched on failure; stale lines are retried at
-            // the next trigger and at worst resend after a restart.
             SdkLog.debug("queue compaction failed: ${t.javaClass.simpleName}")
         }
     }

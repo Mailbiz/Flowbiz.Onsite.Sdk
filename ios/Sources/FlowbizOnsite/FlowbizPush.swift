@@ -1,36 +1,26 @@
 import Foundation
 
-/// A decoded Flowbiz push, from `Flowbiz.handlePush`. `type` is free-form and
-/// any `version` parses, so new push kinds need no SDK update.
 public struct FlowbizPush: Sendable {
 
-    /// Contract version (`v`); absent/malformed defaults to 1.
+    /// Contract version (`v`); 1 when absent or malformed.
     public let version: Int
-    /// Free-form push kind, e.g. `"cart_recovery"`. Always non-empty.
+    /// Free-form push kind; never empty.
     public let type: String
     public let title: String?
     public let body: String?
-    /// `deep_link` as a `URL`, for routing; nil when absent or unparseable
-    /// (the push itself is still returned). On tap, call
-    /// `Flowbiz.handlePushOpened(push)`, not `handleLink(push.deepLink)`: a
-    /// `URL` round trip can alter the link's UTMs.
+    /// For routing only: on tap call `Flowbiz.handlePushOpened`, as a `URL` round trip can alter the UTMs.
     public let deepLink: URL?
-    /// `data` object of the decoded payload; empty when absent.
     public let data: [String: JSONValue]
 
-    /// The raw `deep_link`, unaltered by a `URL` round trip.
     let deepLinkString: String?
 
-    /// The cart of a cart-recovery push: `deep_link` decoded like
-    /// `Flowbiz.handleLink`, nil when it carries no decodable `_mb_cr_`.
-    /// Pure: no tenant check, no UTM capture.
+    /// Pure decode (no UTM capture, no tenant check); on tap, call `Flowbiz.handlePushOpened` instead.
     public var recoveryPayload: RecoveryPayload? {
         RecoveryLinkParser.parse(deepLinkString)
     }
 }
 
-/// The `"flowbiz"` marker value is a JSON string, as FCM data messages are
-/// flat maps; APNs allows a nested object, tolerated by `parse(object:)`.
+// The marker is a JSON string, as FCM data is a flat map; APNs may nest an object, hence parse(object:).
 enum PushPayloadParser {
 
     static let markerKey = "flowbiz"
@@ -65,17 +55,12 @@ enum PushPayloadParser {
         )
     }
 
-    /// iOS 13–16's `URL(string:)` rejects any character outside RFC 3986,
-    /// such as the raw `|` MessageBuilder writes in `utm_campaign`: a
-    /// rejected link is parsed again with those characters encoded. `parse`
-    /// lets tests stand in the iOS 13–16 parser.
+    // iOS 13–16's URL(string:) rejects non-RFC 3986 characters, like the raw `|` in utm_campaign.
     static func deepLinkURL(_ string: String, parse: (String) -> URL? = { URL(string: $0) }) -> URL? {
         parse(string) ?? encodingInvalidCharacters(string).flatMap(parse)
     }
 
-    /// `link` with its non-RFC 3986 characters percent-encoded, or nil unless
-    /// its `scheme:` or `scheme://authority` needs none: encoding a
-    /// non-ASCII host would name another host.
+    // Nil unless scheme and authority need no encoding: encoding a non-ASCII host would name another host.
     static func encodingInvalidCharacters(_ link: String) -> String? {
         guard let encoded = link.addingPercentEncoding(withAllowedCharacters: rfc3986),
               let prefix = encoded.range(of: "^[A-Za-z][A-Za-z0-9+.-]*:(//[^/?#]*)?", options: .regularExpression),
@@ -84,8 +69,7 @@ enum PushPayloadParser {
         return encoded
     }
 
-    /// RFC 3986 unreserved and reserved characters, plus `%` so existing
-    /// escapes are kept.
+    // Plus `%`, so existing escapes are kept.
     private static let rfc3986 = CharacterSet(
         charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=%"
     )

@@ -1,7 +1,6 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Login screen with a fake user: `account.login`, `account.sync`, `logout`.
 struct LoginView: View {
 
     @EnvironmentObject var store: DemoStore

@@ -1,9 +1,6 @@
 import Foundation
 @testable import FlowbizOnsite
 
-/// Test-side helpers for the shared drift-guard fixtures (`shared/fixtures/`):
-/// locating the fixture directory, mapping fixture `input` JSON onto the typed
-/// constructors, and structural JSON comparison.
 enum FixtureSupport {
 
     struct FixtureError: Error, CustomStringConvertible {
@@ -11,14 +8,12 @@ enum FixtureSupport {
         init(_ description: String) { self.description = description }
     }
 
-    /// `shared/<name>` resolved relative to this source file
-    /// (`ios/Tests/FlowbizOnsiteTests/` → repo root → `shared/<name>`).
     static func sharedDirectory(_ name: String) -> URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // FixtureSupport.swift
-            .deletingLastPathComponent() // FlowbizOnsiteTests
-            .deletingLastPathComponent() // Tests
-            .deletingLastPathComponent() // ios
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
             .appendingPathComponent("shared/\(name)", isDirectory: true)
     }
 
@@ -44,7 +39,6 @@ enum FixtureSupport {
         return object
     }
 
-    /// Maps a fixture (`event` name + camelCase `input`) onto the typed constructors.
     static func buildEvent(_ eventName: String, input: [String: Any]) throws -> Event {
         switch eventName {
         case "pageView":
@@ -199,8 +193,6 @@ enum FixtureSupport {
         )
     }
 
-    // MARK: - JSON → JSONValue
-
     private static func propertiesOrNil(_ json: [String: Any], _ key: String) throws -> [String: JSONValue]? {
         guard let raw = json[key] as? [String: Any] else { return nil }
         var result = [String: JSONValue]()
@@ -233,11 +225,6 @@ enum FixtureSupport {
         CFGetTypeID(number) == CFBooleanGetTypeID()
     }
 
-    // MARK: - Structural comparison
-
-    /// Structural comparison — key order irrelevant, numbers compared by
-    /// double value (`0` == `0.0`). Returns a description of the first
-    /// difference, or nil when equivalent.
     static func diff(expected: Any, actual: Any, path: String) -> String? {
         switch (expected, actual) {
         case (is NSNull, is NSNull):
@@ -280,8 +267,6 @@ enum FixtureSupport {
             return "\(path): type mismatch (expected \(type(of: expected)), was \(type(of: actual)))"
         }
     }
-
-    // MARK: - Extraction helpers
 
     private static func object(_ json: [String: Any], _ key: String) throws -> [String: Any] {
         guard let value = json[key] as? [String: Any] else {
