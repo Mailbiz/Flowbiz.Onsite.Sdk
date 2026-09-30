@@ -9,19 +9,9 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 
-/**
- * SPEC §9 response classification through a real socket plus the pure
- * [HttpUrlSender.classify] table. Also pins the wire mechanics: POST to
- * `/collect`, JSON content type, `platform` header, body passthrough,
- * redirects not followed.
- *
- * Uses a minimal [ServerSocket]-based HTTP stub: `com.sun.net.httpserver`
- * is not on the Android unit-test compile classpath (tests compile against
- * `android.jar`, same reason org.json is a test dependency).
- */
 class HttpUrlSenderTest {
 
-    /** One-shot loopback HTTP server answering every request with [status]. */
+    // A raw ServerSocket: com.sun.net.httpserver is not on the android.jar unit-test classpath.
     private class StubServer(
         private val status: Int,
         private val delayMillis: Long = 0,
@@ -43,7 +33,6 @@ class HttpUrlSenderTest {
                     socket.accept().use { handle(it) }
                 }
             } catch (_: Throwable) {
-                // Server socket closed — test over.
             }
         }.apply {
             isDaemon = true
@@ -123,8 +112,6 @@ class HttpUrlSenderTest {
     private fun sendTo(baseUrl: String): SendResult =
         HttpUrlSender(baseUrl, "android").send("""{"data":[]}""")
 
-    // --- Wire mechanics ---
-
     @Test
     fun postsJsonBodyWithPlatformHeaderToCollectPath() {
         val stub = startServer(200)
@@ -137,8 +124,6 @@ class HttpUrlSenderTest {
         assertEquals("android", stub.platform)
         assertEquals("""{"data":[{"event":"e1"}]}""", stub.body)
     }
-
-    // --- Real-socket classification ---
 
     @Test
     fun http200IsSuccess() {
@@ -154,8 +139,6 @@ class HttpUrlSenderTest {
     fun http302IsPermanentAndNotFollowed() {
         val stub = startServer(302, headers = mapOf("Location" to "http://127.0.0.1:1/elsewhere"))
         assertEquals(SendResult.PERMANENT_ERROR, sendTo(stub.baseUrl))
-        // The redirect target (a dead port) was never contacted — the 302
-        // itself was observed and classified.
         assertEquals("/collect", stub.path)
     }
 
@@ -193,7 +176,6 @@ class HttpUrlSenderTest {
 
     @Test
     fun connectionRefusedIsRetriable() {
-        // Grab a genuinely free port, then close it — nothing listens there.
         val port = ServerSocket(0).use { it.localPort }
         val sender = HttpUrlSender("http://127.0.0.1:$port", "android", connectTimeoutMillis = 500)
         assertEquals(SendResult.RETRIABLE_ERROR, sender.send("""{"data":[]}"""))
@@ -203,8 +185,6 @@ class HttpUrlSenderTest {
     fun malformedCollectorUrlIsPermanent() {
         assertEquals(SendResult.PERMANENT_ERROR, HttpUrlSender("nonsense://::bad::", "android").send("{}"))
     }
-
-    // --- Pure classification table (SPEC §9) ---
 
     @Test
     fun classificationTable() {
@@ -229,8 +209,8 @@ class HttpUrlSenderTest {
             502 to SendResult.RETRIABLE_ERROR,
             503 to SendResult.RETRIABLE_ERROR,
             599 to SendResult.RETRIABLE_ERROR,
-            100 to SendResult.RETRIABLE_ERROR, // unexpected → keep and retry
-            -1 to SendResult.RETRIABLE_ERROR, // HttpURLConnection "no valid code"
+            100 to SendResult.RETRIABLE_ERROR,
+            -1 to SendResult.RETRIABLE_ERROR,
         )
         for ((code, expected) in cases) {
             assertEquals("status $code", expected, HttpUrlSender.classify(code))

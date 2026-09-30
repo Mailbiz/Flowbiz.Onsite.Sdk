@@ -1,4 +1,3 @@
-// SPEC §6 identity persistence over the injected KeyValueStore.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -24,7 +23,6 @@ import Testing
         let identity = self.identity
         let first = identity.anonymousId
         #expect(identity.anonymousId == first)
-        // ... and it is the persisted value, not per-instance state.
         #expect(store[StorageKeys.anonymousId] as? String == first)
     }
 

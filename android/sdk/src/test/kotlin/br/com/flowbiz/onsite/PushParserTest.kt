@@ -9,22 +9,12 @@ import org.junit.Test
 import java.io.File
 import kotlin.random.Random
 
-/**
- * `handlePush` (SPEC §10.2/§10.3) driven by the shared drift-guard samples
- * (`shared/push-samples/samples.json`). Samples are exercised through the
- * public facade — `handlePush` is pure and requires no initialize (SPEC §3).
- */
 class PushParserTest {
 
     private fun samples(): JSONArray =
         JSONArray(File(FixtureSupport.sharedDir("push-samples"), "samples.json").readText())
 
-    /**
-     * Builds the FCM-shaped `Map<String, String>` for a sample. A non-string
-     * marker value (the `non_string_marker_dict` sample) is smuggled in via
-     * an erasure-level cast — exactly what a hostile/buggy Java caller could
-     * do; the SDK must degrade to null, never throw.
-     */
+    // Keeps non-string values as they are, smuggled through erasure as a buggy Java caller could.
     private fun payloadMap(payload: JSONObject): Map<String, String> {
         val map = HashMap<String, Any>()
         val keys = payload.keys()
@@ -32,7 +22,7 @@ class PushParserTest {
             val key = keys.next() as String
             when (val value = payload.get(key)) {
                 is String -> map[key] = value
-                else -> map[key] = value // non-string smuggled through erasure
+                else -> map[key] = value
             }
         }
         @Suppress("UNCHECKED_CAST")
@@ -100,9 +90,6 @@ class PushParserTest {
     private fun JSONObject.optStringOrNull(key: String): String? =
         if (has(key) && !isNull(key)) getString(key) else null
 
-    // MARK: purity / never-throw
-
-    /** SPEC §3: handlePush and handleLink are pure — no initialize needed (see also FlowbizFacadeSmokeTest). */
     @Test
     fun handlePushWorksWithoutInitialize() {
         val push = Flowbiz.handlePush(mapOf("flowbiz" to """{"v":1,"type":"promo"}"""))
@@ -123,7 +110,7 @@ class PushParserTest {
             val garbage = buildString {
                 repeat(random.nextInt(0, 80)) { append(random.nextInt(0x20, 0x2FFF).toChar()) }
             }
-            Flowbiz.handlePush(mapOf("flowbiz" to garbage)) // must not throw
+            Flowbiz.handlePush(mapOf("flowbiz" to garbage))
         }
     }
 }

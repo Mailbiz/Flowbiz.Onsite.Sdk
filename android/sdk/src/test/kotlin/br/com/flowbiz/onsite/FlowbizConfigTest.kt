@@ -6,7 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** SPEC §2 config sanitization: blank appId, https-only collector URL, heartbeat clamp. */
 class FlowbizConfigTest {
 
     @Test
@@ -46,7 +45,6 @@ class FlowbizConfigTest {
 
     @Test
     fun httpsWithEmptyHostFallsBackToDefault() {
-        // Reviewer-flagged alignment case: `https://` parses but is garbage.
         val sanitized = ConfigSanitizer.sanitize(
             FlowbizConfig(appId = "77777", baseUri = "https://store.com", collectorUrl = "https://")
         )!!
@@ -88,8 +86,6 @@ class FlowbizConfigTest {
         )!!
         assertEquals(FlowbizConfig.MAX_HEARTBEAT_SECONDS, sanitized.heartbeatIntervalSeconds)
     }
-
-    // MARK: baseUri / recoveryUrl (spec §3)
 
     @Test
     fun baseUriOriginPassesThroughAndTrailingSlashIsStripped() {
@@ -135,18 +131,6 @@ class FlowbizConfigTest {
         assertNull(FlowbizConfig("77777", "https://store.com").recoveryUrl)
     }
 
-    /**
-     * I1 (iOS-side regression, mirrored here): `Flowbiz.initialize` installs
-     * the debug `SdkLog.sink` *before* calling `ConfigSanitizer.sanitize`
-     * (see `Flowbiz.initialize` — `if (config.debug) { SdkLog.sink = ... }`
-     * precedes `ConfigSanitizer.sanitize(config)`), so its warnings are
-     * never dropped on the first `initialize` call. That full path needs a
-     * real `Context` (`FlowbizFacadeSmokeTest`'s doc comment: not
-     * reachable on a plain JVM, and this project deliberately does not use
-     * Robolectric); this pins the piece that plain-JVM tests *can* reach —
-     * that `ConfigSanitizer.sanitize` does log through an installed sink —
-     * so a regression in the sanitizer's warning text is still caught.
-     */
     @Test
     fun invalidBaseUriWarningReachesAnInstalledSink() {
         val captured = mutableListOf<String>()

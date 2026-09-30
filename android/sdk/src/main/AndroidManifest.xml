@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Normal-level permission, merged into consumers: required for the
-         SPEC §9 network-restoration retry trigger (ConnectivityManager
-         default network callback). -->
+    <!-- For the network-restored flush trigger (registerDefaultNetworkCallback). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>

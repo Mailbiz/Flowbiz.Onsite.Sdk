@@ -1,7 +1,6 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Product list — the store's home screen. Mirrors the Android demo 1:1.
 struct ProductListView: View {
 
     @EnvironmentObject var store: DemoStore
@@ -28,14 +27,13 @@ struct ProductListView: View {
                 Section(footer: Text(
                     "Loja fake de demonstração do Flowbiz Onsite SDK. Offline? Tudo bem: " +
                     "os eventos ficam numa fila em disco e são reenviados com backoff " +
-                    "exponencial (SPEC §9). Logs: os_log categoria FlowbizOnsite."
+                    "exponencial. Logs: os_log categoria FlowbizOnsite."
                 )) {
                     EmptyView()
                 }
             }
             .navigationTitle("Bela Moda Store")
             .onAppear {
-                // SPEC §5 `page.view`: tracked on every screen change (SPEC §14).
                 Flowbiz.track(.pageView(path: "/", title: "Produtos"))
             }
         }
@@ -43,7 +41,6 @@ struct ProductListView: View {
     }
 }
 
-/// Product detail — tracks `product.view` on open, `cart.add` on add.
 struct ProductDetailView: View {
 
     @EnvironmentObject var store: DemoStore
@@ -61,9 +58,8 @@ struct ProductDetailView: View {
             Section {
                 Button("Adicionar ao carrinho") {
                     store.add(product)
-                    // SPEC §5 `cart.add`: only the line that was added.
+                    // cart.add carries only the added line; cart.sync then sends the whole cart.
                     Flowbiz.track(.addToCart(products: [store.cartItem(product, quantity: 1)]))
-                    // SPEC §5 `cart.sync`: full cart snapshot after the change.
                     Flowbiz.track(.cartSync(cart: store.cart()))
                 }
                 NavigationLink("Ir para o carrinho (\(store.itemCount))", destination: CartView())
@@ -71,9 +67,7 @@ struct ProductDetailView: View {
         }
         .navigationTitle(product.name)
         .onAppear {
-            // SPEC §5 `page.view`: tracked on every screen change.
             Flowbiz.track(.pageView(path: product.url, title: product.name))
-            // SPEC §5 `product.view`: tracked when the product screen opens.
             Flowbiz.track(.productView(product: store.sdkProduct(product)))
         }
     }

@@ -1,48 +1,9 @@
 import Foundation
 
-/// Durable event queue (SPEC §9): JSON Lines file, one serialized envelope
-/// entry per line, append-only.
-///
-/// ## Model
-/// An in-memory array of pending lines mirrors the file; the file may
-/// additionally contain **stale** lines (consumed after a successful flush,
-/// dropped at the capacity cap, or unparseable garbage) that are purged only
-/// at compaction. Appends are O(1) (open-append-close via `OutputStream`);
-/// consumption is logical (head of the array) until compaction rewrites the
-/// file.
-///
-/// ## Durability & crash behavior
-/// - A crash mid-append costs one truncated line; unparseable/blank lines
-///   are skipped (and counted stale) at load, never fatal (SPEC §3/§9).
-/// - Compaction writes `queue.jsonl.tmp` then atomically replaces the
-///   original (`FileManager.replaceItemAt`) — a crash between write and
-///   replace leaves the original intact; the leftover tmp is deleted at next
-///   load.
-/// - Delivery is at-least-once: consumed-but-not-yet-compacted lines (and,
-///   rarely, capacity-dropped ones) resend after a process death. `hash` is
-///   the collector-side idempotency key (SPEC §9).
-///
-/// ## Compaction trigger
-/// Compacts when the stale-line count reaches `compactStaleThreshold`, and
-/// eagerly whenever the queue drains empty (a cheap truncate — the common
-/// "successful flush" case, per SPEC §9), and at load when any stale line
-/// was found.
-///
-/// ## Concurrency
-/// **Thread-confined** to the SDK's serial `TaskScheduler` queue — no
-/// internal locking, no file locking. Single-process access is a SPEC §9
-/// assumption. Never throws: I/O failures log and degrade to memory-only
-/// behavior for the session.
-///
-/// The backing `fileURL` is injected (tests use temp dirs);
-/// `defaultFileURL(appId:)` provides the production location in Application
-/// Support, excluded from iCloud backup.
+// At-least-once: removed lines stay in the file until compaction; `hash` is the collector's idempotency key.
 final class EventQueue {
 
-    /// SPEC §9: 1000 events, drop-oldest. Internal constant, not a knob.
     static let defaultCapacity = 1000
-
-    /// Stale lines tolerated in the file before a rewrite is forced.
     static let compactStaleThreshold = 64
 
     private let fileURL: URL
@@ -50,14 +11,9 @@ final class EventQueue {
     private let capacity: Int
     private var pending: [String] = []
 
-    /// Lines present in the file but no longer pending (consumed/dropped/garbage).
     private var staleLines = 0
 
-    /// Set when an append failed or may have written a torn tail line.
-    /// While dirty, plain file appends are unsafe — a partially-written tail
-    /// without its newline would merge with the next appended entry into one
-    /// garbage line — so the next write goes through a full `compact()`
-    /// (rewrite from `pending`) instead; a successful compaction clears it.
+    // A failed append may leave a torn tail that would fuse with the next line: rewrite until compacted.
     private var fileDirty = false
 
     init(fileURL: URL, capacity: Int = EventQueue.defaultCapacity) {
@@ -67,18 +23,13 @@ final class EventQueue {
         load()
     }
 
-    /// Number of pending (not yet delivered) entries.
     var size: Int { pending.count }
 
-    /// Oldest-first snapshot of up to `max` pending entries; the queue is unchanged.
     func peek(_ max: Int) -> [String] {
         guard max > 0, !pending.isEmpty else { return [] }
         return Array(pending.prefix(max))
     }
 
-    /// Appends one serialized envelope entry. At capacity the oldest pending
-    /// entry is dropped first (SPEC §9 drop-oldest). Entries containing raw
-    /// newlines are rejected (canonical JSON never has them — defensive only).
     func append(_ entry: String) {
         guard !entry.contains("\n"), !entry.contains("\r"),
               !entry.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -92,16 +43,14 @@ final class EventQueue {
         }
         pending.append(entry)
         if fileDirty {
-            // A previous append tore the tail — rewrite instead of appending.
             compact()
         } else if !appendToFile(entry) {
             fileDirty = true
-            compact() // heal immediately when possible
+            compact()
         }
         compactIfNeeded()
     }
 
-    /// Removes the `count` oldest pending entries (a delivered or poison batch).
     func removeOldest(_ count: Int) {
         let removable = min(count, pending.count)
         if removable > 0 {
@@ -111,12 +60,9 @@ final class EventQueue {
         compactIfNeeded()
     }
 
-    // MARK: - File I/O (never throws out of this class)
-
     private func load() {
         let manager = FileManager.default
-        // A leftover tmp means a compaction crashed between write and
-        // replace; the original is authoritative.
+        // A leftover tmp is a compaction that crashed before replace; the original is authoritative.
         if manager.fileExists(atPath: tmpURL.path) {
             try? manager.removeItem(at: tmpURL)
         }
@@ -135,8 +81,6 @@ final class EventQueue {
                 staleLines += 1
             }
         }
-        // Over-capacity file (e.g. cap lowered, or drop-oldest lines
-        // resurrected after a crash): drop-oldest to the cap.
         if pending.count > capacity {
             staleLines += pending.count - capacity
             pending.removeFirst(pending.count - capacity)
@@ -144,13 +88,9 @@ final class EventQueue {
         if staleLines > 0 { compact() }
     }
 
-    /// Returns false on any failure — including a *partial* write, which
-    /// leaves a torn tail line the caller must mark dirty.
     private func appendToFile(_ entry: String) -> Bool {
         ensureDirectory()
-        // OutputStream (append mode) creates the file when missing and
-        // reports failure via return codes — no uncatchable ObjC exceptions
-        // (unlike legacy FileHandle writes; SPEC §3 never-crash).
+        // OutputStream, not FileHandle: legacy FileHandle writes raise uncatchable ObjC exceptions.
         guard let stream = OutputStream(url: fileURL, append: true) else {
             SdkLog.debug("queue append open failed")
             return false
@@ -183,7 +123,6 @@ final class EventQueue {
         }
     }
 
-    /// Rewrites the file to exactly the pending entries (write tmp, atomic replace).
     private func compact() {
         do {
             ensureDirectory()
@@ -198,8 +137,6 @@ final class EventQueue {
             staleLines = 0
             fileDirty = false
         } catch {
-            // Original file untouched on failure; stale lines are retried at
-            // the next trigger and at worst resend after a restart.
             SdkLog.debug("queue compaction failed")
         }
     }
@@ -213,13 +150,6 @@ final class EventQueue {
         (try? JSONSerialization.jsonObject(with: Data(line.utf8))) is [String: Any]
     }
 
-    // MARK: - Production location
-
-    /// Production queue location:
-    /// `Application Support/flowbiz_onsite/<appId>/queue.jsonl`. Creates the
-    /// directories and excludes them from iCloud backup (tracking state must
-    /// not restore onto a new device). Nil when Application Support is
-    /// unavailable (degrades to a memory-only queue in Slice 4).
     static func defaultFileURL(appId: String) -> URL? {
         do {
             let base = try FileManager.default.url(

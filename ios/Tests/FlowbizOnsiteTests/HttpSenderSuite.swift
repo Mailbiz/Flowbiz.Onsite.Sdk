@@ -1,15 +1,8 @@
-// SPEC §9 response classification through URLProtocol-stubbed URLSession
-// plus the pure classify(status:) table. Also pins the wire mechanics:
-// POST to /collect, JSON content type, platform header, body passthrough,
-// redirects refused.
 #if canImport(Testing)
 import Foundation
 import Testing
 @testable import FlowbizOnsite
 
-/// Global script/recording state for `StubURLProtocol` (URLProtocol offers
-/// no injection point). Lock-guarded; the suite is `.serialized` because
-/// this state is shared.
 final class HttpStubScript: @unchecked Sendable {
 
     static let shared = HttpStubScript()
@@ -104,6 +97,7 @@ final class StubURLProtocol: URLProtocol {
     }
 }
 
+// .serialized: StubURLProtocol's script is global state (URLProtocol offers no injection point).
 @Suite(.serialized) struct HttpSenderSuite {
 
     private func sender(collectorUrl: String = "https://collector.example") -> URLSessionHttpSender {
@@ -111,8 +105,6 @@ final class StubURLProtocol: URLProtocol {
         configuration.protocolClasses = [StubURLProtocol.self]
         return URLSessionHttpSender(collectorUrl: collectorUrl, platform: "ios", configuration: configuration)
     }
-
-    // MARK: Wire mechanics
 
     @Test func postsJsonBodyWithPlatformHeaderToCollectPath() {
         HttpStubScript.shared.configure(status: 200)
@@ -127,8 +119,6 @@ final class StubURLProtocol: URLProtocol {
         #expect(recorded.body == "{\"data\":[{\"event\":\"e1\"}]}")
     }
 
-    // MARK: Stubbed-session classification
-
     @Test func http200IsSuccess() {
         HttpStubScript.shared.configure(status: 200)
         #expect(sender().send(body: "{\"data\":[]}") == .success)
@@ -140,8 +130,7 @@ final class StubURLProtocol: URLProtocol {
     }
 
     @Test func http302IsPermanentAndNotFollowed() {
-        // A Location header engages URLSession's redirect path; the sender's
-        // delegate must refuse it so the 302 itself is classified.
+        // The Location header engages URLSession's redirect path, which the sender must refuse.
         HttpStubScript.shared.configure(status: 302, headers: ["Location": "https://elsewhere.example/x"])
         #expect(sender().send(body: "{\"data\":[]}") == .permanentError)
         #expect(HttpStubScript.shared.recorded().path == "/collect")
@@ -183,8 +172,6 @@ final class StubURLProtocol: URLProtocol {
         #expect(sender(collectorUrl: "nonsense://::bad::").send(body: "{}") == .permanentError)
     }
 
-    // MARK: Pure classification table (SPEC §9)
-
     @Test func classificationTable() {
         let cases: [(Int, SendResult)] = [
             (200, .success),
@@ -207,7 +194,7 @@ final class StubURLProtocol: URLProtocol {
             (502, .retriableError),
             (503, .retriableError),
             (599, .retriableError),
-            (100, .retriableError), // unexpected → keep and retry
+            (100, .retriableError),
             (-1, .retriableError),
         ]
         for (status, expected) in cases {

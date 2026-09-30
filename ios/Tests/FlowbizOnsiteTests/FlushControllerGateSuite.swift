@@ -1,6 +1,3 @@
-// SPEC §12 network gate on `FlushController` (plus the Slice 3 warm-ups:
-// one real-serial-queue integration pass and the backup-exclusion resource
-// check on the default queue directory).
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -31,17 +28,17 @@ import Testing
         queue.append(entry(1))
         sender.results = [.retriableError]
         controller.requestFlush(.eventTracked)
-        #expect(sender.bodies.count == 1) // attempt 1 failed, retry scheduled
+        #expect(sender.bodies.count == 1)
 
         active.value = false
         let scheduledBefore = scheduler.scheduled.count
-        scheduler.runLastScheduled() // pending backoff retry fires → gated
+        scheduler.runLastScheduled()
         #expect(sender.bodies.count == 1)
-        #expect(scheduler.scheduled.count == scheduledBefore) // no follow-up retry
+        #expect(scheduler.scheduled.count == scheduledBefore)
 
-        controller.requestFlush(.explicit) // gated too
+        controller.requestFlush(.explicit)
         #expect(sender.bodies.count == 1)
-        #expect(queue.size == 1) // backlog preserved, not dropped
+        #expect(queue.size == 1)
 
         active.value = true
         controller.requestFlush(.explicit)
@@ -49,9 +46,6 @@ import Testing
         #expect(queue.size == 0)
     }
 
-    /// Slice 3 warm-up: one integration pass over the real
-    /// `DispatchTaskScheduler` (serial `DispatchQueue`) — real asynchrony,
-    /// real ~1 s backoff delay, real serial-queue confinement.
     @Test func drainsRetriesAndSettlesOnARealSerialDispatchQueue() {
         let serialQueue = DispatchQueue(label: "br.com.flowbiz.onsite.tests")
         let scheduler = DispatchTaskScheduler(queue: serialQueue)
@@ -62,15 +56,15 @@ import Testing
         serialQueue.sync {
             queue.append(self.entry(1))
             queue.append(self.entry(2))
-            sender.results = [.retriableError] // first attempt fails → real backoff
+            sender.results = [.retriableError]
             sender.onSend = { _ in sendsSeen.signal() }
         }
 
         let controller = FlushController(queue: queue, sender: sender, scheduler: scheduler, clock: FakeClock())
         controller.requestFlush(.eventTracked)
 
-        #expect(sendsSeen.wait(timeout: .now() + 5) == .success) // failed attempt
-        #expect(sendsSeen.wait(timeout: .now() + 5) == .success) // ~1 s backoff retry
+        #expect(sendsSeen.wait(timeout: .now() + 5) == .success)
+        #expect(sendsSeen.wait(timeout: .now() + 5) == .success)
 
         // Serialize behind the in-flight drain to read settled state.
         let (size, bodies) = serialQueue.sync { (queue.size, sender.bodies) }

@@ -5,39 +5,20 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
-/** Cancellable handle for a scheduled task. Cancelling twice is harmless. */
 internal interface ScheduledHandle {
     fun cancel()
 }
 
-/**
- * The SDK's serial execution seam (SPEC §1: single background
- * `ExecutorService`). Everything the transport layer does — queue I/O,
- * HTTP, backoff retries, heartbeat ticks — runs through one implementation
- * of this interface backed by a **single-threaded** scheduled executor, so
- * queue and flush state are thread-confined without locking. Injected so
- * tests drive time and execution manually.
- */
+// Must be serial: queue and flush state rely on thread confinement instead of locks.
 internal interface TaskScheduler {
-    /** Runs [task] on the serial thread as soon as possible. */
     fun execute(task: Runnable)
 
-    /** Runs [task] on the serial thread after [delayMillis]. */
     fun schedule(delayMillis: Long, task: Runnable): ScheduledHandle
 
-    /**
-     * Runs [task] on the serial thread every [intervalMillis], first fire
-     * one full interval after scheduling (fixed delay between runs).
-     */
+    // First fires one full interval after scheduling, like the web pagePingDelay.
     fun scheduleRepeating(intervalMillis: Long, task: Runnable): ScheduledHandle
 }
 
-/**
- * Production [TaskScheduler] over a single-threaded
- * [ScheduledExecutorService] (Slice 4 owns its creation/lifecycle).
- * Never throws: a rejected task (executor shut down) degrades to a no-op
- * handle (SPEC §3).
- */
 internal class ExecutorTaskScheduler(
     private val executor: ScheduledExecutorService,
 ) : TaskScheduler {

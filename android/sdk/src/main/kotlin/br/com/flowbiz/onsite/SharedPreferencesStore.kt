@@ -3,21 +3,6 @@ package br.com.flowbiz.onsite
 import android.content.Context
 import android.content.SharedPreferences
 
-/**
- * [KeyValueStore] over [SharedPreferences], file `flowbiz_onsite_<appId>`
- * (appId-scoped so distinct tenants in one host app never collide, and so
- * the SDK never touches the host app's default preferences).
- *
- * SPEC §3 hardening: every access is wrapped — a value persisted with a
- * different type (`ClassCastException` from SharedPreferences) or any other
- * storage failure degrades to `null`/no-op, never a throw. Writes use
- * [SharedPreferences.Editor.apply]: synchronous in-memory update, async disk
- * persistence — never blocks the caller. SharedPreferences itself is
- * thread-safe.
- *
- * Unit tests use the in-memory fake instead (no Robolectric); this class is
- * exercised on-device via the demo app.
- */
 internal class SharedPreferencesStore(context: Context, appId: String) : KeyValueStore {
 
     private val prefs: SharedPreferences = context.applicationContext

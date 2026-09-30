@@ -1,11 +1,6 @@
-// Test doubles and harness for the Slice 4 core (`FlowbizCore` with every
-// seam faked): the tests drive the serial scheduler inline and observe the
-// wire through `FakeHttpSender` bodies.
 import Foundation
 @testable import FlowbizOnsite
 
-/// Recorded `ReachabilityMonitor`; tests fire `callback` to simulate
-/// network restoration.
 final class FakeReachability: ReachabilityMonitor, @unchecked Sendable {
     var started = false
     var callback: (@Sendable () -> Void)?
@@ -21,15 +16,11 @@ final class FakeReachability: ReachabilityMonitor, @unchecked Sendable {
     }
 }
 
-/// Mutable box for the injected timezone offset (minutes).
 final class OffsetBox: @unchecked Sendable {
     var value: Int
     init(_ value: Int) { self.value = value }
 }
 
-/// A `FlowbizCore` with every dependency faked. The `FakeTaskScheduler`
-/// executes inline, so `core.track(...)` runs the whole pipeline (including
-/// the flush drain) synchronously on the test thread.
 final class CoreHarness: @unchecked Sendable {
 
     let config: FlowbizConfig
@@ -76,7 +67,6 @@ final class CoreHarness: @unchecked Sendable {
         )
     }
 
-    /// Entries of every sent body, in send order (flush batches flattened).
     func sentEntries() throws -> [[String: Any]] {
         try sender.bodies.flatMap { body -> [[String: Any]] in
             guard let object = try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any],
@@ -95,13 +85,11 @@ final class CoreHarness: @unchecked Sendable {
     }
 }
 
-/// UUID-shape check (8-4-4-4-12 hex, any case) matching the Android tests.
 func isUUIDShaped(_ value: Any?) -> Bool {
     guard let string = value as? String else { return false }
     return UUID(uuidString: string) != nil
 }
 
-/// Convenience accessors mirroring the Android JSONObject helpers.
 func object(_ entry: [String: Any], _ key: String) -> [String: Any] {
     entry[key] as? [String: Any] ?? [:]
 }

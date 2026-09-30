@@ -20,9 +20,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Environment switch pattern: the host app (not the SDK) picks the
-    // collector per build type, so QA builds can't ship pointing at staging
-    // and store builds can't point away from prod.
     buildFeatures {
         buildConfig = true
     }

@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The SDK deliberately does not declare INTERNET (host apps own it);
-         the demo needs it for the SPEC §4 /collect POSTs. -->
+    <!-- The SDK deliberately does not declare INTERNET: host apps own it. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".DemoApplication"
         android:label="Flowbiz Demo">
 
-        <!-- singleTop so a deep link arriving while the demo is open lands in
-             onNewIntent instead of relaunching the activity. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -19,12 +16,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- SPEC §11 deep-link entry point. A custom scheme keeps the demo
-                 self-contained (a real integration uses verified App Links so
-                 the same URL falls back to web recovery). Try it with:
-                 adb shell am start -a android.intent.action.VIEW \
-                   -d "flowbizdemo://recover?utm_source=flowbiz&_mb_cr_=<hash>"
-                 — or use the in-app "simulate recovery link" button. -->
+            <!-- Demo only: recovery links need verified App Links; a custom scheme has no web fallback. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

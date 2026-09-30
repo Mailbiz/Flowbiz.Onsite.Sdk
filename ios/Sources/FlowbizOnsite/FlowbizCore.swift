@@ -1,27 +1,6 @@
 import Foundation
 
-/// The SDK engine behind the `Flowbiz` facade. One instance is created at
-/// `initialize` with production components; tests construct it directly with
-/// fakes (store/clock/sender/scheduler/device/reachability) — the facade
-/// stays thin and the behavioral suite lives at this level.
-///
-/// ## Threading
-/// Every entry point hops onto the serial `scheduler` and returns
-/// immediately (SPEC §3): all pipeline work — session touch, serialization,
-/// dedup, queue I/O — is thread-confined to the scheduler queue.
-/// `lastPage` and `foregrounded` are scheduler-confined state.
-///
-/// ## Never-throw
-/// Each submitted task handles its throwing steps internally (SPEC §3): a
-/// failure degrades to a dropped event and a debug log, never a crash. A
-/// non-serializable payload (NaN price) is dropped in the same way and does
-/// not affect subsequent events.
-///
-/// ## Lazy transport
-/// The `EventQueue` constructor reads the queue file; deferring its
-/// creation to first use keeps that I/O off the caller's (typically main)
-/// thread at initialize — the first toucher is always a background thread
-/// (scheduler task or reachability callback).
+// Pipeline state (lastPage, foregrounded, utmContext) is confined to the serial scheduler.
 final class FlowbizCore: @unchecked Sendable {
 
     static let platform = "ios"
@@ -32,6 +11,7 @@ final class FlowbizCore: @unchecked Sendable {
     private let enabledState: EnabledState
     private let pushTokenStore: PushTokenStore
     private let dedupStore: DedupStore
+    private let utmStore: UtmStore
     private let sender: any HttpSender
     private let scheduler: any TaskScheduler
     private let clock: any Clock
@@ -39,6 +19,7 @@ final class FlowbizCore: @unchecked Sendable {
     private let reachability: any ReachabilityMonitor
     private let heartbeatIntervalMillis: Int64
 
+    // Lazy: EventQueue's init reads the file, which must stay off the caller's thread at initialize.
     private let queueFactory: () -> EventQueue
     private let transportLock = NSLock()
     private var lazyQueue: EventQueue?
@@ -48,15 +29,10 @@ final class FlowbizCore: @unchecked Sendable {
         self?.buildPingEntry()
     }
 
-    /// Last page carried by a `pageView` with a path or title — feeds
-    /// `context.url` on every event and the ping `page` payload (spec §4,
-    /// §6). In-memory only; refreshed even by suppressed duplicate
-    /// pageViews (the user *is* on that screen). Scheduler-confined.
     struct PageState { let title: String?; let url: String? }
     private var lastPage: PageState?
-
-    /// Foreground state (drives heartbeat resume on re-enable). Scheduler-confined.
     private var foregrounded = false
+    private var utmContext: String?
 
     init(
         config: FlowbizConfig,
@@ -74,6 +50,7 @@ final class FlowbizCore: @unchecked Sendable {
         self.enabledState = EnabledState(store: store)
         self.pushTokenStore = PushTokenStore(store: store)
         self.dedupStore = DedupStore(store: store, clock: clock)
+        self.utmStore = UtmStore(store: store, clock: clock)
         self.queueFactory = queueFactory
         self.sender = sender
         self.scheduler = scheduler
@@ -86,42 +63,37 @@ final class FlowbizCore: @unchecked Sendable {
             guard let self, self.enabledState.isEnabled else { return }
             self.flushController.requestFlush(.networkRestored)
         }
+
+        // A process start may be a push or background wake, not a visit: don't slide the UTM expiry.
+        submit { core in core.refreshUtm(link: nil, slideExpiry: false) }
     }
 
-    // MARK: - Facade entry points (any thread, return immediately, never throw)
-
-    /// SPEC §5/§7 track pipeline; see steps inline.
     func track(_ event: Event) {
         submit { core in
-            // 1. Disabled → drop (SPEC §12). Not-initialized is the facade's check.
             guard core.enabledState.isEnabled else {
                 SdkLog.debug("track dropped: SDK disabled")
                 return
             }
-            // 2. Account events store identity (SPEC §5 side effect) — before
-            // the envelope is built, so the login event itself carries user_id.
+            // Before the envelope is built, so the login event itself carries user_id.
             switch event {
             case .accountLogin(let user), .accountSync(let user):
                 core.identityStore.setUser(userId: user.userId, email: user.email)
             default:
                 break
             }
-            // 3. Every tracked event slides the session window (SPEC §6).
             core.sessionManager.touch()
             let session = core.sessionManager.currentSession()
             do {
-                // 4. Serialize; non-finite numbers throw → drop (SPEC §3).
                 let wireName = EventSerializer.wireName(event)
                 let dataJSON = try EventSerializer.dataJSONString(event, baseUri: core.config.baseUriOrNil)
+                // Before the dedup check: a suppressed duplicate still means the user is on that screen.
                 if case .pageView(let path, let title) = event, path != nil || title != nil {
                     core.lastPage = PageState(title: title, url: UrlResolver.resolve(path, baseUri: core.config.baseUriOrNil))
                 }
-                // 5. Dedup (SPEC §7): identical payload within 20 min → suppress.
                 if core.dedupStore.shouldSuppress(wireName: wireName, dataJSON: dataJSON) {
                     SdkLog.debug("event suppressed: duplicate \(wireName) within dedup window")
                     return
                 }
-                // 6. Build the envelope with a fresh hash and wall timestamps.
                 let now = core.clock.wallMillis()
                 let entry = try EnvelopeBuilder.build(
                     event: event,
@@ -140,9 +112,9 @@ final class FlowbizCore: @unchecked Sendable {
                     sdkVersion: SDKVersion.current,
                     contextUrl: core.lastPage?.url,
                     baseUri: core.config.baseUriOrNil,
-                    recoveryUrl: core.config.recoveryUrl
+                    recoveryUrl: core.config.recoveryUrl,
+                    utm: core.utmContext
                 )
-                // 7. Durable queue + immediate flush attempt (SPEC §9).
                 core.queue.append(try CanonicalJSON.render(entry))
                 core.flushController.requestFlush(.eventTracked)
             } catch {
@@ -151,17 +123,13 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// SPEC §6/§10.1 logout: emit `push.token.remove` (if a token is
-    /// stored), then clear user identity, rotate the session and clear the
-    /// token.
-    ///
-    /// **Order matters (decision, flagged)**: the removal event is emitted
-    /// *before* the identity is cleared so it carries the outgoing
-    /// `user_id` — the backend needs to know *whose* token to disassociate.
-    /// While disabled the event is dropped (SPEC §12) but the local state
-    /// is still cleared so identity never outlives a logout.
+    func captureUtm(fromLink link: String) {
+        submit { core in core.refreshUtm(link: link, slideExpiry: true) }
+    }
+
     func logout() {
         submit { core in
+            // Before clearUser: the backend needs the outgoing user_id. UTMs are kept, as on web.
             if let token = core.pushTokenStore.token {
                 core.emitTokenRemoval(token)
             }
@@ -172,23 +140,14 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// SPEC §10.1 token relay: persist the token, emit `push.token.sync`
-    /// through the normal pipeline (queued, deduped, session-touched).
-    ///
-    /// While disabled the event is dropped (SPEC §12) but the token is
-    /// **still persisted** (decision, flagged): a later enable + logout must
-    /// be able to emit a coherent removal for the token that is actually
-    /// registered with APNs/FCM.
     func setPushToken(_ token: String) {
         submit { core in
+            // Stored even while disabled, so re-enabling syncs it and logout can still remove it.
             core.pushTokenStore.set(token)
             core.emitInternal(wireName: "push.token.sync", dataJSON: Self.tokenDataJSON(token))
         }
     }
 
-    /// SPEC §10.1: emit `push.token.remove` with the stored token, then
-    /// forget it. No stored token → no-op. While disabled the event is
-    /// dropped but the token is still cleared (mirror of `setPushToken`).
     func removePushToken() {
         submit { core in
             guard let token = core.pushTokenStore.token else {
@@ -200,24 +159,18 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// SPEC §12 opt-out switch; persisted.
     func setEnabled(_ enabled: Bool) {
         submit { core in
             let wasEnabled = core.enabledState.isEnabled
             core.enabledState.setEnabled(enabled)
             if !enabled {
-                // Idempotent: stopping an already-stopped heartbeat is
-                // harmless, so a repeated disable needs no guard.
                 core.heartbeat.stop()
                 SdkLog.debug("SDK disabled: heartbeat stopped, events dropped, network gated")
             } else if !wasEnabled {
                 if core.foregrounded {
                     core.heartbeat.start(intervalMillis: core.heartbeatIntervalMillis)
                 }
-                // SPEC §10.1/§12: a token registered while disabled was
-                // persisted but its sync event was dropped — re-emit for the
-                // stored token (normal pipeline, so dedup still applies: a
-                // token already synced <20 min ago is not re-sent).
+                // A token set while disabled was never synced; dedup skips one synced < 20 min ago.
                 if let token = core.pushTokenStore.token {
                     core.emitInternal(wireName: "push.token.sync", dataJSON: Self.tokenDataJSON(token))
                 }
@@ -227,7 +180,6 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// SPEC §2 explicit flush; fire-and-forget.
     func flush() {
         submit { core in
             guard core.enabledState.isEnabled else {
@@ -238,16 +190,12 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    // MARK: - Lifecycle (wired by the facade's UIApplication observers)
-
-    /// App entered foreground. Idempotent — a redundant call (already
-    /// foregrounded, e.g. `didBecomeActive` after the initialize-time state
-    /// probe) is ignored so heartbeat cadence isn't reset.
     func onForeground() {
         submit { core in
             guard !core.foregrounded else { return }
             core.foregrounded = true
             core.sessionManager.onForeground()
+            core.refreshUtm(link: nil, slideExpiry: true)
             if core.enabledState.isEnabled {
                 core.heartbeat.start(intervalMillis: core.heartbeatIntervalMillis)
                 core.flushController.requestFlush(.appForeground)
@@ -255,7 +203,6 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// App entered background: heartbeat stops (SPEC §8).
     func onBackground() {
         submit { core in
             core.foregrounded = false
@@ -263,15 +210,9 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    // MARK: - Heartbeat
-
-    /// Builds one `page.ping` envelope entry (SPEC §8), or nil to skip the
-    /// beat while disabled. The ping touches the session — `page.ping`
-    /// counts as activity (SPEC §6) — and carries the last-tracked screen as
-    /// `page` data (web semantics: pings describe the current page), `{}`
-    /// before the first named pageView. Runs on the scheduler queue.
     private func buildPingEntry() -> String? {
         guard enabledState.isEnabled else { return nil }
+        // As on web, a ping counts as session activity and describes the current page.
         sessionManager.touch()
         let session = sessionManager.currentSession()
         let now = clock.wallMillis()
@@ -292,6 +233,7 @@ final class FlowbizCore: @unchecked Sendable {
             contextUrl: lastPage?.url,
             baseUri: config.baseUriOrNil,
             recoveryUrl: config.recoveryUrl,
+            utm: utmContext,
             dataJSON: pingDataJSON()
         )
         return try? CanonicalJSON.render(entry)
@@ -305,31 +247,16 @@ final class FlowbizCore: @unchecked Sendable {
         return (try? CanonicalJSON.render(["page": object])) ?? "{}"
     }
 
-    // MARK: - Internal raw events (SPEC §10.1)
-
-    /// `{"platform":"ios","token":"..."}` rendered canonically (sorted keys
-    /// — byte-identical to the Kotlin SDK's rendering, dedup-stable).
     private static func tokenDataJSON(_ token: String) -> String {
-        // CanonicalJSON only throws for non-finite numbers; unreachable for
-        // two strings — the fallback is pure defensiveness.
         (try? CanonicalJSON.render(["token": token, "platform": platform])) ?? "{}"
     }
 
-    /// Emits `push.token.remove` and clears the `push.token.sync` dedup
-    /// anchor (SPEC §10.1): after a removal, re-registering the *same* token
-    /// within the 20-minute window must re-sync — the collector no longer
-    /// associates it. The anchor is cleared even when the removal event
-    /// itself is dropped (disabled) or suppressed, mirroring how the token
-    /// cell is cleared regardless.
     private func emitTokenRemoval(_ token: String) {
         emitInternal(wireName: "push.token.remove", dataJSON: Self.tokenDataJSON(token))
+        // Even when the removal was dropped: re-registering the same token must sync again.
         dedupStore.clear(wireName: "push.token.sync")
     }
 
-    /// Sends an internal raw event (a wire name outside the public `Event`
-    /// catalog with a pre-rendered `data` string) through the same pipeline
-    /// as `track`: enabled gate, session touch, dedup, envelope, durable
-    /// queue + flush. Scheduler-confined (called from submitted tasks only).
     private func emitInternal(wireName: String, dataJSON: String) {
         guard enabledState.isEnabled else {
             SdkLog.debug("\(wireName) dropped: SDK disabled")
@@ -361,7 +288,8 @@ final class FlowbizCore: @unchecked Sendable {
                 sdkVersion: SDKVersion.current,
                 contextUrl: lastPage?.url,
                 baseUri: config.baseUriOrNil,
-                recoveryUrl: config.recoveryUrl
+                recoveryUrl: config.recoveryUrl,
+                utm: utmContext
             )
             queue.append(try CanonicalJSON.render(entry))
             flushController.requestFlush(.eventTracked)
@@ -370,11 +298,24 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    // MARK: - Plumbing
+    // Web setUtmNavigationContext: the link's UTMs merged over the stored set; a visit slides the expiry.
+    private func refreshUtm(link: String?, slideExpiry: Bool) {
+        let stored = utmStore.load()
+        let current = link.map(UtmLinkParser.extract) ?? []
+        let merged = UtmLinkParser.merge(stored: stored, current: current)
+        guard !merged.isEmpty else {
+            utmContext = nil
+            return
+        }
+        do {
+            if slideExpiry { try utmStore.save(merged) }
+            utmContext = CanonicalJSON.renderStringPairs(merged)
+            SdkLog.debug("utm context: \(current.count) captured, \(merged.count) active")
+        } catch {
+            SdkLog.debug("utm refresh failed: \(type(of: error))")
+        }
+    }
 
-    /// Hops onto the serial scheduler; the caller returns immediately
-    /// (SPEC §3). Tasks are non-throwing by construction — throwing steps
-    /// are handled with do/catch inside each task.
     private func submit(_ task: @escaping @Sendable (FlowbizCore) -> Void) {
         scheduler.execute { [weak self] in
             guard let self else { return }
@@ -382,7 +323,6 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    /// Lazily-built durable queue (see "Lazy transport" above). Thread-safe.
     private var queue: EventQueue {
         transportLock.lock()
         defer { transportLock.unlock() }
@@ -392,7 +332,6 @@ final class FlowbizCore: @unchecked Sendable {
         return queue
     }
 
-    /// Lazily-built flush controller over `queue`. Thread-safe.
     private var flushController: FlushController {
         transportLock.lock()
         if let controller = lazyFlushController {
@@ -416,9 +355,6 @@ final class FlowbizCore: @unchecked Sendable {
         return controller
     }
 
-    /// `±HH:MM` UTC offset (SPEC §4 `timings.timezone`) from an offset in
-    /// minutes — minute precision covers half-hour (+05:30) and quarter-hour
-    /// (+05:45) zones.
     static func formatTimezoneOffset(minutes: Int) -> String {
         let sign = minutes < 0 ? "-" : "+"
         let absMinutes = abs(minutes)

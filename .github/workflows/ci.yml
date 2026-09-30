@@ -1,8 +1,3 @@
-# SPEC §14: the shared-fixture drift guard only guards if it is enforced —
-# both platform jobs run on every PR and push to main. The shared-fixture
-# suites (wire fixtures, recovery links, push samples) are part of each
-# platform's regular unit-test task, so running the unit tests IS running
-# the drift guard; no separate step is needed.
 name: CI
 
 on:
@@ -25,23 +20,16 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      # testDebugUnitTest includes the shared-fixture suites
-      # (WireFixtureTest, RecoveryLinkParserTest, PushParserTest) — SPEC §14 layer 1.
+      # --rerun: the SDK suites read ../shared, not a task input, so a change there alone would hit the cache.
       - name: Unit tests, release AAR, lint
         working-directory: android
-        run: ./gradlew :sdk:testDebugUnitTest :sdk:assembleRelease :sdk:lint
+        run: ./gradlew :sdk:testDebugUnitTest --rerun :demo:testDebugUnitTest :sdk:assembleRelease :sdk:lint
 
   ios:
     name: iOS (macOS 15, Xcode 16.4)
     runs-on: blacksmith-6vcpu-macos-15
     env:
-      # Pin the toolchain explicitly. The test suites are Swift Testing
-      # (`#if canImport(Testing)`-guarded): an older Xcode (15.x, Swift 5.10)
-      # compiles them AWAY and the job goes green having run only the 2
-      # XCTest cases. Xcode 16.4 (Swift 6.1) is the documented default on
-      # the macos-15 runner image (actions/runner-images macos-15 README);
-      # pinning via DEVELOPER_DIR makes an image-default change loud
-      # (missing path fails the job) instead of silently downgrading.
+      # Pinned: an older default Xcode compiles the Swift Testing suites away and the job still goes green.
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
@@ -50,17 +38,10 @@ jobs:
           set -euo pipefail
           xcodebuild -version
           swift --version
-      # 1) Plain SwiftPM run on the macOS host — fast, no simulator boot.
-      #    Includes the shared-fixture suites (WireFixtureSuite,
-      #    RecoveryLinkSuite, PushParserSuite) — SPEC §14 layer 1.
       - name: swift test (macOS host)
         run: |
           set -euo pipefail
           swift test 2>&1 | tee swift-test.log
-      # Green-wash guard: the full suite is ~204 Swift Testing tests. If the
-      # toolchain ever compiles the `canImport(Testing)` suites away again,
-      # `swift test` still exits 0 — so assert the executed-test count from
-      # the "Test run with N tests passed" summary line stays above a floor.
       - name: Assert swift test actually ran the suite (>= 150 tests)
         run: |
           set -euo pipefail
@@ -71,14 +52,7 @@ jobs:
             echo "::error::swift test ran ${COUNT:-0} tests (< ${FLOOR}) — Swift Testing suites were not executed (toolchain too old?)"
             exit 1
           fi
-      # 2) Simulator build + test — this closes the UIKit-compile gate
-      #    deferred from Slice 4: the UIKit-conditional code (lifecycle
-      #    observers, UIScreen, canImport(UIKit) branches) only compiles in
-      #    an iOS build, which no macOS host run exercises.
-      #    The destination resolves to the image's iOS runtime for
-      #    iPhone 16 (Xcode 16.4 simulators on the macos-15 image); the OS
-      #    version is deliberately not pinned so image updates don't break
-      #    the job.
+      # The canImport(UIKit) code only compiles in an iOS build, which the macOS host run never does.
       - name: xcodebuild test (iOS Simulator, iPhone 16)
         run: |
           set -euo pipefail
@@ -86,10 +60,6 @@ jobs:
             -scheme FlowbizOnsite \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
             2>&1 | tee xcodebuild-test.log
-      # Same green-wash guard for the simulator run. Full xcresult parsing is
-      # heavier than it is worth here; a grep floor over xcodebuild's console
-      # summary lines ("Executed N tests" for XCTest, "Test run with N tests
-      # passed" for Swift Testing under Xcode 16) is honest enough.
       - name: Assert xcodebuild actually ran the suite (>= 150 tests)
         run: |
           set -euo pipefail

@@ -3,10 +3,6 @@ package br.com.flowbiz.onsite
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * org.json tree → plain Kotlin values (`Map`/`List`/scalars, `JSONObject.NULL`
- * → null), for the public maps returned by `handlePush`/`handleLink`.
- */
 internal object JsonPlain {
 
     fun toPlainMap(json: JSONObject): Map<String, Any?> {
