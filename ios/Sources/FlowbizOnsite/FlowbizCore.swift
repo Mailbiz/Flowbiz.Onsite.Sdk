@@ -86,11 +86,11 @@ final class FlowbizCore: @unchecked Sendable {
             do {
                 let wireName = EventSerializer.wireName(event)
                 let dataJSON = try EventSerializer.dataJSONString(event, baseUri: core.config.baseUriOrNil)
-                // Before the dedup check: a suppressed duplicate still means the user is on that screen.
                 if case .pageView(let path, let title) = event, path != nil || title != nil {
                     core.lastPage = PageState(title: title, url: UrlResolver.resolve(path, baseUri: core.config.baseUriOrNil))
                 }
-                if core.dedupStore.shouldSuppress(wireName: wireName, dataJSON: dataJSON) {
+                // Never for page.view: web pageView() carries no data, so it skips the EventsState dedup.
+                if wireName != "page.view" && core.dedupStore.shouldSuppress(wireName: wireName, dataJSON: dataJSON) {
                     SdkLog.debug("event suppressed: duplicate \(wireName) within dedup window")
                     return
                 }

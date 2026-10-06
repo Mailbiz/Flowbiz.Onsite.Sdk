@@ -114,7 +114,7 @@ public enum Flowbiz {
         withCore("logout") { $0.logout() }
     }
 
-    /// Opt-out switch, persisted across launches; while disabled nothing is tracked or sent.
+    /// Opt-out switch, persisted across launches; while disabled nothing is tracked or sent
     public static func setEnabled(_ enabled: Bool) {
         withCore("setEnabled") { $0.setEnabled(enabled) }
     }
@@ -123,6 +123,7 @@ public enum Flowbiz {
         withCore("flush") { $0.flush() }
     }
 
+    /// Relays the push token; while disabled it is kept and synced on re-enable. `logout` removes it; blank is ignored.
     public static func setPushToken(_ token: String) {
         guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             SdkLog.debug("Flowbiz.setPushToken ignored: blank token")

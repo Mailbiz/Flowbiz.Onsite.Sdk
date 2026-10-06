@@ -52,6 +52,10 @@ import Testing
     @Test func handleLinkThenTrackFromTheSameThreadOnTheRealScheduler() throws {
         let serialQueue = DispatchQueue(label: "br.com.flowbiz.onsite.tests.utm")
         let store = FakeKeyValueStore()
+        // Expired: the startup load discards it, so it outlives the init only if that load is deferred.
+        let stale = #"[["utm_source","stale"]]"#
+        store[StorageKeys.utmData] = stale
+        store[StorageKeys.utmExpiresAtWallMs] = Int64(0)
         let sender = FakeHttpSender()
         let sent = DispatchSemaphore(value: 0)
         let release = DispatchSemaphore(value: 0)
@@ -71,7 +75,7 @@ import Testing
 
         _ = Flowbiz.handleLink(journey.url, core: core)
         core.track(.cartSetCoupon(cartId: "c-1", coupon: "after-the-link"))
-        #expect(store[StorageKeys.utmData] == nil, "captured on the caller's thread")
+        #expect(store[StorageKeys.utmData] as? String == stale, "loaded or captured on the caller's thread")
         release.signal()
 
         #expect(sent.wait(timeout: .now() + 5) == .success)
@@ -183,7 +187,7 @@ import Testing
         let h = harness()
         try Flowbiz.$taskCore.withValue(h.core) {
             let push = try #require(Flowbiz.handlePush(["flowbiz": String(decoding: marker, as: UTF8.self)]))
-            #expect(push.deepLink?.absoluteString.contains("%2520") == true)
+            #expect(push.deepLink?.absoluteString.contains("carrinho%20abandonado") == true)
             _ = push.recoveryPayload
             #expect(try trackProbe(h) == nil)
             #expect(Flowbiz.handlePushOpened(push)?.cartId == "cart-abc-001")
@@ -191,13 +195,16 @@ import Testing
         #expect(try trackProbe(h) == journey.expected.replacingOccurrences(of: "carrinho-abandonado", with: "carrinho abandonado"))
     }
 
-    @Test func anIdenticalPayloadStaysDedupedAcrossANewCapture() throws {
+    @Test func theLandingPageViewCarriesANewCaptureWhileAnIdenticalPayloadStaysDeduped() throws {
         let h = harness()
+        h.core.track(.pageView(path: "/carrinho"))
         h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "same"))
         _ = Flowbiz.handleLink(journey.url, core: h.core)
         h.clock.advance(minuteMs)
+        h.core.track(.pageView(path: "/carrinho"))
         h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "same"))
-        #expect(try h.sentEntries().count == 1)
+        #expect(try h.sentEntries().count == 3)
+        #expect(utm(try last(h, "page.view")) == journey.expected)
     }
 
     @Test func thePublicHandleLinkReachesTheInstalledCore() throws {

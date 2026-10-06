@@ -10,6 +10,7 @@ data class FlowbizConfig @JvmOverloads constructor(
     /** The store's https origin, as the web tag's `baseuri`; path-only URLs are resolved against it. */
     val baseUri: String,
 
+    /** Collector base URL; must be https with a host, else the default is used. */
     val collectorUrl: String = DEFAULT_COLLECTOR_URL,
     val debug: Boolean = false,
 

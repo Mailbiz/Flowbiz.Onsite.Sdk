@@ -16,7 +16,8 @@ shape `{ t, u, c, its: [[qty, product_id, sku, recovery_properties?]] }`.
 
 `vectors.json` is an array of `{ name, url, appId, expected, hash_json? }`:
 
-- `url` is fed verbatim to `RecoveryLinkParser.parse(url, expectedAppId)`.
+- `url` is fed verbatim to `RecoveryLinkParser.parse(url, expectedAppId)`, which
+  first removes tabs/newlines and trims the ends, as a browser's `location.href`.
 - `appId` is the configured tenant (`null` = not initialized: the tenant
   check is skipped).
 - `expected` is the `RecoveryPayload` (`recoveryProperties: null` when

@@ -68,7 +68,8 @@
   {"name":"direct_after_flow_params_wins","url":"https://store.com/?utm_flow_params=A|B|C&utm_step_id=X","expected":"{\"utm_step_id\":\"X\",\"utm_journey_version\":\"B\",\"utm_journey_instance\":\"C\"}"},
   {"name":"empty_flow_segment_erases_direct","url":"https://store.com/?utm_journey_instance=Z&utm_flow_params=A%7CB%7C","expected":"{\"utm_step_id\":\"A\",\"utm_journey_version\":\"B\"}"},
   {"name":"flow_params_empty_first_segment","url":"https://store.com/?utm_flow_params=|3|I","expected":"{\"utm_journey_version\":\"3\",\"utm_journey_instance\":\"I\"}"},
-  {"name":"flow_params_empty_value","url":"https://store.com/?utm_flow_params=","expected":null}
+  {"name":"flow_params_empty_value","url":"https://store.com/?utm_flow_params=","expected":null},
+  {"name":"tabs_newlines_removed_ends_trimmed","url":" \t https://store.com/?utm_source=flow\tbiz&utm_medium=e\r\nmail&utm_campaign=c\u0001d \n\u0000","expected":"{\"utm_source\":\"flowbiz\",\"utm_medium\":\"email\",\"utm_campaign\":\"c\\u0001d\"}"}
 ],
 "sequences": [
   {"name": "merge_per_key_across_links", "steps": [

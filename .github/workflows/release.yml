@@ -59,6 +59,9 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
         run: ./gradlew :sdk:publishReleasePublicationToCentralRepository
       # Same job on purpose: staging groups the uploads by client IP, and only this POST hands them over.
+      # If it fails, the leftover staging repository blocks later uploads from that IP: find its key with
+      # GET /manual/search/repositories?ip=any&profile_id=br.com.flowbiz, then DELETE /manual/drop/repository/<key>
+      # (same Bearer auth, from a Central Portal user token; OSSRH tokens get 401).
       - name: Hand the staging repository to the Central Portal
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}

@@ -33,6 +33,13 @@ kotlin {
     jvmToolchain(17)
 }
 
+// The suites read ../shared at run time: declared, so a change there alone re-runs them.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.file("../shared"))
+        .withPropertyName("shared")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 dependencies {
     testImplementation(libs.junit)
     // Real org.json for JVM tests: the android.jar stub throws.

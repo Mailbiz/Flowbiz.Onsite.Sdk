@@ -2,7 +2,6 @@ package br.com.flowbiz.onsite
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -87,6 +86,10 @@ class FlowbizCoreUtmTest {
             val sender = FakeHttpSender().apply { onSend = { sent.countDown() } }
             val queueFile = File(temp.newFolder(), "queue.jsonl")
             val store = FakeKeyValueStore()
+            // Expired: the startup load discards it, so it outlives the constructor only if that load is deferred.
+            val stale = """[["utm_source","stale"]]"""
+            store.putString(StorageKeys.UTM_DATA, stale)
+            store.putLong(StorageKeys.UTM_EXPIRES_AT_WALL_MS, 0L)
             val core = FlowbizCore(
                 config = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
                 store = store,
@@ -99,7 +102,7 @@ class FlowbizCoreUtmTest {
             )
             Flowbiz.handleLink(link, core)
             core.track(Event.PageView(path = "/carrinho"))
-            assertFalse("captured on the caller's thread", StorageKeys.UTM_DATA in store.values)
+            assertEquals("loaded or captured on the caller's thread", stale, store.values[StorageKeys.UTM_DATA])
             release.countDown()
 
             assertTrue(sent.await(10, TimeUnit.SECONDS))
@@ -231,14 +234,17 @@ class FlowbizCoreUtmTest {
     }
 
     @Test
-    fun anIdenticalPayloadStaysDedupedAcrossANewCapture() {
+    fun theLandingPageViewCarriesANewCaptureWhileAnIdenticalPayloadStaysDeduped() {
         val h = harness()
         val coupon = Event.CartSetCoupon(cartId = "c-1", coupon = "same")
+        h.core.track(Event.PageView(path = "/carrinho"))
         h.core.track(coupon)
         Flowbiz.handleLink(link, h.core)
         h.clock.advance(MINUTE_MS)
+        h.core.track(Event.PageView(path = "/carrinho"))
         h.core.track(coupon)
 
-        assertEquals(1, h.sentEntries().size)
+        assertEquals(3, h.sentEntries().size)
+        assertEquals(utm, h.last("page.view").utm())
     }
 }

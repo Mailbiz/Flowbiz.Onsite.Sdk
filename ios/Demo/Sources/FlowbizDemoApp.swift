@@ -1,9 +1,25 @@
 import SwiftUI
+import UIKit
 import FlowbizOnsite
+
+// SwiftUI calls onOpenURL for a cold-launch link only after the first screen's onAppear (and its
+// PageView); forwarding it here first lets that page view carry the link's UTMs.
+final class DemoAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        options.urlContexts.forEach { Flowbiz.handleLink($0.url) }
+        options.userActivities.forEach { Flowbiz.handleLink($0.webpageURL) }
+        return UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+    }
+}
 
 @main
 struct FlowbizDemoApp: App {
 
+    @UIApplicationDelegateAdaptor(DemoAppDelegate.self) private var appDelegate
     @StateObject private var store = DemoStore()
 
     init() {

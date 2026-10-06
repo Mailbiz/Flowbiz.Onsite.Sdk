@@ -13,7 +13,7 @@ enum UtmLinkParser {
 
     static func extract(_ url: String) -> Pairs {
         var params: [String: String] = [:]
-        for pair in split(query(Array(url.utf16)), "&") {
+        for pair in split(query(Array(href(url).utf16)), "&") {
             let parts = split(pair, "=")
             let value = parts.count > 1 ? decodeURIComponentOrRaw(string(parts[1])) : "undefined"
             if parts[0].elementsEqual("utm_flow_params".utf16) {
@@ -23,6 +23,13 @@ enum UtmLinkParser {
             }
         }
         return allowlist.compactMap { key in params[key].flatMap { $0.isEmpty ? nil : (key: key, value: $0) } }
+    }
+
+    // What a browser exposes as location.href: tabs and newlines removed, C0 controls and spaces trimmed.
+    static func href(_ url: String) -> String {
+        let units = url.utf16.filter { $0 != 9 && $0 != 10 && $0 != 13 }
+        guard let first = units.firstIndex(where: { $0 > 32 }), let last = units.lastIndex(where: { $0 > 32 }) else { return "" }
+        return String(decoding: units[first...last], as: UTF16.self)
     }
 
     // href.split('?')[1].split('/#')[0].split('#')[0]

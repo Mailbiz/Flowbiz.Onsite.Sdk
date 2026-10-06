@@ -130,13 +130,14 @@ if (push != null) {
 // Notification tap — in the Activity it opens (extrasAsMap: your helper reading the
 // data map its PendingIntent carried); route with tappedPush?.deepLink as usual
 val tappedPush: FlowbizPush? = Flowbiz.handlePush(extrasAsMap(intent.extras))
-val tapped: RecoveryPayload? = Flowbiz.handlePushOpened(tappedPush)
+val tapped: RecoveryPayload? = Flowbiz.handlePushOpened(tappedPush)   // non-null: restore, then track CartSync
 
 // Deep links — every link, recovery or not (see Campaign attribution below)
 val recovery: RecoveryPayload? = Flowbiz.handleLink(intent.data)
 if (recovery != null) {
     // recovery.cartId, recovery.userId, recovery.products[{productId, sku, quantity, recoveryProperties?}]
-    // restore the cart however your app does it
+    // restore the cart however your app does it, then sync it (see Campaign attribution)
+    Flowbiz.track(Event.CartSync(restoredCart))
 }
 ```
 
@@ -171,12 +172,13 @@ if let push = Flowbiz.handlePush(notification.request.content.userInfo) {
 // Notification tap — from didReceive response; route with push.deepLink as usual
 if let push = Flowbiz.handlePush(response.notification.request.content.userInfo),
    let recovery = Flowbiz.handlePushOpened(push) {
-    // restore the cart
+    // restore the cart, then Flowbiz.track(.cartSync(cart: restoredCart))
 }
 
 // Links — every link, recovery or not (entry points under Campaign attribution below)
 if let recovery = Flowbiz.handleLink(url) {
-    // recovery.cartId, recovery.userId, recovery.products — restore the cart
+    // recovery.cartId, recovery.userId, recovery.products — restore the cart, then sync it
+    Flowbiz.track(.cartSync(cart: restoredCart))
 }
 ```
 
@@ -212,18 +214,27 @@ Forward every link the app is opened with, recovery link or not:
   intent (in `onCreate` only when `savedInstanceState == null` and the intent
   lacks `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, so a rotation or a relaunch
   from Recents does not forward an old link again).
-- **iOS**: SwiftUI `onOpenURL`. UIKit scenes: `scene(_:willConnectTo:options:)`
-  for a cold launch (`connectionOptions.userActivities`' `webpageURL` and
+- **iOS**: SwiftUI `onOpenURL`, and for a cold launch also
+  `application(_:configurationForConnecting:options:)` through
+  `@UIApplicationDelegateAdaptor` (`options.urlContexts` and
+  `options.userActivities`' `webpageURL`; for the UTMs only, ignore its
+  result): SwiftUI calls `onOpenURL` only after the first screen's `onAppear`.
+  UIKit scenes: `scene(_:willConnectTo:options:)` for a cold launch
+  (`connectionOptions.userActivities`' `webpageURL` and
   `connectionOptions.urlContexts`), then `scene(_:continue:)` and
   `scene(_:openURLContexts:)`. App-delegate-only apps:
   `application(_:continue:restorationHandler:)` and `application(_:open:options:)`.
+  Forward the `URL` iOS hands you as is: rebuilt from a string with
+  `URL(string:)`, it can lose or alter its UTMs.
 - **Push tap**: `handlePushOpened(push)`; `handlePush` never captures.
 
 Call `initialize` at launch, before forwarding links: links forwarded before
 it are not captured. Forward the launch link before tracking the landing
-screen's `PageView`, so that page view carries the new campaign. Links are
-still captured while the SDK is disabled and ride on the events after
-`setEnabled(true)`; `logout()` keeps them.
+screen's `PageView`, so that page view carries the new campaign. An order is
+credited to a campaign through its cart's last `CartSync`, so after restoring
+a recovered cart, track `CartSync` with it. Links are still captured while
+the SDK is disabled and ride on the events after `setEnabled(true)`;
+`logout()` keeps them.
 
 ### Consent / opt-out
 
@@ -259,8 +270,9 @@ No public API throws: a failure costs at most a dropped event. `track()`
 never blocks and survives offline: events are persisted to a disk queue
 (cap 1000, drop-oldest) and flushed with exponential backoff on network
 restore, app foreground, the next track, or `flush()`. Identical payloads per
-event type are deduplicated for 20 minutes, and nothing else is filtered: a
-`cartSync` with an empty cart is sent. There is no runtime schema validation
+event type are deduplicated for 20 minutes, except `PageView`, which is always
+sent (as on web); nothing else is filtered: a `cartSync` with an empty cart is
+sent. There is no runtime schema validation
 or field enrichment; the SDK sends the typed payload you build. A `page.ping`
 heartbeat (default 60 s, configurable ≥ 15 s) runs while foregrounded,
 best-effort and never queued. Sessions rotate after 30 min of inactivity. All
@@ -329,12 +341,10 @@ Around the SDK sources:
 cd android
 ./gradlew :sdk:testDebugUnitTest                                   # full suite, incl. shared-fixture tests
 ./gradlew :sdk:testDebugUnitTest --tests 'br.com.flowbiz.onsite.SessionManagerTest'
-./gradlew :sdk:testDebugUnitTest --rerun :demo:testDebugUnitTest :sdk:assembleRelease :sdk:lint   # exactly what CI runs
+./gradlew :sdk:testDebugUnitTest :demo:testDebugUnitTest :sdk:assembleRelease :sdk:lint   # exactly what CI runs
 ```
 
 `:sdk:test --rerun` does not re-run the suite; use `:sdk:testDebugUnitTest --rerun`.
-Gradle does not track the `shared/` files the suites read, so after changing
-only those, add `--rerun` or it reuses the previous result.
 The HTML report lands in `android/sdk/build/reports/tests/testDebugUnitTest/`.
 
 **iOS** — needs Xcode 16.4 or newer (Swift 6 toolchain). Older Xcodes

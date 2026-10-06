@@ -32,8 +32,9 @@ const store = {
 const g = globalThis as any;
 g.window = { location: { href: '' } };
 
-function evaluate(href: string | null): string | null {
-  g.window.location.href = href ?? 'https://store.com/';
+// What a browser exposes as location.href: the link after the URL parser (tabs/newlines removed, ends trimmed, escaped).
+function evaluate(link: string | null): string | null {
+  g.window.location.href = new URL(link ?? 'https://store.com/').href;
   sent = null;
   setUtmNavigationContext(store);
   return sent;
@@ -118,6 +119,8 @@ const extract: Array<[string, string]> = [
   ['empty_flow_segment_erases_direct', 'https://store.com/?utm_journey_instance=Z&utm_flow_params=A%7CB%7C'],
   ['flow_params_empty_first_segment', 'https://store.com/?utm_flow_params=|3|I'],
   ['flow_params_empty_value', 'https://store.com/?utm_flow_params='],
+  // Raw strings (a push deep_link, a forwarded string) reach the SDK without the browser's preprocessing.
+  ['tabs_newlines_removed_ends_trimmed', ' \t https://store.com/?utm_source=flow\tbiz&utm_medium=e\r\nmail&utm_campaign=c\u0001d \n\u0000'],
 ];
 
 const sequences: Array<[string, Array<string | null>]> = [

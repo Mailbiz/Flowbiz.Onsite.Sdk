@@ -73,15 +73,16 @@ supplies that field.
 
 | Play form category → data type | Collected? | Shared? | Processed ephemerally? | Required or optional | Purposes to declare |
 |---|---|---|---|---|---|
-| Personal info → Email address | Yes, if you track account events | No¹ | No | Optional (only on login/sync) | Analytics, App functionality |
-| Personal info → Name | *Conditional* (account events with `name`) | No¹ | No | Optional | Analytics, App functionality |
-| Personal info → Phone number | *Conditional* (account events with `phone`) | No¹ | No | Optional | Analytics, App functionality |
-| Personal info → User IDs | Yes (account `user_id`; SDK `anonymous_id`) | No¹ | No | Required for SDK function (`anonymous_id`) | Analytics, App functionality |
-| Personal info → Address | *Conditional* (`deliveryAddress` / postal code on cart/order events) | No¹ | No | Optional | Analytics, App functionality |
-| Financial info → Purchase history | Yes, if you track cart/checkout/order events | No¹ | No | Optional | Analytics, App functionality |
-| App activity → In-app actions (page views, taps, etc.) | Yes (`pageView`, `productView`, heartbeat, checkout steps) | No¹ | No | Optional | Analytics, App functionality |
+| Personal info → Email address | Yes, if you track account events | No¹ | No | Optional (only on login/sync) | Analytics, App functionality, Advertising or marketing |
+| Personal info → Name | *Conditional* (account events with `name`) | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| Personal info → Phone number | *Conditional* (account events with `phone`) | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| Personal info → User IDs | Yes, if you track account events (`user_id`) | No¹ | No | Optional (only on login/sync) | Analytics, App functionality, Advertising or marketing |
+| Personal info → Address | *Conditional* (`deliveryAddress` / postal code on cart/order events) | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| Financial info → Purchase history | Yes, if you track cart/checkout/order events | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| App activity → App interactions (page views, taps, etc.) | Yes (`pageView`, `productView`, heartbeat, checkout steps) | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| App activity → Other actions (campaign links opened: UTM parameters) | Yes, if you forward links to `handleLink` / `handlePushOpened` | No¹ | No | Optional | Analytics, Advertising or marketing |
 | App info and performance | No | — | — | — | — |
-| Device or other IDs | No² | — | — | — | — |
+| Device or other IDs | Yes² (SDK `anonymous_id`) | No¹ | No | Required for SDK function | Analytics, App functionality, Advertising or marketing |
 | Location | No (no location APIs; a user-typed delivery address is declared under Personal info → Address) | — | — | — | — |
 
 ¹ "Shared" in Play's definition means transfer to a *third party*. The SDK
@@ -90,11 +91,9 @@ service provider (processor). If your legal assessment classifies Flowbiz
 as an independent third party for your app, mark these rows as shared with
 purpose Analytics — confirm with your DPO.
 
-² Play's "Device or other IDs" targets identifiers like the AAID or
-hardware IDs. The SDK's `anonymous_id` is a self-generated, app-scoped
-random UUID, conventionally declared under "User IDs" (pseudonymous
-identifier). If your reviewer prefers the conservative reading, also mark
-"Device or other IDs" as collected.
+² Google's examples for this type include a Firebase installation ID; the
+SDK's `anonymous_id` is the same kind of value (a random per-install UUID,
+not the advertising ID or a hardware identifier).
 
 Additional form answers relevant to the SDK:
 

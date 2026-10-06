@@ -8,7 +8,7 @@ enum RecoveryLinkParser {
 
     static func parse(_ url: String?, expectedAppId: String? = nil) -> RecoveryPayload? {
         guard let url else { return nil }
-        let pairs = queryPairs(url)
+        let pairs = queryPairs(UtmLinkParser.href(url))
         guard let raw = pairs.first(where: { $0.key == param && !$0.value.isEmpty })?.value else { return nil }
         guard let utm = pairs.first(where: { $0.key == utmParam })?.value, isValidUtm(utm) else { return nil }
         var candidates: [String] = []

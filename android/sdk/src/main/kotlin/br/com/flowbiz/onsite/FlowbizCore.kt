@@ -69,11 +69,11 @@ internal class FlowbizCore(
         try {
             val wireName = EventSerializer.wireName(event)
             val dataJson = EventSerializer.dataJson(event, config.baseUriOrNull)
-            // Before dedup: a suppressed duplicate pageView still means the user is on that screen.
             if (event is Event.PageView && (event.path != null || event.title != null)) {
                 lastPage = PageState(event.title, UrlResolver.resolve(event.path, config.baseUriOrNull))
             }
-            if (dedupStore.shouldSuppress(wireName, dataJson)) {
+            // Never for page.view: web pageView() carries no data, so it skips the EventsState dedup.
+            if (wireName != "page.view" && dedupStore.shouldSuppress(wireName, dataJson)) {
                 SdkLog.debug("event suppressed: duplicate $wireName within dedup window")
                 return@submit
             }

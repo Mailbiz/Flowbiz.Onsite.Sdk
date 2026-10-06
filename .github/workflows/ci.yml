@@ -20,10 +20,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      # --rerun: the SDK suites read ../shared, not a task input, so a change there alone would hit the cache.
       - name: Unit tests, release AAR, lint
         working-directory: android
-        run: ./gradlew :sdk:testDebugUnitTest --rerun :demo:testDebugUnitTest :sdk:assembleRelease :sdk:lint
+        run: ./gradlew :sdk:testDebugUnitTest :demo:testDebugUnitTest :sdk:assembleRelease :sdk:lint
 
   ios:
     name: iOS (macOS 15, Xcode 16.4)

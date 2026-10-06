@@ -78,13 +78,14 @@ object Flowbiz {
     @JvmStatic
     fun logout() = withCore("logout") { it.logout() }
 
-    /** Opt-out switch, persisted across launches; while disabled nothing is tracked or sent. */
+    /** Opt-out switch, persisted across launches; while disabled nothing is tracked or sent (a push token and links' UTMs are kept). */
     @JvmStatic
     fun setEnabled(enabled: Boolean) = withCore("setEnabled") { it.setEnabled(enabled) }
 
     @JvmStatic
     fun flush() = withCore("flush") { it.flush() }
 
+    /** Relays the push token; while disabled it is kept and synced on re-enable. [logout] removes it; blank is ignored. */
     @JvmStatic
     fun setPushToken(token: String?) {
         if (token.isNullOrBlank()) {

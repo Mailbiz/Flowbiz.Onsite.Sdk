@@ -16,6 +16,7 @@ public struct FlowbizConfig: Sendable, Equatable {
     /// The store's https origin, as the web tag's `baseuri`; path-only URLs are resolved against it.
     public let baseUri: String
 
+    /// Collector base URL; must be https with a host, else the default is used.
     public let collectorUrl: String
     public let debug: Bool
 

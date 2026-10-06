@@ -202,7 +202,6 @@ class FlowbizCoreTest {
         val h = harness()
         for ((minutes, expected) in cases) {
             h.device.offsetMinutes = minutes
-            // distinct payloads: dedup must not eat the later samples
             h.core.track(Event.PageView("screen-$minutes"))
             assertEquals(expected, h.lastEntry().getJSONObject("timings").getString("timezone"))
             assertEquals(expected, FlowbizCore.formatTimezoneOffset(minutes))

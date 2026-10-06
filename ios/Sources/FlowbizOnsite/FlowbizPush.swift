@@ -55,22 +55,24 @@ enum PushPayloadParser {
         )
     }
 
-    // iOS 13–16's URL(string:) rejects non-RFC 3986 characters, like the raw `|` in utm_campaign.
+    // Escapes only what is invalid, so existing escapes survive on every iOS: iOS 13–16's URL(string:)
+    // rejects a raw `|` (utm_campaign), and iOS 17+'s re-escapes every `%` of that part (`%20` → `%2520`).
     static func deepLinkURL(_ string: String, parse: (String) -> URL? = { URL(string: $0) }) -> URL? {
-        parse(string) ?? encodingInvalidCharacters(string).flatMap(parse)
+        encodingInvalidCharacters(string).flatMap(parse) ?? parse(string)
     }
 
     // Nil unless scheme and authority need no encoding: encoding a non-ASCII host would name another host.
     static func encodingInvalidCharacters(_ link: String) -> String? {
-        guard let encoded = link.addingPercentEncoding(withAllowedCharacters: rfc3986),
+        let loneEscaped = link.replacingOccurrences(of: "%(?![0-9A-Fa-f]{2})", with: "%25", options: .regularExpression)
+        guard let encoded = loneEscaped.addingPercentEncoding(withAllowedCharacters: rfc3986),
               let prefix = encoded.range(of: "^[A-Za-z][A-Za-z0-9+.-]*:(//[^/?#]*)?", options: .regularExpression),
               link.utf8.starts(with: encoded[prefix].utf8)
         else { return nil }
         return encoded
     }
 
-    // Plus `%`, so existing escapes are kept.
+    // Plus `%`, so existing escapes are kept; minus `[` `]`, valid only around an IPv6 host.
     private static let rfc3986 = CharacterSet(
-        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=%"
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#@!$&'()*+,;=%"
     )
 }

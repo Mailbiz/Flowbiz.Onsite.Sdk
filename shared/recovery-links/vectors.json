@@ -164,5 +164,17 @@
     "url": "https://s.com/#/cart?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19&utm_source=flowbiz",
     "appId": "77777",
     "expected": null
+  },
+  {
+    "name": "tabs_newlines_removed_ends_trimmed",
+    "url": " \thttps://store.com/carrinho?utm_source=flow\tbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1h\nYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19\r\n",
+    "appId": "77777",
+    "expected": {
+      "cartId": "cart-abc-001", "userId": "user-123",
+      "products": [
+        { "productId": "P100", "sku": "SKU-100-P", "quantity": 2, "recoveryProperties": null },
+        { "productId": "P200", "sku": "SKU-200-M", "quantity": 1, "recoveryProperties": null }
+      ]
+    }
   }
 ]

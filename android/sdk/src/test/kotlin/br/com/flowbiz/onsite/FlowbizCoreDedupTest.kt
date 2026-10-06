@@ -1,7 +1,6 @@
 package br.com.flowbiz.onsite
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -14,21 +13,32 @@ class FlowbizCoreDedupTest {
 
     private fun harness() = CoreHarness(temp.newFolder())
 
+    // An event with data, which web also dedups (EventsState); page.view never is.
+    private fun coupon(code: String) = Event.CartSetCoupon(cartId = "c1", coupon = code)
+
+    @Test
+    fun pageViewIsNeverDeduped() {
+        val h = harness()
+        h.core.track(Event.PageView("home"))
+        h.core.track(Event.PageView("home"))
+        assertEquals(2, h.sentEntries().size)
+    }
+
     @Test
     fun identicalPayloadWithinWindowIsSuppressed() {
         val h = harness()
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         h.clock.advance(5 * MINUTE_MS)
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         assertEquals(1, h.sentEntries().size)
     }
 
     @Test
     fun identicalPayloadAfterWindowSendsAgain() {
         val h = harness()
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         h.clock.advance(DedupStore.WINDOW_MS)
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         assertEquals(2, h.sentEntries().size)
     }
 
@@ -36,23 +46,23 @@ class FlowbizCoreDedupTest {
     fun renewOnDuplicateSemanticsPinned() {
         // t=30 is past a fixed 20-min window from the send but inside the one the t=15 duplicate renewed.
         val h = harness()
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         h.clock.advance(15 * MINUTE_MS)
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         h.clock.advance(15 * MINUTE_MS)
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         assertEquals(1, h.sentEntries().size)
 
         h.clock.advance(20 * MINUTE_MS)
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         assertEquals(2, h.sentEntries().size)
     }
 
     @Test
     fun differentPayloadForSameEventSends() {
         val h = harness()
-        h.core.track(Event.PageView("home"))
-        h.core.track(Event.PageView("cart"))
+        h.core.track(coupon("A"))
+        h.core.track(coupon("B"))
         assertEquals(2, h.sentEntries().size)
     }
 
@@ -81,50 +91,49 @@ class FlowbizCoreDedupTest {
         val store = FakeKeyValueStore()
         val clock = FakeClock()
         val first = CoreHarness(dir, store = store, clock = clock)
-        first.core.track(Event.PageView("home"))
+        first.core.track(coupon("A"))
         assertEquals(1, first.sentEntries().size)
 
         clock.advance(5 * MINUTE_MS)
         val second = CoreHarness(temp.newFolder(), store = store, clock = clock)
-        second.core.track(Event.PageView("home"))
+        second.core.track(coupon("A"))
         assertEquals(0, second.sentEntries().size)
 
         clock.advance(DedupStore.WINDOW_MS)
-        second.core.track(Event.PageView("home"))
+        second.core.track(coupon("A"))
         assertEquals(1, second.sentEntries().size)
     }
 
     @Test
     fun dedupStoresDigestNotPayload() {
         val h = harness()
-        h.core.track(Event.PageView("home"))
-        val stored = h.store.values[DedupStore.DIGEST_KEY_PREFIX + "page.view"] as String
-        val dataJson = EventSerializer.dataJson(Event.PageView("home"), "https://store.com")
+        h.core.track(coupon("A"))
+        val stored = h.store.values[DedupStore.DIGEST_KEY_PREFIX + "cart.setcoupon"] as String
+        val dataJson = EventSerializer.dataJson(coupon("A"), "https://store.com")
         assertEquals(DedupStore.sha256Hex(dataJson), stored)
-        assertFalse(stored.contains("home"))
         assertEquals(64, stored.length)
     }
 
     @Test
     fun backwardsClockJumpDoesNotSuppressForever() {
         val h = harness()
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         h.clock.wall -= 60 * MINUTE_MS
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         assertEquals(2, h.sentEntries().size)
     }
 
     @Test
     fun suppressedDuplicateStillTouchesSession() {
         val h = harness()
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         val first = h.lastEntry().getJSONObject("identity")
         repeat(3) {
             h.clock.advance(15 * MINUTE_MS)
-            h.core.track(Event.PageView("home"))
+            h.core.track(coupon("A"))
         }
         h.clock.advance(20 * MINUTE_MS)
-        h.core.track(Event.PageView("home"))
+        h.core.track(coupon("A"))
         val last = h.lastEntry().getJSONObject("identity")
         assertTrue(h.sentEntries().size == 2)
         assertEquals(first.getString("session_id"), last.getString("session_id"))

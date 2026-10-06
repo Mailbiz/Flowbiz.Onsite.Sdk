@@ -12,7 +12,7 @@ internal object RecoveryLinkParser {
     fun parse(url: String?, expectedAppId: String? = null): RecoveryPayload? {
         if (url == null) return null
         return try {
-            val pairs = queryPairs(url)
+            val pairs = queryPairs(UtmLinkParser.href(url))
             val raw = pairs.firstOrNull { it.first == PARAM && it.second.isNotEmpty() }?.second ?: return null
             val utm = pairs.firstOrNull { it.first == UTM_PARAM }?.second ?: return null
             if (!isValidUtm(utm)) return null

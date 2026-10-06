@@ -76,17 +76,19 @@ import Testing
         #expect(push?.deepLink == URL(string: "https://store.com/promo"))
     }
 
-    @Test func deepLinkIsURLParsingOfTheKeptRawString() throws {
-        for link in [
-            "https://store.com/carrinho?utm_campaign=jornadas|cart|x&utm_medium=e%20mail",
-            "myapp:cart?utm_source=flowbiz&utm_journey_type=1#promo",
-            "https://café.com/promo?utm_source=flowbiz",
-            "//sto|re.com/p",
+    @Test func deepLinkEscapesOnlyWhatIsInvalidAndKeepsTheRawString() throws {
+        for (link, expected) in [
+            ("https://store.com/carrinho?utm_campaign=jornadas|cart|x&utm_medium=e%20mail",
+             "https://store.com/carrinho?utm_campaign=jornadas%7Ccart%7Cx&utm_medium=e%20mail"),
+            // Nothing to escape, or a host the repair must not touch: the system parser decides.
+            ("myapp:cart?utm_source=flowbiz&utm_journey_type=1#promo", URL(string: "myapp:cart?utm_source=flowbiz&utm_journey_type=1#promo")?.absoluteString),
+            ("https://café.com/promo?utm_source=flowbiz", URL(string: "https://café.com/promo?utm_source=flowbiz")?.absoluteString),
+            ("//sto|re.com/p", URL(string: "//sto|re.com/p")?.absoluteString),
         ] {
             let marker = try JSONSerialization.data(withJSONObject: ["v": 1, "type": "promo", "deep_link": link])
             let push = try #require(Flowbiz.handlePush(["flowbiz": String(decoding: marker, as: UTF8.self)]), "\(link)")
             #expect(push.deepLinkString == link, "\(link)")
-            #expect(push.deepLink == URL(string: link), "\(link)")
+            #expect(push.deepLink?.absoluteString == expected, "\(link)")
         }
     }
 
@@ -95,7 +97,7 @@ import Testing
         CFURLCreateWithString(nil, string as CFString, nil).map { $0 as URL }
     }
 
-    @Test func iOS13To16RepairEncodesOnlyInvalidCharactersAfterTheAuthority() throws {
+    @Test func repairEncodesOnlyInvalidCharactersAfterTheAuthority() throws {
         var cases: [(raw: String, repaired: String?)] = [
             ("https://store.com/p?utm_campaign=jornadas%7Ccart%7Cx#top", "https://store.com/p?utm_campaign=jornadas%7Ccart%7Cx#top"),
             ("https://store.com/busca?q=camisa azul&utm_source=flowbiz", "https://store.com/busca?q=camisa%20azul&utm_source=flowbiz"),
@@ -113,7 +115,7 @@ import Testing
             ("https://café.com/p?utm_source=a|b", nil),
             ("https://\u{338}café.com/p?utm_source=a|b", nil),
             ("https://store com/p?utm_source=a|b", nil),
-            ("https://store.com/p?utm_campaign=50%|x", nil),
+            ("https://store.com/p?utm_campaign=50%|x", "https://store.com/p?utm_campaign=50%25%7Cx"),
             ("//café.com/p?utm_source=a|b", nil),
             (" https://store.com/p?utm_source=a|b", nil),
             ("1app://store.com/p?utm_source=a|b", nil),
@@ -132,7 +134,7 @@ import Testing
         }
     }
 
-    @Test func iOS13To16RepairNeverTrapsNorTouchesTheHost() {
+    @Test func repairNeverTrapsNorTouchesTheHost() {
         var generator = SplitMix64(seed: 13)
         let alphabet = Array("ab09:/?#[]@!$&'()*+,;=%|\" <>{}^`\\çã€😀\u{338}\t")
         let prefixes = ["https://store.com/", "myapp:", "myapp://h/", "", "//", "//café.com/", " https://", "1app://h/", "https://"]

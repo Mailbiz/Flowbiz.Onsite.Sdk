@@ -17,8 +17,11 @@ internal object UtmLinkParser {
 
     private val FLOW_PARAMS_KEYS = listOf("utm_step_id", "utm_journey_version", "utm_journey_instance")
 
+    // What a browser exposes as location.href: tabs and newlines removed, C0 controls and spaces trimmed.
+    fun href(url: String): String = url.filterNot { it == '\t' || it == '\n' || it == '\r' }.trim { it <= ' ' }
+
     fun extract(url: String): Map<String, String> {
-        val params = queryParameters(url)
+        val params = queryParameters(href(url))
         return buildMap { for (key in ALLOWLIST) params[key]?.takeIf { it.isNotEmpty() }?.let { put(key, it) } }
     }
 
@@ -39,7 +42,8 @@ internal object UtmLinkParser {
         return params
     }
 
-    // Hand-rolled: URLDecoder turns `+` into a space and Uri.decode swaps bad UTF-8 for U+FFFD.
+    // Hand-rolled: URLDecoder turns `+` into a space, Uri.decode swaps bad UTF-8 for U+FFFD, and a strict
+    // CharsetDecoder would leave strictness to ART's ICU, which the JVM tests cannot pin.
     fun decodeURIComponentOrRaw(value: String): String {
         if ('%' !in value) return value
         val out = StringBuilder(value.length)
