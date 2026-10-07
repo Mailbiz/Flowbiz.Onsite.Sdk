@@ -1,6 +1,3 @@
-// `handlePush` (SPEC §10.2/§10.3) driven by the shared drift-guard samples
-// (`shared/push-samples/samples.json`). Samples are exercised through the
-// public facade — `handlePush` is pure and requires no initialize (SPEC §3).
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -22,7 +19,6 @@ import Testing
         for sample in try Self.samples() {
             let name = sample["name"] as? String ?? "?"
             let payload = sample["payload"] as? [String: Any] ?? [:]
-            // iOS override first (the dict-marker sample parses here, unlike Android).
             let expected = sample["expected_ios"] ?? sample["expected"]
             let push = Flowbiz.handlePush(payload)
             if expected == nil || expected is NSNull {
@@ -73,9 +69,6 @@ import Testing
         value is NSNull ? nil : value as? String
     }
 
-    // MARK: contract details beyond the shared samples
-
-    /// A well-formed `deep_link` surfaces as both the raw string and a URL.
     @Test func wellFormedDeepLinkBecomesAURL() {
         let push = Flowbiz.handlePush(
             ["flowbiz": #"{"v":1,"type":"promo","deep_link":"https://store.com/promo"}"#]
@@ -83,11 +76,84 @@ import Testing
         #expect(push?.deepLink == URL(string: "https://store.com/promo"))
     }
 
-    /// SPEC §3 purity: no initialize needed, nil/empty payloads are nil.
+    @Test func deepLinkEscapesOnlyWhatIsInvalidAndKeepsTheRawString() throws {
+        for (link, expected) in [
+            ("https://store.com/carrinho?utm_campaign=jornadas|cart|x&utm_medium=e%20mail",
+             "https://store.com/carrinho?utm_campaign=jornadas%7Ccart%7Cx&utm_medium=e%20mail"),
+            // Nothing to escape, or a host the repair must not touch: the system parser decides.
+            ("myapp:cart?utm_source=flowbiz&utm_journey_type=1#promo", URL(string: "myapp:cart?utm_source=flowbiz&utm_journey_type=1#promo")?.absoluteString),
+            ("https://café.com/promo?utm_source=flowbiz", URL(string: "https://café.com/promo?utm_source=flowbiz")?.absoluteString),
+            ("//sto|re.com/p", URL(string: "//sto|re.com/p")?.absoluteString),
+        ] {
+            let marker = try JSONSerialization.data(withJSONObject: ["v": 1, "type": "promo", "deep_link": link])
+            let push = try #require(Flowbiz.handlePush(["flowbiz": String(decoding: marker, as: UTF8.self)]), "\(link)")
+            #expect(push.deepLinkString == link, "\(link)")
+            #expect(push.deepLink?.absoluteString == expected, "\(link)")
+        }
+    }
+
+    // iOS 13–16's URL(string:): CFURL rejects the non-RFC 3986 characters iOS 17+ encodes itself.
+    private static func legacyParse(_ string: String) -> URL? {
+        CFURLCreateWithString(nil, string as CFString, nil).map { $0 as URL }
+    }
+
+    @Test func repairEncodesOnlyInvalidCharactersAfterTheAuthority() throws {
+        var cases: [(raw: String, repaired: String?)] = [
+            ("https://store.com/p?utm_campaign=jornadas%7Ccart%7Cx#top", "https://store.com/p?utm_campaign=jornadas%7Ccart%7Cx#top"),
+            ("https://store.com/busca?q=camisa azul&utm_source=flowbiz", "https://store.com/busca?q=camisa%20azul&utm_source=flowbiz"),
+            ("https://store.com/p?utm_campaign=promoção&utm_medium=e%20mail", "https://store.com/p?utm_campaign=promo%C3%A7%C3%A3o&utm_medium=e%20mail"),
+            ("https://store.com/p?utm_content=\"x\"<y>{z}^`\\&utm_source=a|b",
+             "https://store.com/p?utm_content=%22x%22%3Cy%3E%7Bz%7D%5E%60%5C&utm_source=a%7Cb"),
+            ("https://user@store.com:8443/c/ação?utm_source=a|b#topo", "https://user@store.com:8443/c/a%C3%A7%C3%A3o?utm_source=a%7Cb#topo"),
+            ("https://store.com/busca?filter[cor]=azul&utm_campaign=a|b", "https://store.com/busca?filter%5Bcor%5D=azul&utm_campaign=a%7Cb"),
+            ("https://store.com?utm_source=a|b", "https://store.com?utm_source=a%7Cb"),
+            ("https://store.com#x|y", "https://store.com#x%7Cy"),
+            ("https://store.com/\u{338}?utm_source=a|b", "https://store.com/%CC%B8?utm_source=a%7Cb"),
+            ("https:/\u{338}/café.com/p?utm_source=a|b", "https:/%CC%B8/caf%C3%A9.com/p?utm_source=a%7Cb"),
+            ("myapp:ç|x", "myapp:%C3%A7%7Cx"),
+            ("myapp:open?next=https://café.com|x", "myapp:open?next=https://caf%C3%A9.com%7Cx"),
+            ("https://café.com/p?utm_source=a|b", nil),
+            ("https://\u{338}café.com/p?utm_source=a|b", nil),
+            ("https://store com/p?utm_source=a|b", nil),
+            ("https://store.com/p?utm_campaign=50%|x", "https://store.com/p?utm_campaign=50%25%7Cx"),
+            ("//café.com/p?utm_source=a|b", nil),
+            (" https://store.com/p?utm_source=a|b", nil),
+            ("1app://store.com/p?utm_source=a|b", nil),
+        ]
+        for vector in try UtmLinkParserSuite.extractVectors() where (vector["name"] as? String)?.hasPrefix("messagebuilder_") == true {
+            let raw = try #require(vector["url"] as? String)
+            cases.append((raw, raw.replacingOccurrences(of: "|", with: "%7C")))
+        }
+        for (raw, repaired) in cases {
+            let url = PushPayloadParser.deepLinkURL(raw, parse: Self.legacyParse)
+            #expect(url?.absoluteString == repaired, "\(raw)")
+            if let url {
+                #expect(UtmLinkParser.extract(url.absoluteString).map(\.value) == UtmLinkParser.extract(raw).map(\.value), "\(raw)")
+                #expect(RecoveryLinkParser.parse(url.absoluteString) == RecoveryLinkParser.parse(raw), "\(raw)")
+            }
+        }
+    }
+
+    @Test func repairNeverTrapsNorTouchesTheHost() {
+        var generator = SplitMix64(seed: 13)
+        let alphabet = Array("ab09:/?#[]@!$&'()*+,;=%|\" <>{}^`\\çã€😀\u{338}\t")
+        let prefixes = ["https://store.com/", "myapp:", "myapp://h/", "", "//", "//café.com/", " https://", "1app://h/", "https://"]
+        for _ in 0..<2_000 {
+            var raw = prefixes[Int(generator.next() % UInt64(prefixes.count))]
+            for _ in 0..<(generator.next() % 40) {
+                raw.append(alphabet[Int(generator.next() % UInt64(alphabet.count))])
+            }
+            if Self.legacyParse(raw) == nil, let host = PushPayloadParser.deepLinkURL(raw, parse: Self.legacyParse)?.host {
+                #expect(!host.contains("%") && host.unicodeScalars.allSatisfy(\.isASCII), "\(raw) → \(host)")
+            }
+            _ = PushPayloadParser.deepLinkURL(raw)
+        }
+    }
+
     @Test func nilAndEmptyPayloadsAreNil() {
         #expect(Flowbiz.handlePush(nil) == nil)
         #expect(Flowbiz.handlePush([:]) == nil)
-        #expect(Flowbiz.handlePush(["flowbiz": 42]) == nil) // non-string, non-dict marker
+        #expect(Flowbiz.handlePush(["flowbiz": 42]) == nil)
     }
 
     @Test func randomGarbageMarkerNeverCrashes() {
@@ -99,7 +165,7 @@ import Testing
                     garbage.unicodeScalars.append(scalar)
                 }
             }
-            _ = Flowbiz.handlePush(["flowbiz": garbage]) // must not crash
+            _ = Flowbiz.handlePush(["flowbiz": garbage])
         }
     }
 }

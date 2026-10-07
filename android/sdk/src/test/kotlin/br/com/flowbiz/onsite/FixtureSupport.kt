@@ -4,14 +4,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/**
- * Test-side helpers for the shared drift-guard fixtures (`shared/fixtures/`):
- * locating the fixture directory, mapping fixture `input` JSON onto the typed
- * constructors, and structural JSON comparison.
- */
 object FixtureSupport {
 
-    /** Walks up from the working directory until `shared/<name>` is found. */
     fun sharedDir(name: String): File {
         var dir: File? = File(System.getProperty("user.dir")!!).absoluteFile
         while (dir != null) {
@@ -27,7 +21,20 @@ object FixtureSupport {
     fun fixtureFiles(): List<File> =
         fixturesDir().listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
 
-    /** Maps a fixture (`event` name + camelCase `input`) onto the typed constructors. */
+    data class UtmStep(val url: String?, val expected: String?)
+
+    private val utmVectors by lazy { JSONObject(File(sharedDir("utm-links"), "vectors.json").readText()) }
+
+    private fun JSONObject.utmStep() = UtmStep(stringOrNull("url"), stringOrNull("expected"))
+
+    fun utmExtractVectors(): Map<String, UtmStep> =
+        utmVectors.getJSONArray("extract").objects().associate { it.getString("name") to it.utmStep() }
+
+    fun utmSequenceVectors(): Map<String, List<UtmStep>> = utmVectors.getJSONArray("sequences").objects()
+        .associate { it.getString("name") to it.getJSONArray("steps").objects().map { step -> step.utmStep() } }
+
+    fun utmEnvelopeVector(): JSONObject = utmVectors.getJSONObject("envelope")
+
     fun buildEvent(eventName: String, input: JSONObject): Event = when (eventName) {
         "pageView" -> Event.PageView(path = input.stringOrNull("path"), title = input.stringOrNull("title"))
         "accountLogin" -> Event.AccountLogin(user(input.getJSONObject("user")))
@@ -156,11 +163,6 @@ object FixtureSupport {
         },
     )
 
-    /**
-     * Structural comparison — key order irrelevant, numbers compared by double
-     * value (`0` == `0.0`). Returns a description of the first difference, or
-     * null when equivalent.
-     */
     fun diff(expected: Any?, actual: Any?, path: String): String? {
         val exp = if (expected == JSONObject.NULL) null else expected
         val act = if (actual == JSONObject.NULL) null else actual
@@ -194,8 +196,6 @@ object FixtureSupport {
         }
     }
 
-    // --- JSON extraction helpers (org.json opt* return sentinel defaults, we want nulls) ---
-
     private fun JSONObject.stringOrNull(key: String): String? =
         if (has(key) && !isNull(key)) getString(key) else null
 
@@ -214,7 +214,6 @@ object FixtureSupport {
     private fun JSONArray.objects(): List<JSONObject> =
         (0 until length()).map { getJSONObject(it) }
 
-    /** Android's org.json has no `keySet()`; `keys()` exists on both implementations. */
     private fun JSONObject.keyNames(): Set<String> {
         val result = linkedSetOf<String>()
         val iterator = keys()

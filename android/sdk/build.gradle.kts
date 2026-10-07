@@ -5,10 +5,6 @@ plugins {
     signing
 }
 
-// SPEC §13 distribution coordinates (Maven Central: br.com.flowbiz:onsite-sdk).
-// The version is kept in lockstep with SdkVersion.CURRENT and the iOS
-// SDKVersion.current; the release workflow asserts all of them match the
-// vX.Y.Z tag before publishing.
 group = "br.com.flowbiz"
 version = "0.1.0"
 
@@ -37,28 +33,27 @@ kotlin {
     jvmToolchain(17)
 }
 
+// The suites read ../shared at run time: declared, so a change there alone re-runs them.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.file("../shared"))
+        .withPropertyName("shared")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 dependencies {
-    // Zero runtime dependencies by design (SPEC §1) — Kotlin stdlib + platform APIs only.
     testImplementation(libs.junit)
-    // Real org.json for local unit tests (the android.jar stub throws); test-only, not shipped.
+    // Real org.json for JVM tests: the android.jar stub throws.
     testImplementation(libs.json)
 }
 
-// Maven Central requires a javadoc artifact; an empty javadoc jar is the
-// accepted pattern for Kotlin artifacts published without Dokka (adding
-// Dokka would violate the zero-dependency build minimalism; revisit if
-// rendered API docs are ever wanted).
+// Maven Central requires a javadoc jar; an empty one is the accepted pattern without Dokka.
 val emptyJavadocJar = tasks.register<Jar>("emptyJavadocJar") {
     archiveClassifier.set("javadoc")
 }
 
 publishing {
     repositories {
-        // Maven Central via the Sonatype Central Portal's OSSRH-compatible
-        // staging API. TODO(SPEC §13): br.com.flowbiz namespace registration in
-        // the Central Portal is pending; credentials arrive via CI secrets
-        // (CENTRAL_USERNAME / CENTRAL_PASSWORD) — absent locally, which is
-        // fine: publishToMavenLocal never touches this repository.
+        // The Central Portal's OSSRH-compatible staging API, not the retired OSSRH.
         maven {
             name = "central"
             url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
@@ -70,9 +65,7 @@ publishing {
     }
 }
 
-// AGP creates the "release" software component after project evaluation,
-// so the publication (and its conditional signing) is wired in afterEvaluate
-// — the documented AGP pattern.
+// AGP creates the "release" component only after evaluation.
 afterEvaluate {
     publishing {
         publications {
@@ -121,11 +114,7 @@ afterEvaluate {
         }
     }
 
-    // GPG signing for Central (SPEC §13). Activates only when a key is
-    // provided — via the signingInMemoryKey/signingInMemoryKeyPassword
-    // Gradle properties (CI sets them as ORG_GRADLE_PROJECT_* env vars) —
-    // so local builds and :sdk:publishToMavenLocal succeed with no signing
-    // setup present.
+    // Only when CI provides a key (ORG_GRADLE_PROJECT_* env vars), so local publishing needs no GPG setup.
     val signingKey = providers.gradleProperty("signingInMemoryKey").orNull
     val signingPassword = providers.gradleProperty("signingInMemoryKeyPassword").orNull
     if (signingKey != null) {

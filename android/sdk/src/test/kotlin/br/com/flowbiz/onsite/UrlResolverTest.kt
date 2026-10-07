@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Spec §5 resolver table. */
 class UrlResolverTest {
 
     private val base = "https://store.com"

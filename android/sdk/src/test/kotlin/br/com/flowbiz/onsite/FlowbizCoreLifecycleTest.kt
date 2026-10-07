@@ -10,12 +10,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
-/**
- * [FlowbizCore] lifecycle wiring: heartbeat start/stop on
- * foreground/background (SPEC §8), ping contents and session keepalive
- * (SPEC §6), and the SPEC §12 `setEnabled` behavior (drop, stop, gate,
- * resume).
- */
 class FlowbizCoreLifecycleTest {
 
     @get:Rule
@@ -25,8 +19,6 @@ class FlowbizCoreLifecycleTest {
 
     private fun pingEntries(h: CoreHarness): List<JSONObject> =
         h.sentEntries().filter { it.getString("event") == "page.ping" }
-
-    // --- Heartbeat lifecycle (SPEC §8) ---
 
     @Test
     fun foregroundStartsHeartbeatWithConfiguredInterval() {
@@ -60,7 +52,7 @@ class FlowbizCoreLifecycleTest {
     fun redundantForegroundDoesNotRestartHeartbeat() {
         val h = harness()
         h.core.onForeground()
-        h.core.onForeground() // e.g. didBecomeActive after the initial probe
+        h.core.onForeground()
         assertEquals(1, h.scheduler.scheduled.count { it.repeating && !it.cancelled })
     }
 
@@ -68,14 +60,14 @@ class FlowbizCoreLifecycleTest {
     fun pingBypassesQueueAndDedupAndCarriesSessionIdentity() {
         val h = harness()
         h.core.onForeground()
-        h.scheduler.tickRepeating(2) // identical beats: dedup-exempt by design
+        h.scheduler.tickRepeating(2)
 
         val pings = pingEntries(h)
         assertEquals(2, pings.size)
-        assertEquals(0, h.queue.size) // never persisted (SPEC §8)
+        assertEquals(0, h.queue.size)
 
         val ping = pings.first()
-        assertEquals("{}", ping.getString("data")) // no named pageView yet
+        assertEquals("{}", ping.getString("data"))
         val identity = ping.getJSONObject("identity")
         assertTrue(IdentityStore.UUID_SHAPE.matches(identity.getString("anonymous_id")))
         assertTrue(IdentityStore.UUID_SHAPE.matches(identity.getString("session_id")))
@@ -94,7 +86,6 @@ class FlowbizCoreLifecycleTest {
             pingEntries(h).last().getString("data"),
         )
 
-        // An anonymous pageView does not clear the last named screen.
         h.core.track(Event.PageView())
         h.scheduler.tickRepeating()
         assertEquals(
@@ -118,10 +109,6 @@ class FlowbizCoreLifecycleTest {
         assertEquals("https://store.com", context.getString("baseuri"))
         assertEquals("https://store.com/carrinho", context.getString("recoveryUrl"))
 
-        // I2: raw (non-ping) events — e.g. the `push.token.sync` relay —
-        // go through `emitInternal`, a separate path from both `track`'s
-        // envelope build and the ping build above; pin that it carries the
-        // same context fields rather than only ever exercising ping/track.
         h.core.setPushToken("tok")
         val sync = h.sentEntries().last { it.getString("event") == "push.token.sync" }
         val syncContext = sync.getJSONObject("context")
@@ -130,12 +117,6 @@ class FlowbizCoreLifecycleTest {
         assertEquals("https://store.com/carrinho", syncContext.getString("recoveryUrl"))
     }
 
-    /**
-     * I2: a title-only [Event.PageView] (no path) resolves no URL
-     * (`UrlResolver` on a null path is null), so it must not leak a
-     * stale/placeholder URL into `context.url` — and the ping's `page` data
-     * carries the title alone, no `url` key.
-     */
     @Test
     fun titleOnlyPageViewOmitsContextUrlButKeepsPingTitle() {
         val h = harness()
@@ -158,13 +139,11 @@ class FlowbizCoreLifecycleTest {
         h.sender.defaultResult = SendResult.RETRIABLE_ERROR
         h.scheduler.tickRepeating(3)
         assertEquals(0, h.queue.size)
-        assertEquals(3, pingEntries(h).size) // attempted, dropped, no retry state
+        assertEquals(3, pingEntries(h).size)
     }
 
     @Test
     fun pingKeepsSessionAliveAsActivity() {
-        // SPEC §6: page.ping counts as activity — a foregrounded idle app
-        // keeps its session.
         val h = harness()
         h.core.track(Event.PageView("home"))
         val sessionBefore = h.lastEntry().getJSONObject("identity").getString("session_id")
@@ -173,7 +152,7 @@ class FlowbizCoreLifecycleTest {
             h.clock.advance(25 * MINUTE_MS)
             h.scheduler.tickRepeating()
         }
-        h.clock.advance(25 * MINUTE_MS) // 25 < 30 since last ping
+        h.clock.advance(25 * MINUTE_MS)
         h.core.track(Event.PageView("later"))
         assertEquals(sessionBefore, h.lastEntry().getJSONObject("identity").getString("session_id"))
     }
@@ -188,28 +167,25 @@ class FlowbizCoreLifecycleTest {
         assertEquals(0, h.queue.size)
     }
 
-    // --- setEnabled (SPEC §12) ---
-
     @Test
     fun setEnabledFalseStopsHeartbeatDropsEventsAndGatesNetwork() {
         val h = harness()
         h.core.onForeground()
-        // Build a retriable backlog first (a retry is now scheduled).
         h.sender.defaultResult = SendResult.RETRIABLE_ERROR
         h.core.track(Event.PageView("home"))
         assertEquals(1, h.queue.size)
         val sendsBefore = h.sender.bodies.size
 
         h.core.setEnabled(false)
-        assertEquals(false, h.store.values[StorageKeys.ENABLED]) // persisted
-        assertNull(h.scheduler.activeRepeating()) // heartbeat stopped
+        assertEquals(false, h.store.values[StorageKeys.ENABLED])
+        assertNull(h.scheduler.activeRepeating())
 
-        h.core.track(Event.PageView("dropped")) // dropped, not queued
+        h.core.track(Event.PageView("dropped"))
         assertEquals(1, h.queue.size)
 
-        h.core.flush() // ignored while disabled
-        h.scheduler.runLastScheduled() // pending backoff retry fires → gated
-        assertEquals(sendsBefore, h.sender.bodies.size) // zero network while disabled
+        h.core.flush()
+        h.scheduler.runLastScheduled()
+        assertEquals(sendsBefore, h.sender.bodies.size)
     }
 
     @Test
@@ -234,8 +210,8 @@ class FlowbizCoreLifecycleTest {
 
         h.sender.defaultResult = SendResult.SUCCESS
         h.core.setEnabled(true)
-        assertEquals(0, h.queue.size) // backlog flushed
-        assertNotNull(h.scheduler.activeRepeating()) // heartbeat resumed (foregrounded)
+        assertEquals(0, h.queue.size)
+        assertNotNull(h.scheduler.activeRepeating())
         assertEquals(true, h.store.values[StorageKeys.ENABLED])
     }
 

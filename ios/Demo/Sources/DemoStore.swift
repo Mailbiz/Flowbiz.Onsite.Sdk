@@ -1,10 +1,6 @@
 import Foundation
 import FlowbizOnsite
 
-/// One fake-store product. Data mirrors the realistic Brazilian ecommerce
-/// catalog used by `shared/fixtures/` (Bela Moda Store); `P100`/`P200` match
-/// the product ids inside the shared recovery-link vectors so a simulated
-/// recovery link restores real catalog items. Mirrors the Android demo 1:1.
 struct DemoProduct: Identifiable {
     let productId: String
     let sku: String
@@ -20,7 +16,6 @@ struct DemoProduct: Identifiable {
     var id: String { sku }
 }
 
-/// A cart line in the demo store's in-memory state.
 struct CartLine: Identifiable {
     let product: DemoProduct
     var quantity: Int
@@ -28,13 +23,10 @@ struct CartLine: Identifiable {
     var id: String { product.sku }
 }
 
-/// In-memory demo store state: catalog, cart, and the pending deep-link
-/// recovery result. The SDK payloads the demo tracks are built from here.
 final class DemoStore: ObservableObject {
 
     static let cartId = "demo-cart-001"
 
-    /// Presented as a sheet showing the parsed `RecoveryPayload` (SPEC §11).
     struct RecoveryResult: Identifiable {
         let id = UUID()
         let source: String
@@ -98,7 +90,6 @@ final class DemoStore: ObservableObject {
         ),
     ]
 
-    /// Fake logged-in user for `account.login` / `account.sync` (SPEC §5).
     static let fakeUser = User(
         userId: "u-9f2c",
         email: "maria.souza@exemplo.com.br",
@@ -110,17 +101,16 @@ final class DemoStore: ObservableObject {
 
     static let fakePushToken = "fake-apns-token-0123456789abcdef"
 
-    /// "basic" vector from shared/recovery-links/vectors.json —
-    /// decodes to cart-abc-001 / user-123 / P100 + P200.
     static let recoveryHash =
         "eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19"
 
-    /// SPEC §10.2 marker value from shared/push-samples/samples.json
-    /// ("cart_recovery_with_real_mb_cr_deep_link").
+    // %7C, not a raw "|": URL(string:) returns nil for it before iOS 17.
+    static let recoveryLink =
+        "flowbizdemo://recover?_mb_cr_=\(recoveryHash)&utm_journey=16&utm_journey_channel=email" +
+        "&utm_source=flowbiz&utm_medium=email&utm_campaign=jornadas%7Ccart%7Ccarrinho-abandonado&utm_journey_type=1"
+
     static let simulatedPushMarker =
         #"{"v":1,"type":"cart_recovery","title":"Sua sacola te espera!","body":"Finalize sua compra...","deep_link":"https://store.com/carrinho?utm_source=flowbiz&_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoidXNlci0xMjMiLCJjIjoiY2FydC1hYmMtMDAxIiwiaXRzIjpbWyIyIiwiUDEwMCIsIlNLVS0xMDAtUCIsIntcImNvclwiOlwiQXp1bFwiLFwidGFtYW5ob1wiOlwiUFwifSJdLFsiMSIsIlAyMDAiLCJTS1UtMjAwLU0iXV19","data":{"campaign_id":"cr-42"}}"#
-
-    // MARK: - Cart mutations
 
     var itemCount: Int { lines.reduce(0) { $0 + $1.quantity } }
 
@@ -147,9 +137,6 @@ final class DemoStore: ObservableObject {
         postalCode = nil
     }
 
-    /// Restores recovered lines (SPEC §11) into the demo cart. Recovery lines
-    /// are matched to the catalog by sku, then product_id; unknown lines are
-    /// skipped (a real store would fetch them from its own backend).
     func restore(_ payload: RecoveryPayload) {
         clear()
         for line in payload.products {
@@ -160,20 +147,14 @@ final class DemoStore: ObservableObject {
         }
     }
 
-    // MARK: - Totals (fake but arithmetically consistent)
-
     var subtotal: Double { round2(lines.reduce(0) { $0 + $1.product.price * Double($1.quantity) }) }
 
-    /// Flat 10% off with any coupon applied.
     var discounts: Double { coupon == nil ? 0 : round2(subtotal * 0.10) }
 
     var freight: Double { lines.isEmpty ? 0 : 22.9 }
 
     var total: Double { round2(subtotal - discounts + freight) }
 
-    // MARK: - SDK payload builders
-
-    /// SDK `Product` payload for `product.view` (SPEC §5), one variant per demo product.
     func sdkProduct(_ product: DemoProduct) -> Product {
         Product(
             productId: product.productId,
@@ -214,8 +195,6 @@ final class DemoStore: ObservableObject {
         )
     }
 
-    /// SDK `Cart` payload for `cart.sync` (SPEC §5); an empty cart is valid
-    /// and always sent (SPEC §7).
     func cart() -> Cart {
         Cart(
             cartId: DemoStore.cartId,
@@ -231,7 +210,6 @@ final class DemoStore: ObservableObject {
         )
     }
 
-    /// SDK `Order` payload for `order.complete` (SPEC §5).
     func order(orderId: String) -> Order {
         Order(
             cartId: DemoStore.cartId,

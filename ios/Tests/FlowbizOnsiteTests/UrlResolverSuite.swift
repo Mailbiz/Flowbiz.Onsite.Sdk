@@ -1,4 +1,3 @@
-// Spec §5 resolver table.
 #if canImport(Testing)
 import Testing
 @testable import FlowbizOnsite

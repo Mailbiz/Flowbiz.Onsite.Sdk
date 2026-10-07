@@ -10,11 +10,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
-/**
- * [FlowbizCore] track pipeline (SPEC §5/§4/§6): envelope contents,
- * identity side effects, session sliding/rotation, timezone rendering,
- * logout, the never-throw boundary, and explicit flush.
- */
 class FlowbizCoreTest {
 
     @get:Rule
@@ -26,8 +21,6 @@ class FlowbizCoreTest {
     ): CoreHarness = configure(temp)
 
     private val user = User(userId = "98412", email = "maria.oliveira@gmail.com")
-
-    // --- Envelope pipeline ---
 
     @Test
     fun trackedEnvelopeCarriesIdentitySessionContextAndData() {
@@ -43,7 +36,7 @@ class FlowbizCoreTest {
         assertTrue(IdentityStore.UUID_SHAPE.matches(entry.getString("hash")))
 
         val identity = entry.getJSONObject("identity")
-        assertFalse(identity.has("user_id")) // no login yet → omitted
+        assertFalse(identity.has("user_id"))
         assertTrue(IdentityStore.UUID_SHAPE.matches(identity.getString("anonymous_id")))
         assertTrue(IdentityStore.UUID_SHAPE.matches(identity.getString("session_id")))
         assertEquals(1, identity.getInt("visit_count"))
@@ -67,8 +60,6 @@ class FlowbizCoreTest {
 
     @Test
     fun trackedEnvelopeDataMatchesSharedFixture() {
-        // Drift-guard reuse: the pipeline must ship the exact canonical data
-        // string the shared fixture pins for both platforms.
         val h = harness()
         val fixture = JSONObject(File(FixtureSupport.fixturesDir(), "cart_sync_full.json").readText())
         val event = FixtureSupport.buildEvent(fixture.getString("event"), fixture.getJSONObject("input"))
@@ -126,11 +117,9 @@ class FlowbizCoreTest {
     fun trackedEventIsQueuedThenDrainedBySuccessfulFlush() {
         val h = harness()
         h.core.track(Event.PageView("home"))
-        assertEquals(0, h.queue.size) // drained inline by the flush
+        assertEquals(0, h.queue.size)
         assertEquals(1, h.sender.bodies.size)
     }
-
-    // --- Identity side effects (SPEC §5/§6) ---
 
     @Test
     fun accountLoginSetsUserIdOnItselfAndSubsequentEvents() {
@@ -159,21 +148,17 @@ class FlowbizCoreTest {
         val before = h.lastEntry().getJSONObject("identity")
 
         h.core.logout()
-        // Slice 5 will emit push.token.remove here; for now only state changes.
         h.core.track(Event.PageView("home"))
         val after = h.lastEntry().getJSONObject("identity")
 
         assertFalse(after.has("user_id"))
         assertNotEquals(before.getString("session_id"), after.getString("session_id"))
         assertEquals(before.getInt("visit_count") + 1, after.getInt("visit_count"))
-        // anonymous_id survives logout
         assertEquals(before.getString("anonymous_id"), after.getString("anonymous_id"))
         assertFalse(h.store.values.containsKey(StorageKeys.PUSH_TOKEN))
         assertFalse(h.store.values.containsKey(StorageKeys.USER_ID))
         assertFalse(h.store.values.containsKey(StorageKeys.EMAIL))
     }
-
-    // --- Session semantics (SPEC §6) ---
 
     @Test
     fun everyTrackSlidesTheSessionWindow() {
@@ -181,7 +166,6 @@ class FlowbizCoreTest {
         h.core.track(Event.PageView("a"))
         val first = h.lastEntry().getJSONObject("identity")
 
-        // 20 min steps never expire a 30-min sliding window.
         repeat(3) {
             h.clock.advance(20 * MINUTE_MS)
             h.core.track(Event.PageView("screen-$it"))
@@ -205,29 +189,24 @@ class FlowbizCoreTest {
         assertEquals(first.getInt("visit_count") + 1, second.getInt("visit_count"))
     }
 
-    // --- Timezone (SPEC §4, first real use of the timezone param) ---
-
     @Test
     fun timezoneOffsetsRenderAsSignedHoursMinutes() {
         val cases = mapOf(
-            0 to "+00:00",       // UTC
-            -180 to "-03:00",    // São Paulo
-            330 to "+05:30",     // India (half-hour zone)
-            -570 to "-09:30",    // Marquesas (negative half-hour)
-            345 to "+05:45",     // Nepal (quarter-hour)
-            840 to "+14:00",     // Line Islands
+            0 to "+00:00",
+            -180 to "-03:00",
+            330 to "+05:30",
+            -570 to "-09:30",
+            345 to "+05:45",
+            840 to "+14:00",
         )
         val h = harness()
         for ((minutes, expected) in cases) {
             h.device.offsetMinutes = minutes
-            // distinct payloads: dedup must not eat the later samples
             h.core.track(Event.PageView("screen-$minutes"))
             assertEquals(expected, h.lastEntry().getJSONObject("timings").getString("timezone"))
             assertEquals(expected, FlowbizCore.formatTimezoneOffset(minutes))
         }
     }
-
-    // --- Never-throw boundary (SPEC §3) ---
 
     @Test
     fun nanPriceEventIsDroppedAndNextEventIsFine() {
@@ -235,7 +214,7 @@ class FlowbizCoreTest {
         val poison = Event.ProductView(
             Product(productId = "P1", variants = listOf(ProductVariant(sku = "S1", price = Double.NaN)))
         )
-        h.core.track(poison) // must not throw
+        h.core.track(poison)
         assertEquals(0, h.sender.bodies.size)
         assertEquals(0, h.queue.size)
 
@@ -264,7 +243,7 @@ class FlowbizCoreTest {
             deviceContext = h.device,
             reachability = FakeReachability(),
         )
-        core.track(Event.PageView("home")) // must not throw
+        core.track(Event.PageView("home"))
         core.logout()
         core.setEnabled(false)
         core.flush()
@@ -272,16 +251,14 @@ class FlowbizCoreTest {
         core.onBackground()
     }
 
-    // --- Explicit flush (SPEC §2) ---
-
     @Test
     fun explicitFlushDrainsARetriableBacklog() {
         val h = harness()
         h.sender.results.addLast(SendResult.RETRIABLE_ERROR)
-        h.core.track(Event.PageView("home")) // first attempt fails, stays queued
+        h.core.track(Event.PageView("home"))
         assertEquals(1, h.queue.size)
 
-        h.core.flush() // default result SUCCESS
+        h.core.flush()
         assertEquals(0, h.queue.size)
         assertEquals(2, h.sender.bodies.size)
     }

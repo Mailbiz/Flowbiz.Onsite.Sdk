@@ -6,11 +6,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/**
- * SPEC §12 network gate on [FlushController]: while `isActive` reads false
- * (SDK disabled) no drain runs — including a backoff retry scheduled before
- * the disable — and no follow-up retry is scheduled.
- */
 class FlushControllerGateTest {
 
     @get:Rule
@@ -35,17 +30,17 @@ class FlushControllerGateTest {
         queue.append(entry(1))
         sender.results.addLast(SendResult.RETRIABLE_ERROR)
         controller.requestFlush(FlushController.FlushReason.EVENT_TRACKED)
-        assertEquals(1, sender.bodies.size) // attempt 1 failed, retry scheduled
+        assertEquals(1, sender.bodies.size)
 
         active = false
         val scheduledBefore = scheduler.scheduled.size
-        scheduler.runLastScheduled() // pending backoff retry fires → gated
+        scheduler.runLastScheduled()
         assertEquals(1, sender.bodies.size)
-        assertEquals(scheduledBefore, scheduler.scheduled.size) // no follow-up retry
+        assertEquals(scheduledBefore, scheduler.scheduled.size)
 
-        controller.requestFlush(FlushController.FlushReason.EXPLICIT) // gated too
+        controller.requestFlush(FlushController.FlushReason.EXPLICIT)
         assertEquals(1, sender.bodies.size)
-        assertEquals(1, queue.size) // backlog preserved, not dropped
+        assertEquals(1, queue.size)
 
         active = true
         controller.requestFlush(FlushController.FlushReason.EXPLICIT)

@@ -1,21 +1,3 @@
-# SPEC §13: one pipeline releases both platforms from a single vX.Y.Z tag —
-# the AAR is published to Maven Central; the iOS release is the git tag
-# itself (SPM resolves it, source-distributed package).
-#
-# One-time prerequisites (the br.com.flowbiz namespace is already verified
-# in the Central Portal):
-#   - repository secrets: CENTRAL_USERNAME, CENTRAL_PASSWORD (a Central
-#     Portal user token — OSSRH tokens get 401), SIGNING_IN_MEMORY_KEY
-#     (ASCII-armored GPG private key), SIGNING_IN_MEMORY_KEY_PASSWORD
-#   - the signing key's public half uploaded to a keyserver
-#     (keys.openpgp.org or keyserver.ubuntu.com) — Central validates it
-#
-# Publishing goes through the Portal's OSSRH Staging API compatibility
-# service: Gradle's maven-publish PUTs the artifacts into an implicitly
-# created staging repository, and a final POST hands that repository to the
-# Central Portal, where the deployment is reviewed and released by hand.
-# Without that POST the upload never shows up in the Portal (Sonatype docs:
-# central.sonatype.org/publish/publish-portal-ossrh-staging-api/).
 name: Release
 
 on:
@@ -28,12 +10,6 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
-      # The two SDKs version in lockstep (SPEC §13); a tag that does not
-      # match every version constant must never publish anything.
-      # Extract the actual version value from each file and string-compare
-      # against the tag (rather than grepping for a whole expected line, which
-      # cannot report WHAT the file says when it mismatches and silently
-      # passes if the expected string appears anywhere).
       - name: Assert SdkVersion.CURRENT / SDKVersion.current / Gradle version == tag
         run: |
           set -euo pipefail
@@ -74,11 +50,6 @@ jobs:
       - name: Unit tests (gate before publishing)
         working-directory: android
         run: ./gradlew :sdk:testDebugUnitTest
-      # Requires the secrets listed in the header. Without them this step
-      # fails at authentication — intentionally, so a tag can never silently
-      # "release" nothing. Signing activates via the ORG_GRADLE_PROJECT_*
-      # properties (see android/sdk/build.gradle.kts); without them the
-      # artifacts would be unsigned and Central would reject them.
       - name: Publish signed artifacts to Central staging
         working-directory: android
         env:
@@ -87,17 +58,10 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
         run: ./gradlew :sdk:publishReleasePublicationToCentralRepository
-      # The staging API groups the PUTs above into one repository by client
-      # IP, so this hand-off MUST run in the same job (same runner, same IP).
-      # publishing_type=user_managed: the deployment lands in
-      # https://central.sonatype.com/publishing/deployments for a manual
-      # "Publish" (or "Drop") — nothing reaches Maven Central without that
-      # click. Switch to `automatic` to release straight through once the
-      # process is trusted.
-      # Triage: if this step fails, the staging repository is left behind and
-      # blocks later uploads from the same IP — list it with
-      #   GET /manual/search/repositories?ip=any&profile_id=br.com.flowbiz
-      # and DELETE /manual/drop/repository/<key> (same Bearer auth).
+      # Same job on purpose: staging groups the uploads by client IP, and only this POST hands them over.
+      # If it fails, the leftover staging repository blocks later uploads from that IP: find its key with
+      # GET /manual/search/repositories?ip=any&profile_id=br.com.flowbiz, then DELETE /manual/drop/repository/<key>
+      # (same Bearer auth, from a Central Portal user token; OSSRH tokens get 401).
       - name: Hand the staging repository to the Central Portal
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
@@ -110,15 +74,3 @@ jobs:
             -H "Authorization: Bearer ${TOKEN}"
           echo
           echo "Deployment uploaded — review and Publish it at https://central.sonatype.com/publishing/deployments"
-
-  # ios-release:
-  #   name: iOS release (SPM = the tag)
-  #   needs: verify-versions
-  #   runs-on: blacksmith-4vcpu-ubuntu-2404
-  #   steps:
-  #     # Swift Package Manager consumes the git tag directly — there is no
-  #     # artifact to build or upload for iOS (SPEC §13 source-distributed
-  #     # decision; this job would become an XCFramework build + upload if
-  #     # the closed-source option is chosen before 1.0).
-  #     - name: Nothing to upload
-  #       run: echo "The vX.Y.Z git tag itself is the iOS release — SPM resolves it."

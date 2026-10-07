@@ -1,19 +1,8 @@
-// SPEC §12: `debug` logging never prints PII. Pins the invariant end-to-end
-// with the debug sink captured — logs carry wire event names, counts, codes
-// and reasons only, never `data` payload strings or tokens.
-//
-// This suite is `.serialized` and deliberately hosts *every* test that
-// installs the process-global `SdkLog.sink` (the redaction pin and the
-// pre-init purity pin), so no two sink installations can clobber each
-// other. Other suites run in parallel and may log through an installed sink
-// concurrently; the assertions here are written to be immune to that
-// cross-talk (targeted absence checks, never strict emptiness).
 #if canImport(Testing)
 import Foundation
 import Testing
 @testable import FlowbizOnsite
 
-/// Thread-safe capture sink for `SdkLog`.
 final class LogCapture: @unchecked Sendable {
     private let lock = NSLock()
     private var stored: [String] = []
@@ -31,6 +20,7 @@ final class LogCapture: @unchecked Sendable {
     }
 }
 
+// Every test that sets the global SdkLog.sink lives here; other suites log through it concurrently.
 @Suite(.serialized) struct DebugLogRedactionSuite {
 
     @Test func trackedPiiNeverAppearsInCapturedDebugLogs() throws {
@@ -45,19 +35,20 @@ final class LogCapture: @unchecked Sendable {
 
         let harness = CoreHarness()
         let user = User(userId: "u-77", email: email, phone: phone, name: name)
+        // The repeats, the NaN price and the disabled track each hit another log path.
         harness.core.track(.accountLogin(user: user))
-        harness.core.track(.accountLogin(user: user)) // dedup-suppression log path
+        harness.core.track(.accountLogin(user: user))
         harness.core.setPushToken(token)
-        harness.core.setPushToken(token) // dedup-suppression log path for the token event
-        harness.core.track(.productView( // serialization-failure (dropped event) log path
+        harness.core.setPushToken(token)
+        harness.core.track(.productView(
             product: Product(productId: "P1", variants: [ProductVariant(sku: "S1", price: .nan)])
         ))
         harness.core.setEnabled(false)
-        harness.core.track(.accountSync(user: user)) // disabled-drop log path
-        harness.core.setEnabled(true) // re-enable + stored-token re-emit path
+        harness.core.track(.accountSync(user: user))
+        harness.core.setEnabled(true)
         harness.core.removePushToken()
         harness.core.setPushToken(token)
-        harness.core.logout() // logout removal + summary log path
+        harness.core.logout()
         harness.core.flush()
 
         let messages = capture.messages
@@ -68,12 +59,32 @@ final class LogCapture: @unchecked Sendable {
         }
     }
 
-    /// SPEC §3: `handlePush`/`handleLink` are pure functions — they *work*
-    /// before initialize (real result, no "initialize was not called"
-    /// warning), unlike the pipeline entry points. Mirrors the Android
-    /// facade smoke test; the assertion targets the pure handlers' names so
-    /// parallel suites logging through the sink cannot produce false
-    /// failures.
+    @Test func utmLogsNeverCarryALinkAKeyOrAValue() {
+        let link = "https://store.com/carrinho?_mb_cr_=eyJ0IjoiNzc3NzciLCJ1IjoiUTd4In0&utm_source=Q7xsrc" +
+            "&utm_campaign=Q7x%20c&utm_flow_params=Q7xs|Q7xv|Q7xi"
+        let capture = LogCapture()
+        SdkLog.sink = { capture.append($0) }
+        defer { SdkLog.sink = nil }
+
+        let h = CoreHarness()
+        _ = Flowbiz.handleLink(link, core: h.core)
+        h.clock.advance(UtmStore.ttlMillis)
+        h.core.onForeground()
+        h.store[StorageKeys.utmData] = #"[["utm_source","Q7xsrc"]"#
+        h.store[StorageKeys.utmExpiresAtWallMs] = h.clock.wall + 1
+        _ = Flowbiz.handleLink(link, core: h.core)
+
+        let shapes = ["utm context: # captured, # active", "stored utm discarded: expired", "stored utm discarded: corrupt"]
+        let utmLines = capture.messages.filter { $0.contains("utm") }
+        for line in ["utm context: 5 captured, 5 active", "stored utm discarded: expired", "stored utm discarded: corrupt"] {
+            #expect(utmLines.contains(line), "missing '\(line)' in \(utmLines)")
+        }
+        for line in utmLines {
+            #expect(shapes.contains(line.replacingOccurrences(of: "[0-9]+", with: "#", options: .regularExpression)), "\(line)")
+        }
+        #expect(!capture.messages.contains { $0.contains("Q7x") || $0.contains("eyJ0") || $0.contains("utm_") })
+    }
+
     @Test func pureHandlersWorkBeforeInitializeWithoutWarnings() {
         let capture = LogCapture()
         SdkLog.sink = { capture.append($0) }
@@ -84,25 +95,25 @@ final class LogCapture: @unchecked Sendable {
         #expect(Flowbiz.handlePush(["other": "x"]) == nil)
         #expect(Flowbiz.handleLink(nil) == nil)
         #expect(Flowbiz.handleLink(URL(string: "https://store.com/?x=1")) == nil)
-        // Pure: neither handler may route through the core lookup that logs
-        // "Flowbiz.<name> ignored: initialize was not called".
         let handlerWarnings = capture.messages.filter {
             $0.contains("handlePush") || $0.contains("handleLink")
         }
         #expect(handlerWarnings.isEmpty, "pure handlers logged warnings: \(handlerWarnings)")
     }
 
-    /// I1 regression: `ConfigSanitizer` warnings must reach the debug sink
-    /// on the very first `initialize` call, not just on later ones. Starts
-    /// with `SdkLog.sink == nil` — the real first-call state — and
-    /// substitutes what `Flowbiz.initialize` installs *as* the debug sink
-    /// (`Flowbiz.debugSink`) rather than pre-installing `SdkLog.sink`
-    /// itself: pre-installing it would make the warning reach the capture
-    /// regardless of ordering (it doesn't get displaced), masking the bug
-    /// this pins. This is the one real `Flowbiz.initialize` call in the
-    /// test suite (the facade's singleton is "first config wins forever",
-    /// see `FlowbizFacadeSmokeSuite`), so it must run before any other test
-    /// initializes the facade with a non-blank appId.
+    @Test func beforeInitializeALinkIsOnlyDecoded() throws {
+        let capture = LogCapture()
+        SdkLog.sink = { capture.append($0) }
+        defer { SdkLog.sink = nil }
+
+        let link = try UtmLinkParserSuite.extractVector("messagebuilder_journey_cart_recovery").url
+        // core: nil, not the global core: the one real initialize below may already have run.
+        #expect(Flowbiz.handleLink(link, core: nil)?.cartId == "cart-abc-001")
+        #expect(Flowbiz.handlePushOpened(nil) == nil)
+        #expect(!capture.messages.contains { $0.contains("handleLink") || $0.contains("handlePushOpened") })
+    }
+
+    // The one real initialize (first config wins); debugSink, not SdkLog.sink, pins sink-before-sanitize.
     @Test func initializeLogsConfigSanitizerWarningsToSink() {
         #expect(SdkLog.sink == nil, "precondition: no other test may have installed a sink yet")
         let capture = LogCapture()

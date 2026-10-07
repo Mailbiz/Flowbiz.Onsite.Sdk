@@ -1,8 +1,6 @@
 import SwiftUI
 import FlowbizOnsite
 
-/// Deep-link recovery sheet: renders the parsed `RecoveryPayload` (SPEC §11)
-/// — or the nil case — and can restore the cart. Mirrors the Android demo 1:1.
 struct RecoveryView: View {
 
     @EnvironmentObject var store: DemoStore
@@ -16,7 +14,7 @@ struct RecoveryView: View {
                     Text(result.source).font(.system(.footnote, design: .monospaced))
                 }
                 if let payload = result.payload {
-                    Section(header: Text("RecoveryPayload (SPEC §11)")) {
+                    Section(header: Text("RecoveryPayload")) {
                         Text("cartId: \(payload.cartId)")
                         Text("userId: \(payload.userId)")
                         ForEach(Array(payload.products.enumerated()), id: \.offset) { _, product in
@@ -27,15 +25,20 @@ struct RecoveryView: View {
                     Section {
                         Button("Restaurar carrinho") {
                             store.restore(payload)
-                            // SPEC §5 `cart.sync`: snapshot after restoring the recovered items.
                             Flowbiz.track(.cartSync(cart: store.cart()))
                             presentationMode.wrappedValue.dismiss()
                         }
                     }
                 } else {
                     Section {
-                        Text("Flowbiz.handleLink devolveu nil — o link não carrega um _mb_cr_ decodificável (SPEC §11).")
+                        Text("Flowbiz.handleLink devolveu nil — o link não carrega um _mb_cr_ decodificável.")
                     }
+                }
+                Section(footer: Text(
+                    "UTMs: handleLink e handlePushOpened capturam as UTMs de todo link recebido, com ou sem _mb_cr_; " +
+                    "elas seguem como context.utm em todos os eventos seguintes."
+                )) {
+                    EmptyView()
                 }
             }
             .navigationTitle("Recuperação")
@@ -43,7 +46,6 @@ struct RecoveryView: View {
                 Button("Fechar") { presentationMode.wrappedValue.dismiss() }
             }
             .onAppear {
-                // SPEC §5 `page.view`: tracked on every screen change.
                 Flowbiz.track(.pageView(path: "/carrinho/recuperar", title: "Recuperação"))
             }
         }

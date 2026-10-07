@@ -1,5 +1,3 @@
-// `handleLink` decoding (SPEC §11): the `_mb_cr_` + `utm_source` link the
-// backend emits, pinned by `shared/recovery-links/vectors.json`.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -33,7 +31,6 @@ import Testing
         }
     }
 
-    /// Purity proof (SPEC §3): the public facade decodes with no initialize.
     @Test func facadeDecodesBasicLinkWithoutInitialize() throws {
         let vector = try #require(try Self.vectors().first { ($0["name"] as? String) == "basic" })
         let url = URL(string: try #require(vector["url"] as? String))
@@ -43,8 +40,7 @@ import Testing
     }
 
     @Test func plusTurnedIntoSpaceStillDecodes() throws {
-        // Base64 alphabet contains '+'; a naive decoder turns it into ' '.
-        let json = #"{"t":"77777","u":"u","c":"c","its":[["1","P>>1","S"]]}"#   // '>' forces a '+' in base64
+        let json = #"{"t":"77777","u":"u","c":"c","its":[["1","P>>1","S"]]}"#
         let b64 = Data(json.utf8).base64EncodedString()
         #expect(b64.contains("+"))
         let mangled = b64.replacingOccurrences(of: "+", with: " ")
@@ -52,11 +48,6 @@ import Testing
         #expect(RecoveryLinkParser.parse(link)?.products.first?.productId == "P>>1")
     }
 
-    /// I3: seeded fuzz over the *decoded* hash JSON (not just URL bytes) —
-    /// `its` and item slots take every adversarial shape SPEC §3 must
-    /// survive (wrong types, huge/negative numbers, deep nesting, giant
-    /// strings). The only assertion is that `parse` returns (nil or a
-    /// payload) instead of throwing/trapping.
     @Test func adversarialDecodedHashesNeverThrow() {
         var generator = SplitMix64(seed: 20260902)
         for _ in 0..<300 {
@@ -64,13 +55,10 @@ import Testing
             guard let data = try? JSONSerialization.data(withJSONObject: hash) else { continue }
             let b64 = data.base64EncodedString()
             let url = "https://store.com/c?utm_source=flowbiz&_mb_cr_=\(b64)"
-            _ = RecoveryLinkParser.parse(url, expectedAppId: "77777") // must not crash
+            _ = RecoveryLinkParser.parse(url, expectedAppId: "77777")
         }
     }
 
-    /// One adversarial `{t, u, c, its}` hash. `t`/`u`/`c` may be non-string
-    /// (number/bool/null/empty); `its` may be a non-array, and its items
-    /// may be non-arrays or arrays whose slots are wildly-typed values.
     private static func randomHash(_ gen: inout SplitMix64) -> [String: Any] {
         ["t": randomField(&gen), "u": randomField(&gen), "c": randomField(&gen), "its": randomIts(&gen)]
     }
@@ -85,8 +73,6 @@ import Testing
         }
     }
 
-    /// `its`: usually an array of items, occasionally a non-array (object,
-    /// string, number, null) to exercise the "`its` is not an array" path.
     private static func randomIts(_ gen: inout SplitMix64) -> Any {
         switch gen.next() % 6 {
         case 0: return NSNull()
@@ -102,9 +88,6 @@ import Testing
         }
     }
 
-    /// One `its` element: usually an array of adversarial slot values,
-    /// sometimes a non-array item (garbage — SPEC §3: `guard let item = ...
-    /// as? [Any] else { continue }` must skip it, never trap).
     private static func randomItem(_ gen: inout SplitMix64) -> Any {
         if gen.next() % 4 == 0 { return randomSlot(&gen) }
         var item = [Any]()
@@ -113,10 +96,6 @@ import Testing
         return item
     }
 
-    /// One `its[i]` slot value (quantity, product id, sku or recovery
-    /// properties position): a huge/negative/out-of-Int32-range number, a
-    /// bool, null, a nested object, a deeply nested array (depth 20), an
-    /// empty string, or a ~10 kB string.
     private static func randomSlot(_ gen: inout SplitMix64) -> Any {
         switch gen.next() % 9 {
         case 0: return 1e30

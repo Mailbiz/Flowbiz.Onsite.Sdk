@@ -3,32 +3,18 @@ package br.com.flowbiz.onsite
 import android.net.Uri
 import org.json.JSONObject
 
-/**
- * Result of [Flowbiz.handlePush] (SPEC §10.2/§10.3): a decoded Flowbiz push
- * payload. [type] is free-form — new push kinds require no SDK update; the
- * SDK parses best-effort regardless of [version] (forward compatibility).
- *
- * Immutable. Not a data class on purpose: the raw deep-link string is an
- * internal field (the platform [Uri] is derived lazily so the type stays
- * constructible where `android.net.Uri` does not exist, e.g. JVM tests).
- */
 class FlowbizPush internal constructor(
-    /** Contract version (`v`); absent/malformed defaults to 1. */
+    /** Contract version (`v`); 1 when absent or malformed. */
     val version: Int,
-    /** Free-form push kind, e.g. `"cart_recovery"`. Always non-empty. */
+    /** Free-form push kind; never empty. */
     val type: String,
     val title: String?,
     val body: String?,
-    /** `data` object of the decoded payload; empty when absent. */
     val data: Map<String, Any?>,
+    // A string, with deepLink derived: JVM tests construct pushes where android.net.Uri does not exist.
     internal val deepLinkString: String?,
 ) {
 
-    /**
-     * `deep_link` as a [Uri], or null when absent. `Uri.parse` is lenient
-     * (it validates nothing), so this is null only for an absent value; any
-     * parse surprise degrades to null with the push still returned.
-     */
     val deepLink: Uri?
         get() = try {
             deepLinkString?.let(Uri::parse)
@@ -36,25 +22,11 @@ class FlowbizPush internal constructor(
             null
         }
 
-    /**
-     * Convenience for cart-recovery pushes (SPEC §10.2: the `_mb_cr_`
-     * link rides in `deep_link`): the deep link run through the
-     * [Flowbiz.handleLink] decoder. Null when there is no deep link or it
-     * carries no decodable `_mb_cr_` value. Pure, like `handleLink`.
-     */
+    /** Pure decode (no UTM capture, no tenant check); on tap, call [Flowbiz.handlePushOpened] instead. */
     val recoveryPayload: RecoveryPayload?
         get() = RecoveryLinkParser.parse(deepLinkString)
 }
 
-/**
- * Pure parser behind [Flowbiz.handlePush] (SPEC §10.2): the value of the
- * `"flowbiz"` marker key — a JSON-encoded *string* (FCM data messages are
- * flat `Map<String, String>`) — decoded into a [FlowbizPush].
- *
- * Tolerant by design: unknown `v` values and unknown fields parse
- * best-effort (forward compatibility). Null only for undecodable JSON, a
- * non-object root, or a missing/empty `type`. Never throws.
- */
 internal object PushPayloadParser {
 
     const val MARKER_KEY = "flowbiz"

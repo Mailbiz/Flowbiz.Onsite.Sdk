@@ -5,10 +5,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * SPEC §6 session mechanics: 30-min sliding window on the monotonic clock,
- * wall clock only as the cross-restart fallback.
- */
 class SessionManagerTest {
 
     private val timeout = SessionManager.SESSION_TIMEOUT_MS
@@ -16,27 +12,20 @@ class SessionManagerTest {
     private val clock = FakeClock()
     private val manager = SessionManager(store, clock)
 
-    // --- First launch ---
-
     @Test
     fun firstLaunchCreatesSessionWithVisitCount1() {
         val session = manager.currentSession()
         assertEquals(1, session.visitCount)
         val uuidV4 = Regex("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
         assertTrue(uuidV4.matches(session.sessionId))
-        // Persisted immediately so a crash before the first event keeps the visit.
         assertEquals(session.sessionId, store.values[StorageKeys.SESSION_ID])
         assertEquals(1, store.values[StorageKeys.VISIT_COUNT])
         assertEquals(clock.wall, store.values[StorageKeys.LAST_ACTIVITY_WALL_MS])
     }
 
-    // --- Sliding window (in-process, monotonic) ---
-
     @Test
     fun touchInsideWindowSlidesWithoutRotating() {
         val original = manager.currentSession()
-        // Four touches 29 min apart: 116 min of wall time total, but the
-        // window slides on every touch — no rotation.
         repeat(4) {
             clock.advance(29 * MINUTE_MS)
             manager.touch()
@@ -54,8 +43,6 @@ class SessionManagerTest {
 
     @Test
     fun touchAtExactlyThirtyMinutesRotates() {
-        // Boundary is inclusive: elapsed >= 30:00.000 rotates ("after >= 30
-        // min of inactivity", SPEC §6).
         val original = manager.currentSession()
         clock.advance(timeout)
         manager.touch()
@@ -89,13 +76,10 @@ class SessionManagerTest {
     @Test
     fun currentSessionIsAPureSnapshotWithoutExpirySideEffects() {
         clock.advance(timeout + MINUTE_MS)
-        // Reading identity must not rotate — only activity (touch/foreground) does.
         val read = manager.currentSession()
         assertEquals(1, read.visitCount)
         assertEquals(read, manager.currentSession())
     }
-
-    // --- Foreground ---
 
     @Test
     fun foregroundAfterExpiryRotates() {
@@ -115,13 +99,11 @@ class SessionManagerTest {
         assertEquals(original, manager.currentSession())
     }
 
-    // --- Monotonic correctness: wall clock changes mid-process are inert ---
-
     @Test
     fun wallClockJumpingForwardDoesNotRotate() {
         val original = manager.currentSession()
         clock.monotonic += 10 * MINUTE_MS
-        clock.wall += 5 * 60 * MINUTE_MS // user sets clock 5 h ahead
+        clock.wall += 5 * 60 * MINUTE_MS
         manager.touch()
         assertEquals(original, manager.currentSession())
     }
@@ -130,27 +112,23 @@ class SessionManagerTest {
     fun wallClockJumpingBackwardDoesNotRotate() {
         val original = manager.currentSession()
         clock.monotonic += 10 * MINUTE_MS
-        clock.wall -= 5 * 60 * MINUTE_MS // NTP correction / timezone travel
+        clock.wall -= 5 * 60 * MINUTE_MS
         manager.touch()
         assertEquals(original, manager.currentSession())
     }
 
     @Test
     fun wallClockJumpingBackwardDoesNotImmortalizeEither() {
-        // Wall says "only 1 min passed"; monotonic says 31 min — monotonic wins.
         clock.monotonic += timeout + MINUTE_MS
         clock.wall -= 29 * MINUTE_MS
         manager.touch()
         assertEquals(2, manager.currentSession().visitCount)
     }
 
-    // --- Restart fallback (fresh monotonic epoch, persisted wall clock) ---
-
     @Test
     fun restartWithFreshWallClockKeepsSession() {
         manager.touch()
         val original = manager.currentSession()
-        // Process restart 10 min later: monotonic resets to a tiny value.
         val rebooted = FakeClock(monotonic = 1_000L, wall = clock.wall + 10 * MINUTE_MS)
         val next = SessionManager(store, rebooted)
         assertEquals(original, next.currentSession())
@@ -171,7 +149,6 @@ class SessionManagerTest {
     fun restartCarriesIdleTimeIntoTheMonotonicWindow() {
         manager.touch()
         val original = manager.currentSession()
-        // 20 idle minutes before the restart leave 10, not a fresh 30.
         val rebooted = FakeClock(monotonic = 1_000L, wall = clock.wall + 20 * MINUTE_MS)
         val next = SessionManager(store, rebooted)
         assertEquals(original, next.currentSession())
@@ -190,8 +167,6 @@ class SessionManagerTest {
 
     @Test
     fun restartWithFarFutureLastActivityRotates() {
-        // Persisted timestamp 2 h in the future: the clock was rolled back
-        // since the last run — untrusted, rotate.
         manager.touch()
         val rebooted = FakeClock(monotonic = 1_000L, wall = clock.wall - 2 * 60 * MINUTE_MS)
         val next = SessionManager(store, rebooted)
@@ -207,12 +182,10 @@ class SessionManagerTest {
         assertEquals(original, next.currentSession())
     }
 
-    // --- Corrupt persisted state (SPEC §3: silent defaults, no throw) ---
-
     @Test
     fun corruptPersistedValuesStartAFreshSessionSilently() {
-        store.values[StorageKeys.SESSION_ID] = 42 // wrong type
-        store.values[StorageKeys.VISIT_COUNT] = "three" // garbage string
+        store.values[StorageKeys.SESSION_ID] = 42
+        store.values[StorageKeys.VISIT_COUNT] = "three"
         store.values[StorageKeys.LAST_ACTIVITY_WALL_MS] = "yesterday"
         val recovered = SessionManager(store, clock)
         val session = recovered.currentSession()
@@ -247,12 +220,9 @@ class SessionManagerTest {
         val fresh = FakeKeyValueStore()
         fresh.values[StorageKeys.VISIT_COUNT] = -7
         val next = SessionManager(fresh, FakeClock())
-        // max(0, stored) + 1 — never 0 or negative on the wire.
         assertEquals(1, next.currentSession().visitCount)
         assertEquals(1, fresh.values[StorageKeys.VISIT_COUNT])
     }
-
-    // --- Forced rotation (logout support, Slice 4) ---
 
     @Test
     fun rotateForcesANewSessionAndIncrementsVisitCount() {
@@ -261,7 +231,6 @@ class SessionManagerTest {
         val rotated = manager.currentSession()
         assertNotEquals(original.sessionId, rotated.sessionId)
         assertEquals(original.visitCount + 1, rotated.visitCount)
-        // Persisted immediately.
         assertEquals(rotated.sessionId, store.values[StorageKeys.SESSION_ID])
         assertEquals(rotated.visitCount, store.values[StorageKeys.VISIT_COUNT])
     }
@@ -271,7 +240,6 @@ class SessionManagerTest {
         clock.advance(29 * MINUTE_MS)
         manager.rotate()
         val rotated = manager.currentSession()
-        // 29 more minutes: within the freshly-anchored window — no rotation.
         clock.advance(29 * MINUTE_MS)
         manager.touch()
         assertEquals(rotated, manager.currentSession())

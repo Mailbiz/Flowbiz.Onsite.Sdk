@@ -1,19 +1,8 @@
 import Foundation
 
-/// Pure builder for a single SPEC §4 envelope entry.
-///
-/// No storage and no statics-derived state: every runtime value (hash,
-/// timestamps, identity, context) is injected by the caller — later slices
-/// provide the real identity store, clock and device info. This keeps the
-/// wire shape deterministic and unit-testable.
 enum EnvelopeBuilder {
 
-    /// Formats epoch milliseconds as ISO-8601 UTC with milliseconds,
-    /// e.g. `2026-07-21T10:00:00.123Z`.
-    ///
-    /// Pure integer epoch-millis math (Howard Hinnant's civil-from-days
-    /// algorithm) — no `DateFormatter` allocation, no Double seconds
-    /// round-trip, thread-safe and locale/timezone independent.
+    // Integer math (Hinnant's civil-from-days), not DateFormatter: no Double rounding, locale-independent.
     static func isoMillis(_ epochMillis: Int64) -> String {
         let days = floorDiv(epochMillis, 86_400_000)
         let msOfDay = Int(epochMillis - days * 86_400_000)
@@ -33,37 +22,19 @@ enum EnvelopeBuilder {
         return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q
     }
 
-    /// Days since 1970-01-01 → proleptic Gregorian (year, month, day).
     private static func civilFromDays(_ days: Int64) -> (Int, Int, Int) {
         let z = days + 719_468
         let era = floorDiv(z, 146_097)
-        let dayOfEra = z - era * 146_097                                        // [0, 146096]
-        let yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36_524 - dayOfEra / 146_096) / 365 // [0, 399]
+        let dayOfEra = z - era * 146_097
+        let yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36_524 - dayOfEra / 146_096) / 365
         let year = yearOfEra + era * 400
-        let dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100) // [0, 365]
-        let monthIndex = (5 * dayOfYear + 2) / 153                              // [0, 11], March-based
+        let dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100)
+        let monthIndex = (5 * dayOfYear + 2) / 153
         let day = dayOfYear - (153 * monthIndex + 2) / 5 + 1
         let month = monthIndex < 10 ? monthIndex + 3 : monthIndex - 9
         return (Int(year + (month <= 2 ? 1 : 0)), Int(month), Int(day))
     }
 
-    /// Builds one entry of the envelope `data` array (SPEC §4).
-    ///
-    /// - `identity.user_id` is omitted when `userId` is nil.
-    /// - `context.url` / `context.baseuri` / `context.recoveryUrl` are
-    ///   passed in by the core, spec §4; omitted when nil or empty.
-    /// - `data` is a JSON **string** (the payload serialized separately),
-    ///   not a nested object.
-    /// - Throws only for non-finite numbers in the payload (see
-    ///   ``EventSerializer``); the SPEC §3 never-throw boundary is applied
-    ///   at the public API in Slice 4.
-    ///
-    /// - Parameters:
-    ///   - createdAtMillis: wall-clock epoch millis captured at `track()` time
-    ///   - sentAtMillis: wall-clock epoch millis of the transmission attempt
-    ///   - timezone: UTC offset of the device, e.g. `-03:00`
-    ///   - screen: device screen size, e.g. `1170x2532`
-    ///   - platform: `android` or `ios` (drives `context.vendor`, `v_tracker`, `v_version`)
     static func build(
         event: Event,
         hash: String,
@@ -81,7 +52,8 @@ enum EnvelopeBuilder {
         sdkVersion: String,
         contextUrl: String? = nil,
         baseUri: String? = nil,
-        recoveryUrl: String? = nil
+        recoveryUrl: String? = nil,
+        utm: String? = nil
     ) throws -> [String: Any] {
         return buildEntry(
             wireName: EventSerializer.wireName(event),
@@ -89,6 +61,7 @@ enum EnvelopeBuilder {
             contextUrl: contextUrl,
             baseUri: baseUri,
             recoveryUrl: recoveryUrl,
+            utm: utm,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -105,13 +78,6 @@ enum EnvelopeBuilder {
         )
     }
 
-    /// Builds a SPEC §8 `page.ping` heartbeat entry. Not part of the `Event`
-    /// catalog (the heartbeat is automatic, never tracked by the host app).
-    /// `dataJSON` defaults to an empty object; the facade passes the
-    /// last-tracked page as `{"page":{"title":...,"url":...}}`
-    /// (web semantics: pings describe the current page). Same shape rules
-    /// as `build`, including `context.url` / `context.baseuri` /
-    /// `context.recoveryUrl` passed in by the caller.
     static func buildPing(
         hash: String,
         createdAtMillis: Int64,
@@ -129,6 +95,7 @@ enum EnvelopeBuilder {
         contextUrl: String? = nil,
         baseUri: String? = nil,
         recoveryUrl: String? = nil,
+        utm: String? = nil,
         dataJSON: String = "{}"
     ) -> [String: Any] {
         buildEntry(
@@ -137,6 +104,7 @@ enum EnvelopeBuilder {
             contextUrl: contextUrl,
             baseUri: baseUri,
             recoveryUrl: recoveryUrl,
+            utm: utm,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -153,11 +121,6 @@ enum EnvelopeBuilder {
         )
     }
 
-    /// Builds an entry for an *internal* raw event — a wire name outside the
-    /// public `Event` catalog with a pre-rendered `data` JSON string
-    /// (SPEC §10.1 `push.token.sync` / `push.token.remove`). Same envelope
-    /// shape as `build`, including `context.url` / `context.baseuri` /
-    /// `context.recoveryUrl` passed in by the caller.
     static func buildRaw(
         wireName: String,
         dataJSON: String,
@@ -176,7 +139,8 @@ enum EnvelopeBuilder {
         sdkVersion: String,
         contextUrl: String? = nil,
         baseUri: String? = nil,
-        recoveryUrl: String? = nil
+        recoveryUrl: String? = nil,
+        utm: String? = nil
     ) -> [String: Any] {
         buildEntry(
             wireName: wireName,
@@ -184,6 +148,7 @@ enum EnvelopeBuilder {
             contextUrl: contextUrl,
             baseUri: baseUri,
             recoveryUrl: recoveryUrl,
+            utm: utm,
             hash: hash,
             createdAtMillis: createdAtMillis,
             sentAtMillis: sentAtMillis,
@@ -200,12 +165,14 @@ enum EnvelopeBuilder {
         )
     }
 
+    // Collector contract: `data` and `context.utm` are JSON strings, not nested objects.
     private static func buildEntry(
         wireName: String,
         dataJSON: String,
         contextUrl: String?,
         baseUri: String?,
         recoveryUrl: String?,
+        utm: String?,
         hash: String,
         createdAtMillis: Int64,
         sentAtMillis: Int64,
@@ -247,6 +214,7 @@ enum EnvelopeBuilder {
         }
         if let baseUri, !baseUri.isEmpty { context["baseuri"] = baseUri }
         if let recoveryUrl, !recoveryUrl.isEmpty { context["recoveryUrl"] = recoveryUrl }
+        if let utm, !utm.isEmpty { context["utm"] = utm }
 
         return [
             "event": wireName,

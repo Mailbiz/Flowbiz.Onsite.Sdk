@@ -2,7 +2,7 @@
 
 This document discloses every data type the SDK collects, transmits and
 stores, so integrators can complete Google Play's **Data safety** form
-accurately (SPEC §12). It is written against the actual implementation
+accurately. It is written against the actual implementation
 (`br.com.flowbiz:onsite-sdk` 0.1.0); the iOS equivalent is the bundled
 `PrivacyInfo.xcprivacy` privacy manifest.
 
@@ -43,6 +43,7 @@ LGPD/GDPR consent gating.
 | Product interaction | `pageView`, `productView`, `cartSetCoupon`, automatic `page.ping` heartbeat | `data.page` / `data.product` etc. | Screen names, product/SKU views |
 | Push token (FCM registration token) | `setPushToken` / `removePushToken` / `logout()` | `data.token` of `push.token.sync` / `push.token.remove` | Relayed so the Flowbiz backend can message the device |
 | Device/app context | Collected by the SDK | `context.language`, `context.screen` (resolution), `timings.timezone` (UTC offset), platform + SDK version | No hardware identifiers |
+| Campaign parameters (UTMs) | Links the host app forwards to `handleLink` / `handlePushOpened` | `context.utm` on every event | `utm_source`, `utm_medium`, `utm_campaign`, `utm_journey`, `utm_journey_channel`, `utm_journey_type`, `utm_step_id`, `utm_journey_version`, `utm_journey_instance` |
 | IP address / User-Agent | Not sent by the SDK | Derived server-side from HTTP headers at the collector | Standard for any HTTPS request |
 
 The SDK never accesses: advertising ID (AAID), Android ID, IMEI, location
@@ -54,7 +55,7 @@ normal-level `ACCESS_NETWORK_STATE` permission; the host app must hold
 
 | Storage | Location | Contents | Cleared by |
 |---|---|---|---|
-| SharedPreferences `flowbiz_onsite_<appId>` | App-private storage | `anonymous_id`; `user_id` + `email` (after account events); `session_id`, `visit_count`, `last_activity_wall_ms`; `enabled` opt-out flag; `push_token` (last registered token); `dedup_digest_<event>` / `dedup_at_<event>` (SHA-256 digests of last payloads — digests, not payloads) | `logout()` clears user identity + push token; uninstall clears all |
+| SharedPreferences `flowbiz_onsite_<appId>` | App-private storage | `anonymous_id`; `user_id` + `email` (after account events); `session_id`, `visit_count`, `last_activity_wall_ms`; `enabled` opt-out flag; `push_token` (last registered token); `dedup_digest_<event>` / `dedup_at_<event>` (SHA-256 digests of last payloads — digests, not payloads); `utm_data` + `utm_expires_at_wall_ms` (campaign parameters of forwarded links) | `logout()` clears user identity + push token; campaign parameters are kept on the device for 30 days after the last forwarded link or app foreground (also while opted out, when nothing is sent); uninstall clears all |
 | Event queue `files/flowbiz_onsite/<appId>/queue.jsonl` | App-private storage | Pending event envelopes (may contain the PII above) until successfully delivered; capped at 1000 events, compacted after flushes | Successful delivery; uninstall |
 
 All storage is app-private (`MODE_PRIVATE` / app files dir); nothing is
@@ -72,15 +73,16 @@ supplies that field.
 
 | Play form category → data type | Collected? | Shared? | Processed ephemerally? | Required or optional | Purposes to declare |
 |---|---|---|---|---|---|
-| Personal info → Email address | Yes, if you track account events | No¹ | No | Optional (only on login/sync) | Analytics, App functionality |
-| Personal info → Name | *Conditional* (account events with `name`) | No¹ | No | Optional | Analytics, App functionality |
-| Personal info → Phone number | *Conditional* (account events with `phone`) | No¹ | No | Optional | Analytics, App functionality |
-| Personal info → User IDs | Yes (account `user_id`; SDK `anonymous_id`) | No¹ | No | Required for SDK function (`anonymous_id`) | Analytics, App functionality |
-| Personal info → Address | *Conditional* (`deliveryAddress` / postal code on cart/order events) | No¹ | No | Optional | Analytics, App functionality |
-| Financial info → Purchase history | Yes, if you track cart/checkout/order events | No¹ | No | Optional | Analytics, App functionality |
-| App activity → In-app actions (page views, taps, etc.) | Yes (`pageView`, `productView`, heartbeat, checkout steps) | No¹ | No | Optional | Analytics, App functionality |
+| Personal info → Email address | Yes, if you track account events | No¹ | No | Optional (only on login/sync) | Analytics, App functionality, Advertising or marketing |
+| Personal info → Name | *Conditional* (account events with `name`) | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| Personal info → Phone number | *Conditional* (account events with `phone`) | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| Personal info → User IDs | Yes, if you track account events (`user_id`) | No¹ | No | Optional (only on login/sync) | Analytics, App functionality, Advertising or marketing |
+| Personal info → Address | *Conditional* (`deliveryAddress` / postal code on cart/order events) | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| Financial info → Purchase history | Yes, if you track cart/checkout/order events | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| App activity → App interactions (page views, taps, etc.) | Yes (`pageView`, `productView`, heartbeat, checkout steps) | No¹ | No | Optional | Analytics, App functionality, Advertising or marketing |
+| App activity → Other actions (campaign links opened: UTM parameters) | Yes, if you forward links to `handleLink` / `handlePushOpened` | No¹ | No | Optional | Analytics, Advertising or marketing |
 | App info and performance | No | — | — | — | — |
-| Device or other IDs | No² | — | — | — | — |
+| Device or other IDs | Yes² (SDK `anonymous_id`) | No¹ | No | Required for SDK function | Analytics, App functionality, Advertising or marketing |
 | Location | No (no location APIs; a user-typed delivery address is declared under Personal info → Address) | — | — | — | — |
 
 ¹ "Shared" in Play's definition means transfer to a *third party*. The SDK
@@ -89,11 +91,9 @@ service provider (processor). If your legal assessment classifies Flowbiz
 as an independent third party for your app, mark these rows as shared with
 purpose Analytics — confirm with your DPO.
 
-² Play's "Device or other IDs" targets identifiers like the AAID or
-hardware IDs. The SDK's `anonymous_id` is a self-generated, app-scoped
-random UUID, conventionally declared under "User IDs" (pseudonymous
-identifier). If your reviewer prefers the conservative reading, also mark
-"Device or other IDs" as collected.
+² Google's examples for this type include a Firebase installation ID; the
+SDK's `anonymous_id` is the same kind of value (a random per-install UUID,
+not the advertising ID or a hardware identifier).
 
 Additional form answers relevant to the SDK:
 
@@ -110,5 +110,6 @@ Additional form answers relevant to the SDK:
 
 With `debug = true` the SDK logs diagnostics via `Log.d("FlowbizOnsite", …)`.
 Logs never contain PII: they carry wire event names, counts, HTTP status
-codes and exception class names — never event payload strings, user fields
-or push tokens (SPEC §12; pinned by `DebugLogRedactionTest`).
+codes and exception class names — never event payload strings, user fields,
+push tokens, or forwarded links and their campaign parameters (pinned by
+`DebugLogRedactionTest`).

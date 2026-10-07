@@ -1,6 +1,4 @@
-// XCTest suite — runs wherever XCTest is available (Xcode hosts, CI).
-// Guarded because Command Line Tools-only hosts ship Swift Testing but not
-// XCTest; the equivalent Swift Testing suite lives in SDKVersionSuite.swift.
+// Guarded: Command Line Tools ship Swift Testing but not XCTest; SDKVersionSuite mirrors this suite.
 #if canImport(XCTest)
 import XCTest
 @testable import FlowbizOnsite

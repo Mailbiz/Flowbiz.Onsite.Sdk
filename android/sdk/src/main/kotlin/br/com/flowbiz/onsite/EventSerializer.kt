@@ -3,29 +3,8 @@ package br.com.flowbiz.onsite
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Event → wire serialization (SPEC §5).
- *
- * Maps a typed [Event] to its wire event name and its `data` payload JSON
- * string: snake_case keys, optional (`null`) fields omitted entirely.
- * Free-form `properties` / `recoveryProperties` maps are passed through with
- * their keys untouched; `null` values inside those maps are dropped (inside
- * arrays a `null` element is kept as JSON `null` to preserve positions).
- *
- * Must stay behaviorally identical to the Swift `EventSerializer` — both are
- * pinned by the shared fixtures in `shared/fixtures/`. The produced wire
- * string is rendered by [CanonicalJson] (sorted keys, `JSON.stringify`
- * number rendering and escaping) and is byte-identical across platforms.
- *
- * Garbage-input contract (aligned with Swift): serialization **throws** on
- * non-finite numbers (NaN/±Infinity) — org.json throws `JSONException` when
- * the value enters the tree; the Swift writer throws its own error for the
- * same input. SPEC §3's never-throw boundary is applied at the public API in
- * Slice 4; internally serialization is strict.
- */
 internal object EventSerializer {
 
-    /** Wire event name (SPEC §5 table). */
     fun wireName(event: Event): String = when (event) {
         is Event.PageView -> "page.view"
         is Event.AccountLogin -> "account.login"
@@ -41,13 +20,8 @@ internal object EventSerializer {
         is Event.OrderCancel -> "order.cancel"
     }
 
-    /**
-     * The envelope `data` field value: the payload as a canonical JSON string
-     * (see [CanonicalJson]). Throws only for non-finite numbers.
-     */
     fun dataJson(event: Event, baseUri: String? = null): String = CanonicalJson.render(dataObject(event, baseUri))
 
-    /** The payload as a JSON object (snake_case keys, nulls omitted). */
     fun dataObject(event: Event, baseUri: String? = null): JSONObject = when (event) {
         is Event.PageView -> JSONObject().put("page", pageObject(event, baseUri))
         is Event.AccountLogin -> JSONObject().put("user", userObject(event.user))
@@ -165,13 +139,11 @@ internal object EventSerializer {
             JSONArray(methods.map { JSONObject().put("type", it.type).put("amount", it.amount) })
         })
 
-    /** Puts [value] only when non-null; nulls are omitted entirely from the wire. */
     private fun JSONObject.putIfPresent(key: String, value: Any?): JSONObject {
         if (value != null) put(key, wrapValue(value))
         return this
     }
 
-    /** Free-form `properties` / `recovery_properties`: keys untouched, null entries dropped. */
     private fun freeFormObject(map: Map<*, *>): JSONObject {
         val obj = JSONObject()
         for ((key, value) in map) {
@@ -181,7 +153,6 @@ internal object EventSerializer {
         return obj
     }
 
-    /** Recursively converts Kotlin values to org.json values. */
     private fun wrapValue(value: Any): Any = when (value) {
         is JSONObject, is JSONArray -> value
         is Map<*, *> -> freeFormObject(value)

@@ -1,25 +1,7 @@
 import Foundation
 
-/// Event → wire serialization (SPEC §5).
-///
-/// Maps a typed ``Event`` to its wire event name and its `data` payload JSON
-/// string: snake_case keys, optional (`nil`) fields omitted entirely.
-/// Free-form `properties` / `recoveryProperties` maps are passed through with
-/// their keys untouched; `.null` values inside objects are dropped (inside
-/// arrays a `.null` element is kept as JSON `null` to preserve positions).
-///
-/// Must stay behaviorally identical to the Kotlin `EventSerializer` — both
-/// are pinned by the shared fixtures in `shared/fixtures/`. The produced wire
-/// string is rendered by ``CanonicalJSON`` (sorted keys, `JSON.stringify`
-/// number rendering and escaping) and is byte-identical across platforms.
-///
-/// Garbage-input contract (aligned with Kotlin): serialization **throws** on
-/// non-finite numbers (NaN/±Infinity) — org.json throws `JSONException` for
-/// the same input. SPEC §3's never-throw boundary is applied at the public
-/// API in Slice 4; internally serialization is strict.
 enum EventSerializer {
 
-    /// Wire event name (SPEC §5 table).
     static func wireName(_ event: Event) -> String {
         switch event {
         case .pageView: return "page.view"
@@ -37,13 +19,10 @@ enum EventSerializer {
         }
     }
 
-    /// The envelope `data` field value: the payload as a canonical JSON
-    /// string (see ``CanonicalJSON``). Throws only for non-finite numbers.
     static func dataJSONString(_ event: Event, baseUri: String? = nil) throws -> String {
         try CanonicalJSON.render(dataObject(event, baseUri: baseUri))
     }
 
-    /// The payload as a JSON-compatible dictionary (snake_case keys, nils omitted).
     static func dataObject(_ event: Event, baseUri: String? = nil) -> [String: Any] {
         switch event {
         case .pageView(let path, let title):
@@ -204,12 +183,10 @@ enum EventSerializer {
         return object
     }
 
-    /// Sets `value` only when non-nil; nils are omitted entirely from the wire.
     private static func setIfPresent(_ object: inout [String: Any], _ key: String, _ value: Any?) {
         if let value { object[key] = value }
     }
 
-    /// Free-form `properties` / `recovery_properties`: keys untouched, `.null` entries dropped.
     private static func freeFormObject(_ map: [String: JSONValue]) -> [String: Any] {
         JSONValue.object(map).foundationValue as? [String: Any] ?? [:]
     }

@@ -1,19 +1,6 @@
 import Foundation
 
-/// A `Sendable` JSON value, used for the free-form `properties` /
-/// `recoveryProperties` payload fields (SPEC §5).
-///
-/// `[String: Any]` cannot conform to `Sendable` (SPEC §3 requires all public
-/// event types to be Sendable value types), so free-form maps are typed as
-/// `[String: JSONValue]`. The literal conformances keep construction
-/// ergonomic — this reads like a plain dictionary literal:
-///
-/// ```swift
-/// properties: ["cor": "Azul Marinho", "tamanho": "P", "estoque": 12, "ativo": true]
-/// ```
-///
-/// The Kotlin SDK keeps `Map<String, Any?>` for the same fields; both
-/// serialize identically (pinned by `shared/fixtures/`).
+/// Free-form `properties` values, from literals; keys ship as-is, `.null` object entries are dropped.
 public enum JSONValue: Sendable, Equatable, Hashable {
     case string(String)
     case number(Double)
@@ -54,10 +41,6 @@ extension JSONValue: ExpressibleByDictionaryLiteral {
 }
 
 extension JSONValue {
-    /// `JSONSerialization` output → `JSONValue`, for the maps *returned to*
-    /// the host by `handlePush`/`handleLink` (the inverse direction of
-    /// `foundationValue`). Values outside the JSON model return nil — which
-    /// cannot happen for genuine `JSONSerialization` output.
     static func fromFoundation(_ any: Any) -> JSONValue? {
         switch any {
         case let string as String:
@@ -86,24 +69,16 @@ extension JSONValue {
         }
     }
 
-    /// `[String: Any]` (JSONSerialization output) → `[String: JSONValue]`;
-    /// nil when any value falls outside the JSON model.
     static func objectFromFoundation(_ object: [String: Any]) -> [String: JSONValue]? {
         guard case .object(let entries)? = fromFoundation(object) else { return nil }
         return entries
     }
 
-    /// NSNumber booleans are CFBooleans underneath; a plain number is not.
+    // Not `as? Bool`, which also matches a numeric 0 or 1: only a CFBoolean is a JSON boolean.
     static func isBoolean(_ number: NSNumber) -> Bool {
         CFGetTypeID(number) == CFBooleanGetTypeID()
     }
 
-    /// Foundation representation for `JSONSerialization`.
-    ///
-    /// Matches the Kotlin serializer's rules: `null` entries inside objects
-    /// are dropped (nulls never appear on the wire for maps), while `null`
-    /// elements inside arrays are kept as JSON `null` to preserve positions.
-    /// Whole numbers are emitted as integers (`12`, not `12.0`).
     var foundationValue: Any {
         switch self {
         case .string(let value):

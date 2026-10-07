@@ -3,25 +3,7 @@ package br.com.flowbiz.onsite
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Pure decoder behind [Flowbiz.handleLink] (SPEC §11): URL string →
- * `_mb_cr_` query value (+ `utm_source` guard) → base64 → hash JSON
- * `{t, u, c, its: [[qty, product_id, sku, recovery_properties?]]}` →
- * [RecoveryPayload]. Mirrors the web tag's `getRecoveryDataFromQuery`.
- *
- * Operates on the raw URL *string* (the facade adapts `android.net.Uri` via
- * `toString()`), for two reasons: `Uri` does not exist in JVM unit tests,
- * and `Uri.getQueryParameter` decodes `+` to a space before callers see it.
- *
- * Encoding tolerance: the value is tried raw, percent-decoded (`%XX` only),
- * and with `' '` restored to `'+'`; missing base64 padding is added;
- * URL-safe `-`/`_` are accepted. First candidate that decodes to a valid
- * payload wins.
- *
- * Tenant check: when `expectedAppId` is given (SDK initialized), `t` must
- * equal it, like web `appId === hash.t`. Before initialize the decoder is
- * pure and skips the check (SPEC §3). Never throws.
- */
+// Port of the web `getRecoveryDataFromQuery` on the raw string: Uri.getQueryParameter turns `+` into a space.
 internal object RecoveryLinkParser {
 
     private const val PARAM = "_mb_cr_"
@@ -30,7 +12,7 @@ internal object RecoveryLinkParser {
     fun parse(url: String?, expectedAppId: String? = null): RecoveryPayload? {
         if (url == null) return null
         return try {
-            val pairs = queryPairs(url)
+            val pairs = queryPairs(UtmLinkParser.href(url))
             val raw = pairs.firstOrNull { it.first == PARAM && it.second.isNotEmpty() }?.second ?: return null
             val utm = pairs.firstOrNull { it.first == UTM_PARAM }?.second ?: return null
             if (!isValidUtm(utm)) return null
@@ -48,12 +30,7 @@ internal object RecoveryLinkParser {
         }
     }
 
-    /**
-     * Query pairs in order. Fragment cut first (M2 — spec §7 step 1: a `?`
-     * inside the fragment, e.g. `#/cart?_mb_cr_=…`, is not a query), then
-     * the query is found within what remains. Keys percent-decoded, values
-     * raw.
-     */
+    // Fragment cut first (`#/cart?_mb_cr_=…` holds no query); values stay raw for the base64 candidates.
     private fun queryPairs(url: String): List<Pair<String, String>> {
         val fragmentStart = url.indexOf('#')
         val beforeFragment = if (fragmentStart >= 0) url.substring(0, fragmentStart) else url
@@ -68,13 +45,12 @@ internal object RecoveryLinkParser {
         }
     }
 
-    /** Web `isValidUtm`: contains "mailbiz" or "flowbiz", case-insensitive. */
+    // Web isValidUtm, "mailbiz" included.
     private fun isValidUtm(raw: String): Boolean {
         val value = (percentDecode(raw) ?: raw).lowercase()
         return value.contains("mailbiz") || value.contains("flowbiz")
     }
 
-    /** Standard or URL-safe base64, padding optional → UTF-8 string. */
     private fun decodeBase64(value: String): String? = try {
         var normalized = value.replace('-', '+').replace('_', '/')
         val remainder = normalized.length % 4
@@ -88,10 +64,6 @@ internal object RecoveryLinkParser {
         null
     }
 
-    /**
-     * `%XX` decoding over UTF-8 bytes. Returns null for malformed escapes —
-     * the raw candidate then stands on its own.
-     */
     private fun percentDecode(value: String): String? {
         if ('%' !in value) return value
         val bytes = ArrayList<Byte>(value.length)
@@ -118,8 +90,6 @@ internal object RecoveryLinkParser {
         in 'A'..'F' -> char - 'A' + 10
         else -> null
     }
-
-    // MARK: hash → payload
 
     private fun mapHash(json: String, expectedAppId: String?): RecoveryPayload? = try {
         val hash = JSONObject(json)
@@ -153,13 +123,11 @@ internal object RecoveryLinkParser {
 
     private fun nonEmptyString(value: Any?): String? = when (value) {
         is String -> value.takeIf { it.isNotEmpty() }
-        // A numeric id passes through the JS untouched; stringified here to
-        // fit the typed payload.
+        // The web passes a numeric id through untouched; stringified here to fit the typed payload.
         is Number, is Boolean -> value.toString()
         else -> null
     }
 
-    /** Web `it[idx] || ''`: missing/null/empty → `""`; numbers stringified. */
     private fun itemString(item: JSONArray, index: Int): String = when (val value = item.opt(index)) {
         is String -> value
         null, JSONObject.NULL -> ""
@@ -167,18 +135,10 @@ internal object RecoveryLinkParser {
         else -> ""
     }
 
-    /**
-     * Web `parseInt(it[0]) || 1`: leading decimal integer of a string (JS
-     * `parseInt` semantics — leading whitespace/sign, trailing junk
-     * ignored), numbers truncated toward zero; `NaN` *and* `0` (falsy) → 1.
-     */
+    // Web `parseInt(it[0]) || 1`: a 0 quantity becomes 1 too.
     private fun webQuantity(value: Any?): Int {
         val parsed: Int? = when (value) {
-            // `Double.toLong()`/`.toInt()` already saturate out-of-range and
-            // infinite values since Kotlin 1.3 (never throws); the explicit
-            // `coerceIn` makes that saturation to Int32's range visible in
-            // the code path, matching iOS's `parseIntLeading`/`webQuantity`
-            // exactly (SPEC §3: never traps).
+            // Via toLong + coerceIn: Number.toInt() on a Long wraps instead of saturating like iOS.
             is Number -> value.toDouble().takeIf { !it.isNaN() }
                 ?.let { it.toLong().coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt() }
             is String -> parseIntLeading(value)
@@ -198,7 +158,7 @@ internal object RecoveryLinkParser {
         var digits = 0
         var accumulated = 0L
         while (i < trimmed.length && trimmed[i] in '0'..'9') {
-            if (digits < 12) { // beyond any realistic quantity; avoids overflow
+            if (digits < 12) { // enough to saturate Int; avoids Long overflow
                 accumulated = accumulated * 10 + (trimmed[i] - '0')
             }
             digits++
@@ -208,11 +168,6 @@ internal object RecoveryLinkParser {
         return (sign * accumulated).coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
     }
 
-    /**
-     * 4th `its` element → properties map. Web parity: a JSON-object *string*
-     * (`tryToParseJson`); a nested object is additionally tolerated. Garbage
-     * → null (web emits `{}` — same meaning).
-     */
     private fun recoveryProperties(value: Any?): Map<String, Any?>? = try {
         when (value) {
             is String -> if (value.isEmpty()) null else JsonPlain.toPlainMap(JSONObject(value))

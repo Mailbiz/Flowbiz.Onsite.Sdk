@@ -1,5 +1,3 @@
-// SPEC §2 config sanitization: blank appId, https-only collector URL,
-// heartbeat clamp.
 #if canImport(Testing)
 import Foundation
 import Testing
@@ -39,7 +37,6 @@ import Testing
     }
 
     @Test func httpsWithEmptyHostFallsBackToDefault() {
-        // Reviewer-flagged alignment case: `https://` parses but is garbage.
         let sanitized = ConfigSanitizer.sanitize(
             FlowbizConfig(appId: "77777", baseUri: "https://store.com", collectorUrl: "https://")
         )
@@ -77,8 +74,6 @@ import Testing
         )
         #expect(sanitized?.heartbeatInterval == FlowbizConfig.maxHeartbeatInterval)
     }
-
-    // MARK: baseUri / recoveryUrl (spec §3)
 
     @Test func baseUriOriginPassesThroughAndTrailingSlashIsStripped() {
         let a = ConfigSanitizer.sanitize(FlowbizConfig(appId: "77777", baseUri: "https://store.com"))
