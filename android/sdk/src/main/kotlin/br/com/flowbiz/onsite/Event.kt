@@ -1,15 +1,13 @@
 package br.com.flowbiz.onsite
 
-/** Sent as given: unlike the web tag, no schema validation or field enrichment; null fields are omitted. */
+/** Sent as given; null fields are omitted. */
 sealed class Event {
 
     /** [path] is resolved against [FlowbizConfig.baseUri]; it becomes `context.url` from this event on. */
     data class PageView(val path: String? = null, val title: String? = null) : Event()
 
-    /** This and later events carry [User.userId] until [Flowbiz.logout]. */
     data class AccountLogin(val user: User) : Event()
 
-    /** This and later events carry [User.userId] until [Flowbiz.logout]. */
     data class AccountSync(val user: User) : Event()
 
     data class ProductView(val product: Product) : Event()

@@ -1,15 +1,12 @@
 import Foundation
 
-/// Sent as given: unlike the web tag, no schema validation or field enrichment; nil fields are omitted.
+/// Sent as given; nil fields are omitted.
 public enum Event: Sendable, Equatable {
 
     /// `path` is resolved against `FlowbizConfig.baseUri`; it becomes `context.url` from this event on.
     case pageView(path: String? = nil, title: String? = nil)
 
-    /// This and later events carry `User.userId` until `Flowbiz.logout`.
     case accountLogin(user: User)
-
-    /// This and later events carry `User.userId` until `Flowbiz.logout`.
     case accountSync(user: User)
 
     case productView(product: Product)

@@ -58,7 +58,6 @@ data class Address(
     val neighborhood: String? = null,
 )
 
-/** Unlike on web, an empty cart is still sent: emptying a cart is signal. */
 data class Cart(
     val cartId: String,
     val subtotal: Double,

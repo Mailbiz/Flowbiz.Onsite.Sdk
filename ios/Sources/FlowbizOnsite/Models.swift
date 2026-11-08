@@ -158,7 +158,6 @@ public struct Address: Sendable, Equatable {
     }
 }
 
-/// Unlike on web, an empty cart is still sent: emptying a cart is signal.
 public struct Cart: Sendable, Equatable {
     public let cartId: String
     public let subtotal: Double

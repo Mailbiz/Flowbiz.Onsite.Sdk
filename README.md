@@ -127,8 +127,9 @@ if (push != null) {
     // push.type, push.title, push.body, push.deepLink, push.data — display/route as you wish
 }
 
-// Notification tap — in the Activity it opens (extrasAsMap: your helper reading the
-// data map its PendingIntent carried); route with tappedPush?.deepLink as usual
+// Notification tap — in the Activity it opens, once per intent like deep links (see Campaign
+// attribution); extrasAsMap: your helper reading the data map its PendingIntent carried.
+// Route with tappedPush?.deepLink as usual
 val tappedPush: FlowbizPush? = Flowbiz.handlePush(extrasAsMap(intent.extras))
 val tapped: RecoveryPayload? = Flowbiz.handlePushOpened(tappedPush)   // non-null: restore, then track CartSync
 
@@ -210,10 +211,11 @@ push via `handlePushOpened`, ride as `context.utm` on every event, as the web
 tag reports them; they are kept 30 days, renewed on each app open or new link.
 Forward every link the app is opened with, recovery link or not:
 
-- **Android**: the deep-link Activity's `onCreate` and `onNewIntent`, once per
-  intent (in `onCreate` only when `savedInstanceState == null` and the intent
-  lacks `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, so a rotation or a relaunch
-  from Recents does not forward an old link again).
+- **Android**: the Activity's `onCreate` and `onNewIntent`, for deep links and
+  notification taps alike, once per intent (in `onCreate` only when
+  `savedInstanceState == null` and the intent lacks
+  `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, so a rotation or a relaunch from
+  Recents does not forward an old link or push again).
 - **iOS**: SwiftUI `onOpenURL`, and for a cold launch also
   `application(_:configurationForConnecting:options:)` through
   `@UIApplicationDelegateAdaptor` (`options.urlContexts` and
