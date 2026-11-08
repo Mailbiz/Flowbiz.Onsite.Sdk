@@ -138,7 +138,7 @@ object FixtureSupport {
         tax = json.getDouble("tax"),
         discounts = json.getDouble("discounts"),
         currency = json.stringOrNull("currency"),
-        coupons = json.optJSONArray("coupons")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } },
+        coupons = json.stringOrNull("coupons"),
         items = json.optJSONArray("items")?.objects()?.map { cartItem(it) },
         deliveryAddress = json.optJSONObject("deliveryAddress")?.let { address(it) },
     )
@@ -152,7 +152,7 @@ object FixtureSupport {
         tax = json.getDouble("tax"),
         discounts = json.getDouble("discounts"),
         currency = json.stringOrNull("currency"),
-        coupons = json.optJSONArray("coupons")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } },
+        coupons = json.stringOrNull("coupons"),
         items = json.optJSONArray("items")?.objects()?.map { cartItem(it) },
         deliveryAddress = json.optJSONObject("deliveryAddress")?.let { address(it) },
         paymentMethods = json.optJSONArray("paymentMethods")?.objects()?.map {

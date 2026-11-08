@@ -165,7 +165,7 @@ enum FixtureSupport {
             tax: try double(json, "tax"),
             discounts: try double(json, "discounts"),
             currency: json["currency"] as? String,
-            coupons: json["coupons"] as? [String],
+            coupons: json["coupons"] as? String,
             items: try (json["items"] as? [[String: Any]]).map { try $0.map(cartItem) },
             deliveryAddress: (json["deliveryAddress"] as? [String: Any]).map(address)
         )
@@ -181,7 +181,7 @@ enum FixtureSupport {
             tax: try double(json, "tax"),
             discounts: try double(json, "discounts"),
             currency: json["currency"] as? String,
-            coupons: json["coupons"] as? [String],
+            coupons: json["coupons"] as? String,
             items: try (json["items"] as? [[String: Any]]).map { try $0.map(cartItem) },
             deliveryAddress: (json["deliveryAddress"] as? [String: Any]).map(address),
             paymentMethods: try (json["paymentMethods"] as? [[String: Any]]).map { methods in

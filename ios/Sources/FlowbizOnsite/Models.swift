@@ -166,7 +166,8 @@ public struct Cart: Sendable, Equatable {
     public let tax: Double
     public let discounts: Double
     public let currency: String?
-    public let coupons: [String]?
+    /// One string, as the web tag sends it; join several codes with a comma.
+    public let coupons: String?
     public let items: [CartItem]?
     public let deliveryAddress: Address?
 
@@ -178,7 +179,7 @@ public struct Cart: Sendable, Equatable {
         tax: Double,
         discounts: Double,
         currency: String? = nil,
-        coupons: [String]? = nil,
+        coupons: String? = nil,
         items: [CartItem]? = nil,
         deliveryAddress: Address? = nil
     ) {
@@ -238,7 +239,8 @@ public struct Order: Sendable, Equatable {
     public let tax: Double
     public let discounts: Double
     public let currency: String?
-    public let coupons: [String]?
+    /// One string, as the web tag sends it; join several codes with a comma.
+    public let coupons: String?
     public let items: [CartItem]?
     public let deliveryAddress: Address?
     public let paymentMethods: [PaymentMethod]?
@@ -253,7 +255,7 @@ public struct Order: Sendable, Equatable {
         tax: Double,
         discounts: Double,
         currency: String? = nil,
-        coupons: [String]? = nil,
+        coupons: String? = nil,
         items: [CartItem]? = nil,
         deliveryAddress: Address? = nil,
         paymentMethods: [PaymentMethod]? = nil,

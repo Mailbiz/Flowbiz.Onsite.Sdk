@@ -172,7 +172,7 @@ object DemoCart {
         tax = 0.0,
         discounts = discounts(),
         currency = "BRL",
-        coupons = coupon?.let(::listOf),
+        coupons = coupon,
         items = lines.map { (product, qty) -> toCartItem(product, qty) },
         deliveryAddress = deliveryAddress(),
     )
@@ -186,7 +186,7 @@ object DemoCart {
         tax = 0.0,
         discounts = discounts(),
         currency = "BRL",
-        coupons = coupon?.let(::listOf),
+        coupons = coupon,
         items = lines.map { (product, qty) -> toCartItem(product, qty) },
         deliveryAddress = deliveryAddress(),
         paymentMethods = listOf(PaymentMethod(type = "credit_card", amount = total())),

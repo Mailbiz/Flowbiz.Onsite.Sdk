@@ -66,7 +66,8 @@ data class Cart(
     val tax: Double,
     val discounts: Double,
     val currency: String? = null,
-    val coupons: List<String>? = null,
+    /** One string, as the web tag sends it; join several codes with a comma. */
+    val coupons: String? = null,
     val items: List<CartItem>? = null,
     val deliveryAddress: Address? = null,
 )
@@ -97,7 +98,8 @@ data class Order(
     val tax: Double,
     val discounts: Double,
     val currency: String? = null,
-    val coupons: List<String>? = null,
+    /** One string, as the web tag sends it; join several codes with a comma. */
+    val coupons: String? = null,
     val items: List<CartItem>? = null,
     val deliveryAddress: Address? = null,
     val paymentMethods: List<PaymentMethod>? = null,
