@@ -238,6 +238,20 @@ goes out at once. An order is credited to a campaign through its cart's last
 Links are still captured while the SDK is disabled and ride on the events
 after `setEnabled(true)`; `logout()` keeps them.
 
+### What the backend needs
+
+The SDK sends what you build without validating it. For carts to be
+identified, abandoned and recovered, the backend needs:
+
+- **An identified user**: `AccountLogin` or `AccountSync` at least once per
+  install. Until then no cart email can go out for that device.
+- **`User.createdAt` in ISO 8601** (`2026-10-19T14:03:00-03:00`): any other
+  format drops the account event.
+- **`items = emptyList()` / `items: []` to empty a cart**: a `CartSync`
+  without `items` keeps the products the backend already has.
+- **`coupons` as one string**, several codes joined with a comma, as the web
+  tag sends them.
+
 ### Consent / opt-out
 
 `Flowbiz.setEnabled(false)` is the LGPD/GDPR consent hook: persisted across
@@ -245,8 +259,10 @@ launches; while disabled the SDK drops new events, stops the heartbeat and
 makes no network calls. Re-enabling resumes normal operation and re-syncs a
 push token registered while disabled. The consent UI/decision is
 the host app's responsibility — the SDK collects by default until told
-otherwise. UTMs of links forwarded while disabled are still stored on the
-device, and sent only after re-enabling.
+otherwise. Keep `initialize` at launch even before consent, and call
+`setEnabled(false)` right after it until the user agrees, rather than
+delaying `initialize`. UTMs of links forwarded while disabled are still
+stored on the device, and sent only after re-enabling.
 
 ## Demo apps
 

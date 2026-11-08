@@ -1,6 +1,7 @@
 import Foundation
 
-// At-least-once: removed lines stay in the file until compaction; `hash` is the collector's idempotency key.
+// At-least-once: removed lines stay in the file until compaction, so a crash can re-send delivered events
+// (the collector does not deduplicate on `hash`).
 final class EventQueue {
 
     static let defaultCapacity = 1000

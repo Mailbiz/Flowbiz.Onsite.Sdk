@@ -7,7 +7,8 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-// At-least-once: removed lines stay in the file until compaction; `hash` is the collector's idempotency key.
+// At-least-once: removed lines stay in the file until compaction, so a crash can re-send delivered events
+// (the collector does not deduplicate on `hash`).
 internal class EventQueue(
     private val file: File,
     private val capacity: Int = DEFAULT_CAPACITY,

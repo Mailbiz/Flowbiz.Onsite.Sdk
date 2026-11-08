@@ -83,10 +83,20 @@ backend that will associate push tokens with users.
 The SDK relies on these collector facts: every field is optional and
 `platform` is free-form (browser-only context fields are simply absent);
 `ip` and `user_agent` are derived server-side from the request; a request is
-capped at 3 MB; a disabled tenant gets a 200 and its events are dropped.
+capped at 3 MB. The collector answers 200 to everything, malformed bodies and
+unknown or disabled tenants included: check ingestion in the indexes, not by
+the status.
+
+Backend facts the fixtures pin or rely on: `coupons` is one string (the
+backend's `Coupons` is a `string`; an array makes Cart.Worker drop the event);
+`user.created_at` must parse as ISO 8601 or the account event is dropped; a
+`cart.sync` without `items` keeps the stored products, `items: []` empties
+them; no cart email goes out until an account event ties the `anonymous_id`
+to a contact. `identity.visit_count` is sent as a number, as on web, but the
+collector reads a string, so it is lost on both.
 
 Responses: 2xx is delivered; 5xx, 408, 429 and network errors are retried with
 backoff; a 413 splits the batch; entries rejected with any other 4xx or a 3xx
 are dropped. Delivery is at-least-once (a batch is resent if the app dies
-between the POST and the dequeue), so consumers must treat `hash` as the
-idempotency key.
+between the POST and the dequeue), and the collector does not deduplicate on
+`hash`, so a resent event can be ingested twice.

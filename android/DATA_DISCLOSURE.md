@@ -51,6 +51,11 @@ APIs, contacts, or any permission-gated data. Its manifest merges only the
 normal-level `ACCESS_NETWORK_STATE` permission; the host app must hold
 `INTERNET` (virtually always already declared) for delivery to work.
 
+The SDK does no fingerprinting: language, screen resolution and timezone are
+sent as context next to the random `anonymous_id`, never combined into an
+identifier, and nothing is used to track users across other companies' apps
+or websites.
+
 ## Data stored locally on the device
 
 | Storage | Location | Contents | Cleared by |
@@ -64,11 +69,6 @@ described above; server-side retention is governed by the Flowbiz platform's
 data-retention policy (outside SDK scope — integrators should reference the
 Flowbiz DPA).
 
-## Google Play Data safety form — row-by-row mapping
-
-Declare the following for the SDK's collection (merge with your app's own
-declarations). "Collected" applies only if your app actually tracks the
-corresponding events; rows marked *conditional* apply only when your app
 **Backup.** The event queue is never backed up. The SharedPreferences file
 follows the app's backup rules: with Android Auto Backup on (the default), a
 reinstall or a new device restores the same `anonymous_id`, user identity
@@ -76,6 +76,11 @@ and campaign parameters. For a new `anonymous_id` on every install, exclude
 it in both `android:fullBackupContent` and `android:dataExtractionRules`:
 `<exclude domain="sharedpref" path="flowbiz_onsite_<appId>.xml"/>`.
 
+## Google Play Data safety form — row-by-row mapping
+
+Declare the following for the SDK's collection (merge with your app's own
+declarations). "Collected" applies only if your app actually tracks the
+corresponding events; rows marked *conditional* apply only when your app
 supplies that field.
 
 | Play form category → data type | Collected? | Shared? | Processed ephemerally? | Required or optional | Purposes to declare |
