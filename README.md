@@ -57,7 +57,7 @@ Flowbiz.setEnabled(enabled: Boolean)    // opt-out switch, see Consent below; pe
 Flowbiz.setPushToken(token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(payload: Map<String, String>): FlowbizPush?   // null = not ours
-Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch); once initialized, UTMs are captured either way
+Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch); UTMs are captured either way (before initialize: when it runs)
 Flowbiz.handlePushOpened(push: FlowbizPush): RecoveryPayload?    // on notification tap: handleLink over the push's deep link
 Flowbiz.flush()                         // force queue flush (optional nicety, fire-and-forget)
 ```
@@ -230,13 +230,13 @@ Forward every link the app is opened with, recovery link or not:
   `URL(string:)`, it can lose or alter its UTMs.
 - **Push tap**: `handlePushOpened(push)`; `handlePush` never captures.
 
-Call `initialize` at launch, before forwarding links: links forwarded before
-it are not captured. Forward the launch link before tracking the landing
-screen's `PageView`, so that page view carries the new campaign. An order is
-credited to a campaign through its cart's last `CartSync`, so after restoring
-a recovered cart, track `CartSync` with it. Links are still captured while
-the SDK is disabled and ride on the events after `setEnabled(true)`;
-`logout()` keeps them.
+A link forwarded before `initialize` is still decoded, and its UTMs are
+captured when `initialize` runs. Capturing sends nothing: after forwarding a
+link, on a cold or a warm open, track the screen's `PageView`, so the campaign
+goes out at once. An order is credited to a campaign through its cart's last
+`CartSync`, so after restoring a recovered cart, track `CartSync` with it.
+Links are still captured while the SDK is disabled and ride on the events
+after `setEnabled(true)`; `logout()` keeps them.
 
 ### Consent / opt-out
 
@@ -280,8 +280,9 @@ heartbeat (default 60 s, configurable ≥ 15 s) runs while foregrounded,
 best-effort and never queued. Sessions rotate after 30 min of inactivity. All
 public APIs are callable from any thread, and — with the exception of
 `handlePush`/`handleLink`/`handlePushOpened`, which still decode (recovery
-links without the tenant check) — they are no-ops before `initialize`. A
-second `initialize` is ignored: the first config wins.
+links without the tenant check) and keep links' UTMs for `initialize` — they
+are no-ops before `initialize`. A second `initialize` is ignored: the first
+config wins.
 `debug = true` logs diagnostics but never PII.
 
 ## Development

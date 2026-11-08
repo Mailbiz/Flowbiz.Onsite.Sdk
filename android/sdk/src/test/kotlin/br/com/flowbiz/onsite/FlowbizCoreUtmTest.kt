@@ -51,12 +51,17 @@ class FlowbizCoreUtmTest {
     private fun withInstalledCore(core: FlowbizCore, block: () -> Unit) {
         val field = Flowbiz::class.java.getDeclaredField("core").apply { isAccessible = true }
         check(field.get(null) == null) { "a core is already installed" }
-        field.set(null, core)
+        Flowbiz.install(core)
         try {
             block()
         } finally {
             field.set(null, null)
         }
+    }
+
+    private fun discardPendingLinks() {
+        val field = Flowbiz::class.java.getDeclaredField("pendingLinks").apply { isAccessible = true }
+        (field.get(null) as MutableCollection<*>).clear()
     }
 
     @Test
@@ -221,16 +226,29 @@ class FlowbizCoreUtmTest {
     }
 
     @Test
-    fun beforeInitializeALinkIsOnlyDecoded() {
+    fun beforeInitializeALinkIsDecodedSilently() {
         val logs = mutableListOf<String>()
         SdkLog.sink = { logs += it }
         try {
-            assertEquals("cart-abc-001", Flowbiz.handleLink(link, current = null)?.cartId)
+            assertEquals("cart-abc-001", Flowbiz.forwardLink(link)?.cartId)
             assertEquals("cart-abc-001", Flowbiz.handlePushOpened(pushWith(link))?.cartId)
         } finally {
             SdkLog.sink = null
+            discardPendingLinks()
         }
         assertTrue(logs.toString(), logs.isEmpty())
+    }
+
+    @Test
+    fun linksAndPushTapsForwardedBeforeInitializeAreCapturedWhenItRuns() {
+        val forwards = listOf({ Flowbiz.forwardLink(link) }, { Flowbiz.handlePushOpened(pushWith(link)) })
+        for (forward in forwards) {
+            val h = harness()
+            assertEquals("cart-abc-001", forward()?.cartId)
+            withInstalledCore(h.core) {
+                assertEquals(utm, h.trackProbe())
+            }
+        }
     }
 
     @Test

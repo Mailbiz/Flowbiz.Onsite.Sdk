@@ -7,10 +7,12 @@ import UIKit
 /// Every call is thread-safe, returns at once and never throws; before `initialize` only the decoders work.
 public enum Flowbiz {
 
-    private final class State: @unchecked Sendable {
+    final class State: @unchecked Sendable {
         private let lock = NSLock()
         private var core: FlowbizCore?
         private var observers: [NSObjectProtocol] = []
+        // Links forwarded before initialize; their UTMs are captured when it runs.
+        private var pendingLinks: [String] = []
 
         var currentCore: FlowbizCore? {
             lock.lock()
@@ -25,7 +27,17 @@ public enum Flowbiz {
             // Built under the lock so a losing initialize never starts an NWPathMonitor; it does no I/O.
             let newCore = makeCore()
             core = newCore
+            pendingLinks.forEach { newCore.captureUtm(fromLink: $0) }
+            pendingLinks.removeAll()
             return newCore
+        }
+
+        /// The installed core, or nil after keeping `link` for the coming initialize.
+        func coreOrPending(_ link: String) -> FlowbizCore? {
+            lock.lock()
+            defer { lock.unlock() }
+            if core == nil { pendingLinks.append(link) }
+            return core
         }
 
         var isInitialized: Bool {
@@ -41,7 +53,7 @@ public enum Flowbiz {
         }
     }
 
-    private static let state = State()
+    static let state = State()
 
     private final class DebugSinkBox: @unchecked Sendable {
         private let lock = NSLock()
@@ -151,13 +163,21 @@ public enum Flowbiz {
     /// Decodes a cart-recovery link and captures its campaign UTMs; forward every incoming link.
     @discardableResult
     public static func handleLink(_ url: URL?) -> RecoveryPayload? {
-        handleLink(url?.absoluteString, core: currentCore)
+        forwardLink(url?.absoluteString)
     }
 
     /// Call on notification tap: `handleLink` over the push's raw deep link.
     @discardableResult
     public static func handlePushOpened(_ push: FlowbizPush?) -> RecoveryPayload? {
-        handleLink(push?.deepLinkString, core: currentCore)
+        forwardLink(push?.deepLinkString)
+    }
+
+    static func forwardLink(_ link: String?, state: State = Flowbiz.state) -> RecoveryPayload? {
+        guard let link else { return nil }
+        #if DEBUG
+        if let taskCore { return handleLink(link, core: taskCore) }
+        #endif
+        return handleLink(link, core: state.coreOrPending(link))
     }
 
     // Not withCore: without a core the link is still decoded.

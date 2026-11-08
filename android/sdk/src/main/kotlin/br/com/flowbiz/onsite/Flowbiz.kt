@@ -18,6 +18,9 @@ object Flowbiz {
     @Volatile
     private var core: FlowbizCore? = null
 
+    // Links forwarded before initialize; their UTMs are captured when it runs. Guarded by this.
+    private val pendingLinks = ArrayDeque<String>()
+
     /** Call once, from `Application.onCreate`; later calls are ignored. */
     @JvmStatic
     fun initialize(context: Context?, config: FlowbizConfig?) {
@@ -49,7 +52,7 @@ object Flowbiz {
                     deviceContext = AndroidDeviceContext(appContext),
                     reachability = AndroidReachability(appContext),
                 )
-                core = created
+                install(created)
                 val application = appContext as? Application
                 if (application != null) {
                     application.registerActivityLifecycleCallbacks(
@@ -109,9 +112,23 @@ object Flowbiz {
     /** Decodes a cart-recovery link and captures its campaign UTMs; forward every incoming link. */
     @JvmStatic
     fun handleLink(url: Uri?): RecoveryPayload? = try {
-        handleLink(url?.toString(), core)
+        forwardLink(url?.toString())
     } catch (t: Throwable) {
         null
+    }
+
+    internal fun install(created: FlowbizCore) = synchronized(this) {
+        core = created
+        while (pendingLinks.isNotEmpty()) created.captureUtm(pendingLinks.removeFirst())
+    }
+
+    internal fun forwardLink(link: String?): RecoveryPayload? {
+        if (link == null) return null
+        val current = synchronized(this) {
+            if (core == null) pendingLinks.addLast(link)
+            core
+        }
+        return handleLink(link, current)
     }
 
     internal fun handleLink(link: String?, current: FlowbizCore?): RecoveryPayload? {
@@ -123,7 +140,7 @@ object Flowbiz {
     /** Call on notification tap: [handleLink] over the push's raw deep link. */
     @JvmStatic
     fun handlePushOpened(push: FlowbizPush?): RecoveryPayload? = try {
-        handleLink(push?.deepLinkString, core)
+        forwardLink(push?.deepLinkString)
     } catch (t: Throwable) {
         null
     }

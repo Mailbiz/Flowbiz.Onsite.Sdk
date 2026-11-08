@@ -207,6 +207,14 @@ import Testing
         #expect(utm(try last(h, "page.view")) == journey.expected)
     }
 
+    @Test func aLinkForwardedBeforeInitializeIsCapturedWhenItRuns() throws {
+        let state = Flowbiz.State()
+        let h = harness()
+        #expect(Flowbiz.forwardLink(journey.url, state: state)?.cartId == "cart-abc-001")
+        _ = state.installIfAbsent { h.core }
+        #expect(try trackProbe(h) == journey.expected)
+    }
+
     @Test func thePublicHandleLinkReachesTheInstalledCore() throws {
         let link = journey.url.replacingOccurrences(of: "|", with: "%7C")
         for (appId, cartId) in [("77777", "cart-abc-001"), ("88888", nil)] as [(String, String?)] {
