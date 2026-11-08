@@ -168,4 +168,24 @@ class EventQueueTest {
         q.append(entry(4))
         assertEquals((1..4).map { entry(it) }, EventQueue(file).peek(10))
     }
+
+    @Test
+    fun theDefaultQueueLivesInTheNoBackupDirectory() {
+        val noBackup = temp.newFolder("no_backup")
+        val resolved = EventQueue.resolveFile(noBackup, temp.newFolder("files"), "77777")
+        assertEquals(File(noBackup, "flowbiz_onsite/77777/queue.jsonl"), resolved)
+    }
+
+    @Test
+    fun aQueueLeftInFilesDirByAnOlderVersionIsMovedOutOfBackup() {
+        val noBackup = temp.newFolder("no_backup")
+        val files = temp.newFolder("files")
+        val legacy = File(files, "flowbiz_onsite/77777/queue.jsonl")
+        EventQueue(legacy).apply { (1..2).forEach { append(entry(it)) } }
+
+        val resolved = EventQueue.resolveFile(noBackup, files, "77777")
+
+        assertEquals(listOf(entry(1), entry(2)), EventQueue(resolved).peek(10))
+        assertFalse(File(files, "flowbiz_onsite").exists())
+    }
 }

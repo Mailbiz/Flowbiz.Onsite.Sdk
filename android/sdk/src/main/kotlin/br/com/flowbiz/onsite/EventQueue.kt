@@ -130,6 +130,26 @@ internal class EventQueue(
         const val COMPACT_STALE_THRESHOLD = 64
 
         fun defaultFile(context: Context, appId: String): File =
-            File(File(File(context.filesDir, "flowbiz_onsite"), appId), "queue.jsonl")
+            resolveFile(context.noBackupFilesDir, context.filesDir, appId)
+
+        // Out of Auto Backup: a queue restored on reinstall or a new device would re-send old events.
+        // Takes over the queue 0.1.x kept in filesDir.
+        fun resolveFile(noBackupDir: File, legacyDir: File, appId: String): File {
+            val file = queueFile(noBackupDir, appId)
+            val legacy = queueFile(legacyDir, appId)
+            if (legacy.exists() && !file.exists()) {
+                file.parentFile?.mkdirs()
+                if (!legacy.renameTo(file)) return legacy
+            }
+            legacy.parentFile?.takeIf { it.exists() }?.let { appDir ->
+                appDir.deleteRecursively()
+                appDir.parentFile?.delete() // only if no other appId's queue is left
+            }
+            return file
+        }
+
+        private const val ROOT_DIR = "flowbiz_onsite"
+
+        private fun queueFile(dir: File, appId: String) = File(File(File(dir, ROOT_DIR), appId), "queue.jsonl")
     }
 }
