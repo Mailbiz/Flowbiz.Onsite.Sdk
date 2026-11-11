@@ -113,6 +113,8 @@ collector reads a string, so it is lost on both.
 
 Responses: 2xx is delivered; 5xx, 408, 429 and network errors are retried with
 backoff; a 413 splits the batch; entries rejected with any other 4xx or a 3xx
-are dropped. Delivery is at-least-once (a batch is resent if the app dies
+are dropped. An entry still queued 7 days after its `created_at` is dropped when the
+queue loads, never sent: the backend reads `created_at` as the cart's last
+update. Delivery is at-least-once (a batch is resent if the app dies
 between the POST and the dequeue), and the collector does not deduplicate on
 `hash`, so a resent event can be ingested twice.

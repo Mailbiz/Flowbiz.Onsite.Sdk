@@ -97,7 +97,8 @@ apps get the same defaults via `@JvmOverloads`).
 
 Invalid values never throw: each one is sanitized at `initialize` with a
 `debug` log line, and the sanitized copy is what the SDK runs with. Session
-timeout (30 min), dedup window (20 min), queue cap (1000) and the connection
+timeout (30 min), dedup window (20 min), queue cap (1000), queue max age
+(7 days) and the connection
 timeout are internal constants, not configuration.
 
 ### Android
@@ -298,7 +299,9 @@ queue + backoff.
 
 No public API throws: a failure costs at most a dropped event. `track()`
 never blocks and survives offline: events are persisted to a disk queue
-(cap 1000, drop-oldest) and flushed with exponential backoff on network
+(cap 1000, drop-oldest; an event still undelivered 7 days after it was
+tracked is dropped when the queue next loads, at the first use after a
+process start) and flushed with exponential backoff on network
 restore, app foreground, the next track, or `flush()`. Identical payloads per
 event type are deduplicated for 20 minutes, except `PageView`, which is always
 sent (as on web); nothing else is filtered: a `cartSync` with an empty cart is

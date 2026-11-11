@@ -6,12 +6,14 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.time.Instant
 
 // At-least-once: removed lines stay in the file until compaction, so a crash can re-send delivered events
 // (the collector does not deduplicate on `hash`).
 internal class EventQueue(
     private val file: File,
     private val capacity: Int = DEFAULT_CAPACITY,
+    nowMillis: () -> Long = System::currentTimeMillis,
 ) {
 
     private val pending = ArrayDeque<String>()
@@ -27,12 +29,20 @@ internal class EventQueue(
             val tmp = tmpFile()
             if (tmp.exists()) tmp.delete()
             if (file.exists()) {
+                // An event delivered weeks late would move its cart's last update: created_at is what the backend reads.
+                val oldest = nowMillis() - MAX_AGE_MS
+                var expired = 0
                 file.forEachLine { line ->
-                    if (line.isNotBlank() && isParseable(line)) {
-                        pending.addLast(line)
-                    } else if (line.isNotEmpty()) {
-                        staleLines += 1
+                    val createdAt = if (line.isBlank()) null else createdAtMillis(line)
+                    when {
+                        createdAt == null -> if (line.isNotEmpty()) staleLines += 1
+                        createdAt < oldest -> expired += 1
+                        else -> pending.addLast(line)
                     }
+                }
+                if (expired > 0) {
+                    staleLines += expired
+                    SdkLog.debug("queue dropped $expired events older than ${MAX_AGE_MS / 86_400_000} days")
                 }
                 while (pending.size > capacity) {
                     pending.removeFirst()
@@ -119,16 +129,24 @@ internal class EventQueue(
 
     private fun tmpFile(): File = File(file.parentFile, file.name + ".tmp")
 
-    private fun isParseable(line: String): Boolean = try {
-        JSONObject(line)
-        true
+    // Null when the line is not an entry; an entry without a readable created_at never expires.
+    private fun createdAtMillis(line: String): Long? = try {
+        val createdAt = JSONObject(line).optJSONObject("timings")?.optString("created_at")
+        try {
+            if (createdAt.isNullOrEmpty()) Long.MAX_VALUE else Instant.parse(createdAt).toEpochMilli()
+        } catch (_: Throwable) {
+            Long.MAX_VALUE
+        }
     } catch (_: Throwable) {
-        false
+        null
     }
 
     companion object {
         const val DEFAULT_CAPACITY = 1000
         const val COMPACT_STALE_THRESHOLD = 64
+
+        // Applied when the queue loads. The web out-queue has no max age; 7 days is the SDK's own rule.
+        const val MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000L
 
         fun defaultFile(context: Context, appId: String): File =
             resolveFile(context.noBackupFilesDir, context.filesDir, appId)

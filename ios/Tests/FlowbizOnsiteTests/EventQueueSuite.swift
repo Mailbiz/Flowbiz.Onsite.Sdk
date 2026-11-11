@@ -161,5 +161,34 @@ import Testing
         let values = try directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
         #expect(values.isExcludedFromBackup == true)
     }
+
+    @Test func entriesOlderThanSevenDaysAreDroppedOnLoad() throws {
+        let now: Int64 = 1_700_000_000_000
+        func aged(_ name: String, _ ageMillis: Int64) -> String {
+            #"{"event":"\#(name)","timings":{"created_at":"\#(EnvelopeBuilder.isoMillis(now - ageMillis))"}}"#
+        }
+        let stale = aged("stale", EventQueue.maxAgeMillis + 1)
+        let kept = [
+            aged("at-the-limit", EventQueue.maxAgeMillis),
+            aged("fresh", minuteMs),
+            aged("clock-moved-back", -24 * 60 * minuteMs),
+            entry(1), // no created_at to judge by
+            #"{"event":"unreadable","timings":{"created_at":"yesterday"}}"#,
+        ]
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(([stale] + kept + [stale]).map { $0 + "\n" }.joined().utf8).write(to: file)
+
+        let queue = EventQueue(fileURL: file, nowMillis: { now })
+        #expect(queue.peek(10) == kept)
+        #expect(try fileText() == kept.map { $0 + "\n" }.joined())
+    }
+
+    @Test func ageIsJudgedOnLoadOnlyNeverOnAppend() {
+        let now: Int64 = 1_700_000_000_000
+        let queue = EventQueue(fileURL: file, nowMillis: { now })
+        let old = #"{"event":"old","timings":{"created_at":"\#(EnvelopeBuilder.isoMillis(now - 30 * 24 * 60 * minuteMs))"}}"#
+        queue.append(old)
+        #expect(queue.peek(10) == [old])
+    }
 }
 #endif

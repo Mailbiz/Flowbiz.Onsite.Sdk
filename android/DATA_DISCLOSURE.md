@@ -61,7 +61,7 @@ or websites.
 | Storage | Location | Contents | Cleared by |
 |---|---|---|---|
 | SharedPreferences `flowbiz_onsite_<appId>` | App-private storage | `anonymous_id`; `user_id` + `email` (after account events); `session_id`, `visit_count`, `last_activity_wall_ms`; `enabled` opt-out flag; `dedup_digest_<event>` / `dedup_at_<event>` (SHA-256 digests of last payloads — digests, not payloads); `utm_data` + `utm_expires_at_wall_ms` (campaign parameters of forwarded links) | `logout()` clears user identity; campaign parameters are kept on the device for 30 days after the last forwarded link or app foreground (also while opted out, when nothing is sent); uninstall clears all, unless Auto Backup restores it (see Backup) |
-| Event queue `no_backup/flowbiz_onsite/<appId>/queue.jsonl` | App-private storage (`noBackupFilesDir`), never backed up | Pending event envelopes (may contain the PII above) until successfully delivered; capped at 1000 events, compacted after flushes | Successful delivery; uninstall |
+| Event queue `no_backup/flowbiz_onsite/<appId>/queue.jsonl` | App-private storage (`noBackupFilesDir`), never backed up | Pending event envelopes (may contain the PII above) until successfully delivered; capped at 1000 events and 7 days, compacted after flushes | Successful delivery; 7 days undelivered (dropped at the next process start); uninstall |
 | Push token `no_backup/flowbiz_onsite/<appId>/push_token` | App-private storage (`noBackupFilesDir`), never backed up | The last registered FCM token | `logout()`, `removePushToken()`; uninstall |
 
 All storage is app-private (`MODE_PRIVATE` / `noBackupFilesDir`); nothing is

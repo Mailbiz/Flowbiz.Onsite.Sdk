@@ -47,7 +47,7 @@ object Flowbiz {
                 val created = FlowbizCore(
                     config = sanitized,
                     store = SharedPreferencesStore(appContext, sanitized.appId),
-                    queueFactory = { EventQueue(EventQueue.defaultFile(appContext, sanitized.appId)) },
+                    queueFactory = { EventQueue(EventQueue.defaultFile(appContext, sanitized.appId), nowMillis = AndroidClock::wallMillis) },
                     pushTokenFile = { PushTokenStore.defaultFile(appContext, sanitized.appId) },
                     sender = HttpUrlSender(sanitized.collectorUrl, FlowbizCore.PLATFORM),
                     scheduler = ExecutorTaskScheduler(executor),

@@ -188,4 +188,34 @@ class EventQueueTest {
         assertEquals(listOf(entry(1), entry(2)), EventQueue(resolved).peek(10))
         assertFalse(File(files, "flowbiz_onsite").exists())
     }
+
+    @Test
+    fun entriesOlderThanSevenDaysAreDroppedOnLoad() {
+        val now = 1_700_000_000_000L
+        fun aged(name: String, ageMillis: Long) =
+            """{"event":"$name","timings":{"created_at":"${EnvelopeBuilder.isoMillis(now - ageMillis)}"}}"""
+        val stale = aged("stale", EventQueue.MAX_AGE_MS + 1)
+        val kept = listOf(
+            aged("at-the-limit", EventQueue.MAX_AGE_MS),
+            aged("fresh", MINUTE_MS),
+            aged("clock-moved-back", -DAY_MS),
+            entry(1), // no created_at to judge by
+            """{"event":"unreadable","timings":{"created_at":"yesterday"}}""",
+        )
+        file = File(temp.newFolder(), "queue.jsonl")
+        file.writeText((listOf(stale) + kept + stale).joinToString("") { it + "\n" })
+
+        val q = EventQueue(file, nowMillis = { now })
+        assertEquals(kept, q.peek(10))
+        assertEquals(kept, file.readLines())
+    }
+
+    @Test
+    fun ageIsJudgedOnLoadOnlyNeverOnAppend() {
+        val now = 1_700_000_000_000L
+        val q = EventQueue(File(temp.newFolder(), "queue.jsonl"), nowMillis = { now })
+        val old = """{"event":"old","timings":{"created_at":"${EnvelopeBuilder.isoMillis(now - 30 * DAY_MS)}"}}"""
+        q.append(old)
+        assertEquals(listOf(old), q.peek(10))
+    }
 }
