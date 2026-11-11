@@ -15,9 +15,13 @@ internal interface BackgroundFlush {
 
     fun cancel()
 
+    /** Whether the system holds the job, also one a previous process of the app scheduled. */
+    fun isPending(): Boolean
+
     object None : BackgroundFlush {
         override fun schedule() = false
         override fun cancel() = Unit
+        override fun isPending() = false
     }
 }
 
@@ -48,6 +52,14 @@ internal class JobSchedulerBackgroundFlush(context: Context) : BackgroundFlush {
             SdkLog.debug("background flush job not cancelled: ${t.javaClass.simpleName}")
         }
     }
+
+    override fun isPending(): Boolean =
+        try {
+            scheduler()?.getPendingJob(JOB_ID) != null
+        } catch (t: Throwable) {
+            SdkLog.debug("background flush job not looked up: ${t.javaClass.simpleName}")
+            false
+        }
 
     // Job ids are shared by the whole app; a namespace (Android 14+) keeps this one from the host's.
     private fun scheduler(): JobScheduler? {

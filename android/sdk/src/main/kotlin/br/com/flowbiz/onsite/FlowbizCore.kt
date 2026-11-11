@@ -44,9 +44,9 @@ internal class FlowbizCore(
 
     private var foregrounded = false
 
-    // Whether the system holds the flush job, as far as this process knows. Scheduling it again would
-    // replace it, backoff included: with the network up and the collector failing, each retry would start
-    // the job at once, and the job the next retry.
+    // Whether the system holds the flush job. Scheduling it again would replace it, backoff included:
+    // with the network up and the collector failing, each retry would start the job at once, and the
+    // job the next retry. Seeded in init: the job may be one a previous process left.
     private var flushJobScheduled = false
 
     // Declared before init: an inline scheduler runs the startup refresh during construction.
@@ -63,6 +63,9 @@ internal class FlowbizCore(
                 }
             }
         }
+        // Once per process, on the SDK thread: a job pending from a killed process is held too, and has
+        // to be cancelled once the queue is empty.
+        submit("flushJobSeed") { flushJobScheduled = backgroundFlush.isPending() }
         // A process start may be a push or a background job, not a visit: load without sliding the expiry.
         submit("utmStartup") { refreshUtm(link = null, slideExpiry = false) }
     }

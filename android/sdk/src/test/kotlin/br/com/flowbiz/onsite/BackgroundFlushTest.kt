@@ -20,6 +20,10 @@ class BackgroundFlushTest {
             return accepts
         }
         override fun cancel() { calls += "cancel" }
+
+        // What a previous process of the app left with the system.
+        var pending = false
+        override fun isPending() = pending
     }
 
     private val job = FakeBackgroundFlush()
@@ -170,6 +174,38 @@ class BackgroundFlushTest {
 
         assertEquals(0, h.queue.size)
         assertEquals(listOf("schedule", "cancel"), job.calls) // else it wakes the process for nothing
+    }
+
+    @Test
+    fun aJobLeftByAPreviousProcessIsCancelledOnceTheQueueIsEmpty() {
+        job.pending = true // scheduled by a process the system killed since
+        val h = CoreHarness(temp.newFolder(), backgroundFlush = job)
+        h.queue.append("{\"event\":\"cart.sync\"}")
+
+        h.core.onForeground()
+
+        assertEquals(0, h.queue.size)
+        assertEquals(listOf("cancel"), job.calls) // else it later starts the process for nothing
+    }
+
+    @Test
+    fun aJobLeftByAPreviousProcessIsNotReplacedByTheRetries() {
+        job.pending = true
+        val h = CoreHarness(temp.newFolder(), backgroundFlush = job)
+
+        h.queueOneOffline() // not in the foreground: a process started by a push, say
+
+        assertEquals(emptyList<String>(), job.calls)
+    }
+
+    @Test
+    fun aJobLeftByAPreviousProcessIsCancelledByTheOptOut() {
+        job.pending = true
+        val h = CoreHarness(temp.newFolder(), backgroundFlush = job)
+
+        h.core.setEnabled(false)
+
+        assertEquals(listOf("cancel"), job.calls)
     }
 
     @Test

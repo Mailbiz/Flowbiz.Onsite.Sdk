@@ -298,7 +298,8 @@ nothing to set up in the host app:
   connection is back, also after the process was killed. An event tracked
   after the app left the foreground (in `onStop`, from a service or a
   receiver) that cannot be sent gets the same job, and the job is cancelled
-  once any flush empties the queue. Android decides when the job runs: under
+  once any flush empties the queue, also a job that a previous process of
+  the app left pending. Android decides when the job runs: under
   app-standby buckets and job quotas it can start well after the network is
   back. The SDK's manifest
   merges the job's service (`FlowbizFlushJobService`); it needs no permission
@@ -312,9 +313,8 @@ nothing to set up in the host app:
   namespace.
 
 While the SDK is disabled neither sends anything, and no job is scheduled. A
-job the running process scheduled is cancelled at the opt-out. One left by a
-previous process is not: Android may still start the process for it, where
-it ends at once without a network call. Neither
+pending job is cancelled at the opt-out, also one that a previous process
+left. Neither
 tracks anything: only events the app already tracked are sent, and no
 heartbeat runs in the background.
 
