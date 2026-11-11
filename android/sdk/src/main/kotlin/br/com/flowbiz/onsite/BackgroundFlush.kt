@@ -10,12 +10,13 @@ import android.os.Build
 
 // What outlives the app's time in the foreground: a flush of the queue once the network is back.
 internal interface BackgroundFlush {
-    fun schedule()
+    /** Whether the system took the job: a refused one must not count as held. */
+    fun schedule(): Boolean
 
     fun cancel()
 
     object None : BackgroundFlush {
-        override fun schedule() = Unit
+        override fun schedule() = false
         override fun cancel() = Unit
     }
 }
@@ -26,17 +27,19 @@ internal class JobSchedulerBackgroundFlush(context: Context) : BackgroundFlush {
 
     private val appContext = context.applicationContext
 
-    override fun schedule() {
+    override fun schedule(): Boolean =
         try {
             val job = JobInfo.Builder(JOB_ID, ComponentName(appContext, FlowbizFlushJobService::class.java))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .build()
             // Same id: replaces the job a previous backgrounding left.
-            if (scheduler()?.schedule(job) != JobScheduler.RESULT_SUCCESS) SdkLog.debug("background flush job refused")
+            val accepted = scheduler()?.schedule(job) == JobScheduler.RESULT_SUCCESS
+            if (!accepted) SdkLog.debug("background flush job refused")
+            accepted
         } catch (t: Throwable) {
             SdkLog.debug("background flush job not scheduled: ${t.javaClass.simpleName}")
+            false
         }
-    }
 
     override fun cancel() {
         try {

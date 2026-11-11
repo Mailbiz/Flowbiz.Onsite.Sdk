@@ -14,7 +14,11 @@ class BackgroundFlushTest {
 
     private class FakeBackgroundFlush : BackgroundFlush {
         val calls = mutableListOf<String>()
-        override fun schedule() { calls += "schedule" }
+        var accepts = true
+        override fun schedule(): Boolean {
+            calls += "schedule"
+            return accepts
+        }
         override fun cancel() { calls += "cancel" }
     }
 
@@ -111,6 +115,21 @@ class BackgroundFlushTest {
 
         // Scheduling again would replace the job, and with the network up it would start at once.
         assertEquals(listOf("schedule"), job.calls)
+    }
+
+    @Test
+    fun aJobTheSystemRefusedIsScheduledAgainByTheNextRetry() {
+        val h = harness()
+        h.core.onBackground()
+        job.accepts = false
+        h.queueOneOffline()
+        assertEquals(listOf("schedule"), job.calls)
+        job.accepts = true
+
+        h.scheduler.runLastScheduled() // the in-process retry fails again
+
+        // A refused job is not held: counting it as one would leave the queue with no job at all.
+        assertEquals(listOf("schedule", "schedule"), job.calls)
     }
 
     @Test

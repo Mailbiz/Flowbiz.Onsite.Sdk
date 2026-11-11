@@ -232,8 +232,8 @@ internal class FlowbizCore(
 
     private fun scheduleFlushJob() {
         if (flushJobScheduled) return
-        flushJobScheduled = true
-        backgroundFlush.schedule()
+        // Refused: not held, so the next retry or onBackground asks again.
+        flushJobScheduled = backgroundFlush.schedule()
     }
 
     private fun cancelFlushJob() {
