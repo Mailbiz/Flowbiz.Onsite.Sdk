@@ -1,0 +1,23 @@
+{
+  "name": "account_login_mixed_case",
+  "event": "accountLogin",
+  "input": {
+    "user": {
+      "userId": "Cliente-ABC",
+      "email": "Maria.Oliveira@Gmail.COM",
+      "name": "Maria Oliveira"
+    }
+  },
+  "expected": {
+    "wire_event": "account.login",
+    "data": {
+      "user": {
+        "user_id": "cliente-abc",
+        "email": "maria.oliveira@gmail.com",
+        "name": "Maria Oliveira"
+      }
+    },
+    "data_canonical": "{\"user\":{\"email\":\"maria.oliveira@gmail.com\",\"name\":\"Maria Oliveira\",\"user_id\":\"cliente-abc\"}}",
+    "identity_user_id": "cliente-abc"
+  }
+}

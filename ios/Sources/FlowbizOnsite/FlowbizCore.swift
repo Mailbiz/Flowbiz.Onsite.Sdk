@@ -68,16 +68,22 @@ final class FlowbizCore: @unchecked Sendable {
         submit { core in core.refreshUtm(link: nil, slideExpiry: false) }
     }
 
-    func track(_ event: Event) {
+    func track(_ tracked: Event) {
         submit { core in
             guard core.enabledState.isEnabled else {
                 SdkLog.debug("track dropped: SDK disabled")
                 return
             }
+            guard let event = UserSanitizer.sanitize(tracked) else {
+                SdkLog.debug("account event dropped: no valid user_id or email")
+                return
+            }
             // Before the envelope is built, so the login event itself carries user_id.
             switch event {
             case .accountLogin(let user), .accountSync(let user):
-                core.identityStore.setUser(userId: user.userId, email: user.email)
+                if let userId = UserSanitizer.identityUserId(user) {
+                    core.identityStore.setUser(userId: userId, email: user.email)
+                }
             default:
                 break
             }

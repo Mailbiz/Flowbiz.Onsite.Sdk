@@ -1,6 +1,6 @@
 package br.com.flowbiz.onsite
 
-/** Sent as given; null fields are omitted. */
+/** Sent as given, except the account [User] (see it); null fields are omitted. */
 sealed class Event {
 
     /** [path] is resolved against [FlowbizConfig.baseUri]; it becomes `context.url` from this event on. */

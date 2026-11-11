@@ -92,8 +92,8 @@ enum FixtureSupport {
 
     private static func user(_ json: [String: Any]) throws -> User {
         User(
-            userId: try string(json, "userId"),
-            email: try string(json, "email"),
+            userId: json["userId"] as? String,
+            email: json["email"] as? String,
             phone: json["phone"] as? String,
             name: json["name"] as? String,
             plan: json["plan"] as? String,

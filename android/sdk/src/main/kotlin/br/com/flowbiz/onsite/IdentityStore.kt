@@ -25,10 +25,10 @@ internal class IdentityStore(private val store: KeyValueStore) {
     val email: String?
         get() = synchronized(lock) { store.getString(StorageKeys.EMAIL) }
 
-    fun setUser(userId: String, email: String) {
+    fun setUser(userId: String, email: String?) {
         synchronized(lock) {
             store.putString(StorageKeys.USER_ID, userId)
-            store.putString(StorageKeys.EMAIL, email)
+            if (email != null) store.putString(StorageKeys.EMAIL, email) else store.remove(StorageKeys.EMAIL)
         }
     }
 

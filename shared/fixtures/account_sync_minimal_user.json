@@ -15,6 +15,7 @@
         "email": "maria.oliveira@gmail.com"
       }
     },
-    "data_canonical": "{\"user\":{\"email\":\"maria.oliveira@gmail.com\",\"user_id\":\"98412\"}}"
+    "data_canonical": "{\"user\":{\"email\":\"maria.oliveira@gmail.com\",\"user_id\":\"98412\"}}",
+    "identity_user_id": "98412"
   }
 }

@@ -5,9 +5,14 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class WireFixtureTest {
+
+    @get:Rule
+    val temp = TemporaryFolder()
 
     @Test
     fun allFixturesProduceExpectedWirePayload() {
@@ -18,11 +23,17 @@ class WireFixtureTest {
         for (file in files) {
             try {
                 val fixture = JSONObject(file.readText())
-                val event = FixtureSupport.buildEvent(
+                val built = FixtureSupport.buildEvent(
                     fixture.getString("event"),
                     fixture.optJSONObject("input") ?: JSONObject(),
                 )
                 val expected = fixture.getJSONObject("expected")
+                val event = UserSanitizer.sanitize(built)
+                val dropped = expected.optBoolean("dropped")
+                if (event == null || dropped) {
+                    if ((event == null) != dropped) failures += "${file.name}: expected dropped=$dropped"
+                    continue
+                }
                 val baseUri = if (fixture.has("baseUri")) fixture.getString("baseUri") else null
 
                 val wireName = EventSerializer.wireName(event)
@@ -46,6 +57,30 @@ class WireFixtureTest {
             }
         }
         assertTrue("fixture mismatches:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test
+    fun accountFixturesPinTheIdentityOfTheEnvelope() {
+        val accounts = FixtureSupport.fixtureFiles().map { JSONObject(it.readText()) }
+            .filter { it.getString("event").startsWith("account") }
+        assertTrue(accounts.size >= 10)
+        for (fixture in accounts) {
+            val name = fixture.getString("name")
+            val expected = fixture.getJSONObject("expected")
+            val h = CoreHarness(temp.newFolder())
+            h.core.track(FixtureSupport.buildEvent(fixture.getString("event"), fixture.getJSONObject("input")))
+            if (expected.optBoolean("dropped")) {
+                assertTrue(name, h.sender.bodies.isEmpty())
+                assertEquals(name, null, h.store.getString(StorageKeys.USER_ID))
+                continue
+            }
+            val entry = h.lastEntry()
+            assertEquals(name, expected.getString("data_canonical"), entry.getString("data"))
+            assertEquals(name, expected.getString("identity_user_id"), entry.getJSONObject("identity").getString("user_id"))
+            assertEquals(name, expected.getString("identity_user_id"), h.store.getString(StorageKeys.USER_ID))
+            val email = expected.getJSONObject("data").getJSONObject("user").opt("email")
+            assertEquals(name, email, h.store.getString(StorageKeys.EMAIL))
+        }
     }
 
     @Test

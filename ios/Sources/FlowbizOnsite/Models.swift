@@ -1,16 +1,17 @@
 import Foundation
 
+/// At least one of `userId` and `email`; both are sent lowercased, an invalid one is left out, as on web.
 public struct User: Sendable, Equatable {
-    public let userId: String
-    public let email: String
+    public let userId: String?
+    public let email: String?
     public let phone: String?
     public let name: String?
     public let plan: String?
     public let createdAt: String?
 
     public init(
-        userId: String,
-        email: String,
+        userId: String? = nil,
+        email: String? = nil,
         phone: String? = nil,
         name: String? = nil,
         plan: String? = nil,

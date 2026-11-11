@@ -14,7 +14,8 @@ their unit tests.
   "expected": {
     "wire_event": "cart.sync",
     "data": { "...": "exact snake_case wire payload object" },
-    "data_canonical": "exact canonical wire string, byte-for-byte"
+    "data_canonical": "exact canonical wire string, byte-for-byte",
+    "identity_user_id": "account events only: identity.user_id of the envelope"
   }
 }
 ```
@@ -40,13 +41,24 @@ their unit tests.
   `JSON.stringify` of each scalar.
 - Optional fields absent from `input` must be entirely absent from the wire
   (`"key": null` never appears).
+- Account events go through `UserSanitizer` first, the port of the web's
+  account pipeline (the universal vendor's `userSchema`, then onsite-core's
+  `sanitizeAccountUser`): `user_id` and `email` lowercased, an invalid email
+  and a `user_id` that identifies nobody left out. `expected.identity_user_id`
+  is the envelope's `identity.user_id` from that event on (`user_id`, or the
+  email without one), also what the SDK stores. `"dropped": true` replaces
+  `data`, `data_canonical` and `identity_user_id` when neither is left: the
+  event is not sent and the identity does not change.
 
 Covered edge cases: pageView with path+title, path only, title only, an empty
 call, and an absolute URL with no `baseUri`; productView and addToCart with
 relative/protocol-relative/absolute URLs resolved against `baseUri`; cartSync
 full vs empty-cart; productView multi-variant with nested `properties` /
 `recovery_properties`; orderComplete with payment/delivery methods and minimal;
-orderCancel with only `order_id`, only `cart_id`, and both ids; multi-item
+account events with mixed case, only an email, only a `user_id`, an invalid
+email, a placeholder `user_id`, a `user_id` that is another email or the same
+one, and no valid identity at all; orderCancel with only `order_id`, only
+`cart_id`, and both ids; multi-item
 addToCart; and number/escaping edge cases (`19.99`, `0.1`, whole-number double
 `19.0`, `10000000`, `1e21`, `1e-7`, `-0.0`, URLs with slashes, unicode
 including non-BMP emoji) in `cart_sync_number_edge_cases`.
@@ -65,7 +77,8 @@ entries. Each entry:
   device wall clock, ISO-8601 UTC with milliseconds; `timezone` is the UTC
   offset, e.g. `-03:00`.
 - `identity`: `anonymous_id`, `session_id`, `visit_count`, and `user_id` from
-  an `accountLogin`/`accountSync` until `logout()`.
+  an `accountLogin`/`accountSync` until `logout()` (the user's `user_id`, or
+  the email without one, as the web's `setUserId(user_id || email)`).
 - `context`: `platform`, `language`, `screen`, `vendor`
   (`flowbiz-<platform>-sdk`), `onsite_version`, and when set: `url` (resolved
   URL of the latest `pageView` with a path or title), `baseuri`, `recoveryUrl`,

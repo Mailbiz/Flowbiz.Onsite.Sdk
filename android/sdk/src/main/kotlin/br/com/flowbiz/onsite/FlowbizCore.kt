@@ -53,15 +53,20 @@ internal class FlowbizCore(
         submit("utmStartup") { refreshUtm(link = null, slideExpiry = false) }
     }
 
-    fun track(event: Event) = submit("track") {
+    fun track(tracked: Event) = submit("track") {
         if (!enabledState.isEnabled) {
             SdkLog.debug("track dropped: SDK disabled")
             return@submit
         }
+        val event = UserSanitizer.sanitize(tracked)
+        if (event == null) {
+            SdkLog.debug("account event dropped: no valid user_id or email")
+            return@submit
+        }
         // Before the envelope is built, so the login event itself carries user_id.
         when (event) {
-            is Event.AccountLogin -> identityStore.setUser(event.user.userId, event.user.email)
-            is Event.AccountSync -> identityStore.setUser(event.user.userId, event.user.email)
+            is Event.AccountLogin -> identify(event.user)
+            is Event.AccountSync -> identify(event.user)
             else -> Unit
         }
         // Sent anyway: Cart.Worker still closes the cart, but credits no UTMs to an order without a real id.
@@ -177,6 +182,10 @@ internal class FlowbizCore(
     fun onBackground() = submit("onBackground") {
         foregrounded = false
         heartbeat.stop()
+    }
+
+    private fun identify(user: User) {
+        UserSanitizer.identityUserId(user)?.let { identityStore.setUser(it, user.email) }
     }
 
     private fun buildPingEntry(): String? = try {

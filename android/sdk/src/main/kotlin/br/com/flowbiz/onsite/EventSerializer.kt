@@ -52,8 +52,8 @@ internal object EventSerializer {
         .putIfPresent("url", UrlResolver.resolve(event.path, baseUri))
 
     private fun userObject(user: User): JSONObject = JSONObject()
-        .put("user_id", user.userId)
-        .put("email", user.email)
+        .putIfPresent("user_id", user.userId)
+        .putIfPresent("email", user.email)
         .putIfPresent("phone", user.phone)
         .putIfPresent("name", user.name)
         .putIfPresent("plan", user.plan)

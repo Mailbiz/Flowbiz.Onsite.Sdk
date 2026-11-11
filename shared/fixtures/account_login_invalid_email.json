@@ -1,0 +1,22 @@
+{
+  "name": "account_login_invalid_email",
+  "event": "accountLogin",
+  "input": {
+    "user": {
+      "userId": "98412",
+      "email": "maria@gmail",
+      "phone": "+5511987654321"
+    }
+  },
+  "expected": {
+    "wire_event": "account.login",
+    "data": {
+      "user": {
+        "user_id": "98412",
+        "phone": "+5511987654321"
+      }
+    },
+    "data_canonical": "{\"user\":{\"phone\":\"+5511987654321\",\"user_id\":\"98412\"}}",
+    "identity_user_id": "98412"
+  }
+}

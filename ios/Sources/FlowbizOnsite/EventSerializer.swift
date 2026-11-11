@@ -79,10 +79,9 @@ enum EventSerializer {
     }
 
     private static func userObject(_ user: User) -> [String: Any] {
-        var object: [String: Any] = [
-            "user_id": user.userId,
-            "email": user.email,
-        ]
+        var object = [String: Any]()
+        setIfPresent(&object, "user_id", user.userId)
+        setIfPresent(&object, "email", user.email)
         setIfPresent(&object, "phone", user.phone)
         setIfPresent(&object, "name", user.name)
         setIfPresent(&object, "plan", user.plan)

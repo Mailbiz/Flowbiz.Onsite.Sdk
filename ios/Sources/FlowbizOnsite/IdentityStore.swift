@@ -37,11 +37,15 @@ final class IdentityStore: @unchecked Sendable {
         return store.string(forKey: StorageKeys.email)
     }
 
-    func setUser(userId: String, email: String) {
+    func setUser(userId: String, email: String?) {
         lock.lock()
         defer { lock.unlock() }
         store.set(userId, forKey: StorageKeys.userId)
-        store.set(email, forKey: StorageKeys.email)
+        if let email {
+            store.set(email, forKey: StorageKeys.email)
+        } else {
+            store.removeValue(forKey: StorageKeys.email)
+        }
     }
 
     func clearUser() {

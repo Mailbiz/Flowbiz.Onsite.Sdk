@@ -246,7 +246,12 @@ The SDK sends what you build without validating it. For carts to be
 identified, abandoned and recovered, the backend needs:
 
 - **An identified user**: `AccountLogin` or `AccountSync` at least once per
-  install. Until then no cart email can go out for that device.
+  install. Until then no cart email can go out for that device. `User` takes
+  a `userId`, an `email` or both, and the SDK normalises them as the web tag
+  does: both are lowercased, an invalid email or a placeholder `userId`
+  (`"0"`, `"null"`, a single character…) is left out, and
+  `identity.user_id` is the `userId`, or the email without one. An account
+  event left with neither is not sent.
 - **`User.createdAt` in ISO 8601** (`2026-10-19T14:03:00-03:00`): any other
   format drops the account event.
 - **`items = emptyList()` / `items: []` to empty a cart**: a `CartSync`
@@ -298,7 +303,9 @@ restore, app foreground, the next track, or `flush()`. Identical payloads per
 event type are deduplicated for 20 minutes, except `PageView`, which is always
 sent (as on web); nothing else is filtered: a `cartSync` with an empty cart is
 sent. There is no runtime schema validation
-or field enrichment; the SDK sends the typed payload you build. A `page.ping`
+or field enrichment; the SDK sends the typed payload you build, with one
+exception: the account `User` is normalised as on web (see What the backend
+needs). A `page.ping`
 heartbeat (default 60 s, configurable ≥ 15 s) runs while foregrounded,
 best-effort and never queued. Sessions rotate after 30 min of inactivity. All
 public APIs are callable from any thread, and — with the exception of
@@ -326,7 +333,7 @@ envelope, identity and session, queueing) and `Mailbiz.One.Collector`
 |---|---|
 | Public surface | `Flowbiz`, `FlowbizConfig`, `Event`, `Models` |
 | Engine (wires everything: lifecycle, logout, heartbeat, flush triggers) | `FlowbizCore` |
-| Event → wire payload | `EventSerializer`, `UrlResolver`, `CanonicalJson`/`CanonicalJSON`, `EnvelopeBuilder` |
+| Event → wire payload | `EventSerializer`, `UserSanitizer`, `UrlResolver`, `CanonicalJson`/`CanonicalJSON`, `EnvelopeBuilder` |
 | Identity & session | `IdentityStore`, `SessionManager`, `Clock` + `AndroidClock`/`SystemClock` |
 | Dedup, heartbeat, opt-out | `DedupStore`, `HeartbeatScheduler`, `EnabledState` |
 | Offline queue & transport | `EventQueue`, `FlushController`, `HttpSender`, `Reachability` |

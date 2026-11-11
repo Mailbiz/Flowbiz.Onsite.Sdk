@@ -75,8 +75,8 @@ object FixtureSupport {
     }
 
     private fun user(json: JSONObject) = User(
-        userId = json.getString("userId"),
-        email = json.getString("email"),
+        userId = json.stringOrNull("userId"),
+        email = json.stringOrNull("email"),
         phone = json.stringOrNull("phone"),
         name = json.stringOrNull("name"),
         plan = json.stringOrNull("plan"),

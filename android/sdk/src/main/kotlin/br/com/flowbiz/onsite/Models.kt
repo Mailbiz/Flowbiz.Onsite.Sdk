@@ -1,8 +1,9 @@
 package br.com.flowbiz.onsite
 
+/** At least one of [userId] and [email]; both are sent lowercased, an invalid one is left out, as on web. */
 data class User(
-    val userId: String,
-    val email: String,
+    val userId: String? = null,
+    val email: String? = null,
     val phone: String? = null,
     val name: String? = null,
     val plan: String? = null,

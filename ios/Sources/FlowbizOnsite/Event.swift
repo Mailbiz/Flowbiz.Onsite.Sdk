@@ -1,6 +1,6 @@
 import Foundation
 
-/// Sent as given; nil fields are omitted.
+/// Sent as given, except the account `User` (see it); nil fields are omitted.
 public enum Event: Sendable, Equatable {
 
     /// `path` is resolved against `FlowbizConfig.baseUri`; it becomes `context.url` from this event on.

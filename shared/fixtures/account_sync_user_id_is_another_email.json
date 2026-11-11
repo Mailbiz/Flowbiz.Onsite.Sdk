@@ -1,0 +1,20 @@
+{
+  "name": "account_sync_user_id_is_another_email",
+  "event": "accountSync",
+  "input": {
+    "user": {
+      "userId": "outra@gmail.com",
+      "email": "maria.oliveira@gmail.com"
+    }
+  },
+  "expected": {
+    "wire_event": "account.sync",
+    "data": {
+      "user": {
+        "email": "maria.oliveira@gmail.com"
+      }
+    },
+    "data_canonical": "{\"user\":{\"email\":\"maria.oliveira@gmail.com\"}}",
+    "identity_user_id": "maria.oliveira@gmail.com"
+  }
+}
