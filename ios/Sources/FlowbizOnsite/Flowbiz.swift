@@ -103,6 +103,10 @@ public enum Flowbiz {
                 config: sanitized,
                 store: UserDefaultsStore(appId: sanitized.appId),
                 queueFactory: { EventQueue(fileURL: queueFileURL(appId: sanitized.appId)) },
+                // Beside the queue: that directory is excluded from backups.
+                pushTokenFileURL: {
+                    queueFileURL(appId: sanitized.appId).deletingLastPathComponent().appendingPathComponent("push_token")
+                },
                 sender: URLSessionHttpSender(collectorUrl: sanitized.collectorUrl, platform: FlowbizCore.platform),
                 scheduler: DispatchTaskScheduler(queue: serialQueue),
                 clock: SystemClock(),

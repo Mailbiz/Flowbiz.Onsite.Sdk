@@ -60,8 +60,9 @@ or websites.
 
 | Storage | Location | Contents | Cleared by |
 |---|---|---|---|
-| SharedPreferences `flowbiz_onsite_<appId>` | App-private storage | `anonymous_id`; `user_id` + `email` (after account events); `session_id`, `visit_count`, `last_activity_wall_ms`; `enabled` opt-out flag; `push_token` (last registered token); `dedup_digest_<event>` / `dedup_at_<event>` (SHA-256 digests of last payloads — digests, not payloads); `utm_data` + `utm_expires_at_wall_ms` (campaign parameters of forwarded links) | `logout()` clears user identity + push token; campaign parameters are kept on the device for 30 days after the last forwarded link or app foreground (also while opted out, when nothing is sent); uninstall clears all, unless Auto Backup restores it (see Backup) |
+| SharedPreferences `flowbiz_onsite_<appId>` | App-private storage | `anonymous_id`; `user_id` + `email` (after account events); `session_id`, `visit_count`, `last_activity_wall_ms`; `enabled` opt-out flag; `dedup_digest_<event>` / `dedup_at_<event>` (SHA-256 digests of last payloads — digests, not payloads); `utm_data` + `utm_expires_at_wall_ms` (campaign parameters of forwarded links) | `logout()` clears user identity; campaign parameters are kept on the device for 30 days after the last forwarded link or app foreground (also while opted out, when nothing is sent); uninstall clears all, unless Auto Backup restores it (see Backup) |
 | Event queue `no_backup/flowbiz_onsite/<appId>/queue.jsonl` | App-private storage (`noBackupFilesDir`), never backed up | Pending event envelopes (may contain the PII above) until successfully delivered; capped at 1000 events, compacted after flushes | Successful delivery; uninstall |
+| Push token `no_backup/flowbiz_onsite/<appId>/push_token` | App-private storage (`noBackupFilesDir`), never backed up | The last registered FCM token | `logout()`, `removePushToken()`; uninstall |
 
 All storage is app-private (`MODE_PRIVATE` / `noBackupFilesDir`); nothing is
 written to shared/external storage. Data is retained locally only as
@@ -69,7 +70,11 @@ described above; server-side retention is governed by the Flowbiz platform's
 data-retention policy (outside SDK scope — integrators should reference the
 Flowbiz DPA).
 
-**Backup.** The event queue is never backed up. The SharedPreferences file
+**Backup.** The event queue and the push token are never backed up: a token
+belongs to one device, and one restored on another phone would make
+`logout()` remove the old phone's registration. A token that 0.1.x kept in
+the SharedPreferences file is moved out of it on the first run of this
+version. The SharedPreferences file
 follows the app's backup rules: with Android Auto Backup on (the default), a
 reinstall or a new device restores the same `anonymous_id`, user identity
 and campaign parameters. For a new `anonymous_id` on every install, exclude

@@ -32,6 +32,11 @@ final class CoreHarness: @unchecked Sendable {
     let offset: OffsetBox
     let queue: EventQueue
     let core: FlowbizCore
+    private let pushTokenFile: URL
+
+    var pushToken: String? {
+        try? String(contentsOf: pushTokenFile, encoding: .utf8)
+    }
 
     init(
         config: FlowbizConfig = FlowbizConfig(appId: "77777", baseUri: "https://store.com"),
@@ -42,7 +47,10 @@ final class CoreHarness: @unchecked Sendable {
         let scheduler = FakeTaskScheduler()
         let reachability = FakeReachability()
         let offset = OffsetBox(-180)
-        let queue = EventQueue(fileURL: temporaryQueueFile())
+        let queueFile = temporaryQueueFile()
+        let queue = EventQueue(fileURL: queueFile)
+        let pushTokenFile = queueFile.deletingLastPathComponent().appendingPathComponent("push_token")
+        self.pushTokenFile = pushTokenFile
         self.config = config
         self.store = store
         self.clock = clock
@@ -55,6 +63,7 @@ final class CoreHarness: @unchecked Sendable {
             config: config,
             store: store,
             queueFactory: { queue },
+            pushTokenFileURL: { pushTokenFile },
             sender: sender,
             scheduler: scheduler,
             clock: clock,

@@ -74,6 +74,7 @@ class DebugLogRedactionTest {
                 config = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
                 store = store,
                 queueFactory = { EventQueue(File(temp.newFolder(), "queue.jsonl")) },
+                pushTokenFile = { File(temp.newFolder(), "push_token") },
                 sender = sender,
                 scheduler = FakeTaskScheduler(),
                 clock = clock,

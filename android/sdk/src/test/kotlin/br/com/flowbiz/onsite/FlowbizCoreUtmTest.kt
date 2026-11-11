@@ -99,6 +99,7 @@ class FlowbizCoreUtmTest {
                 config = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
                 store = store,
                 queueFactory = { EventQueue(queueFile) },
+                pushTokenFile = { File(queueFile.parentFile, "push_token") },
                 sender = sender,
                 scheduler = ExecutorTaskScheduler(executor),
                 clock = FakeClock(),

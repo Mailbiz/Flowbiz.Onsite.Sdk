@@ -312,7 +312,9 @@ public APIs are callable from any thread, and — with the exception of
 `handlePush`/`handleLink`/`handlePushOpened`, which still decode (recovery
 links without the tenant check) and keep links' UTMs for `initialize` — they
 are no-ops before `initialize`. A second `initialize` is ignored: the first
-config wins.
+config wins. The event queue and the push token live in files left out of
+device backups (Android `noBackupFilesDir`; iOS Application Support, flagged
+`isExcludedFromBackup`), so neither follows the user to another phone.
 `debug = true` logs diagnostics but never PII.
 
 ## Development

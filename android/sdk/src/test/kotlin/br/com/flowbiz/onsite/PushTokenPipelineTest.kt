@@ -24,7 +24,7 @@ class PushTokenPipelineTest {
         assertEquals("""{"platform":"android","token":"fcm-token-1"}""", entry.getString("data"))
         assertTrue(entry.getJSONObject("identity").has("session_id"))
         assertEquals("android", entry.getJSONObject("context").getString("platform"))
-        assertEquals("fcm-token-1", harness.store.values[StorageKeys.PUSH_TOKEN])
+        assertEquals("fcm-token-1", harness.pushToken)
     }
 
     @Test
@@ -45,7 +45,7 @@ class PushTokenPipelineTest {
         val entry = harness.lastEntry()
         assertEquals("push.token.remove", entry.getString("event"))
         assertEquals("""{"platform":"android","token":"fcm-token-1"}""", entry.getString("data"))
-        assertFalse(harness.store.values.containsKey(StorageKeys.PUSH_TOKEN))
+        assertNull(harness.pushToken)
         val sentBefore = harness.sentEntries().size
         harness.core.removePushToken()
         assertEquals(sentBefore, harness.sentEntries().size)
@@ -67,7 +67,7 @@ class PushTokenPipelineTest {
         val removal = harness.sentEntries().last { it.getString("event") == "push.token.remove" }
         assertEquals("u-42", removal.getJSONObject("identity").getString("user_id"))
         assertEquals("""{"platform":"android","token":"fcm-token-1"}""", removal.getString("data"))
-        assertFalse(harness.store.values.containsKey(StorageKeys.PUSH_TOKEN))
+        assertNull(harness.pushToken)
         assertNull(harness.store.values[StorageKeys.USER_ID])
     }
 
@@ -85,13 +85,13 @@ class PushTokenPipelineTest {
         harness.core.setEnabled(false)
         harness.core.setPushToken("fcm-token-1")
         assertTrue(harness.sentEntries().isEmpty())
-        assertEquals("fcm-token-1", harness.store.values[StorageKeys.PUSH_TOKEN])
+        assertEquals("fcm-token-1", harness.pushToken)
         harness.core.setEnabled(true)
         harness.core.removePushToken()
         val entry = harness.sentEntries().last()
         assertEquals("push.token.remove", entry.getString("event"))
         assertEquals("""{"platform":"android","token":"fcm-token-1"}""", entry.getString("data"))
-        assertFalse(harness.store.values.containsKey(StorageKeys.PUSH_TOKEN))
+        assertNull(harness.pushToken)
     }
 
     @Test
@@ -149,6 +149,6 @@ class PushTokenPipelineTest {
         val sentBefore = harness.sentEntries().size
         harness.core.removePushToken()
         assertEquals(sentBefore, harness.sentEntries().size)
-        assertFalse(harness.store.values.containsKey(StorageKeys.PUSH_TOKEN))
+        assertNull(harness.pushToken)
     }
 }

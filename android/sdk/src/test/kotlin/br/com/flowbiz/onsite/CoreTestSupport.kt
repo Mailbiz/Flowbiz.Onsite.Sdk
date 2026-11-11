@@ -37,10 +37,14 @@ internal class CoreHarness(
     val reachability: FakeReachability = FakeReachability(),
 ) {
     val queue = EventQueue(File(queueDir, "queue.jsonl"))
+    private val pushTokenFile = File(queueDir, "push_token")
+    val pushToken: String?
+        get() = pushTokenFile.takeIf { it.exists() }?.readText()
     val core = FlowbizCore(
         config = config,
         store = store,
         queueFactory = { queue },
+        pushTokenFile = { pushTokenFile },
         sender = sender,
         scheduler = scheduler,
         clock = clock,

@@ -216,6 +216,7 @@ class FlowbizCoreLifecycleTest {
                 queueBuilds += 1
                 EventQueue(java.io.File(folder, "queue.jsonl")).also { it.append("""{"event":"page.view"}""") }
             },
+            pushTokenFile = { java.io.File(folder, "push_token") },
             sender = sender,
             scheduler = scheduler,
             clock = FakeClock(),

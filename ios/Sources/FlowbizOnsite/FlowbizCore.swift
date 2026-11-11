@@ -38,6 +38,7 @@ final class FlowbizCore: @unchecked Sendable {
         config: FlowbizConfig,
         store: any KeyValueStore,
         queueFactory: @escaping () -> EventQueue,
+        pushTokenFileURL: @escaping () -> URL,
         sender: any HttpSender,
         scheduler: any TaskScheduler,
         clock: any Clock,
@@ -48,7 +49,7 @@ final class FlowbizCore: @unchecked Sendable {
         self.identityStore = IdentityStore(store: store)
         self.sessionManager = SessionManager(store: store, clock: clock)
         self.enabledState = EnabledState(store: store)
-        self.pushTokenStore = PushTokenStore(store: store)
+        self.pushTokenStore = PushTokenStore(fileURL: pushTokenFileURL, legacy: store)
         self.dedupStore = DedupStore(store: store, clock: clock)
         self.utmStore = UtmStore(store: store, clock: clock)
         self.queueFactory = queueFactory

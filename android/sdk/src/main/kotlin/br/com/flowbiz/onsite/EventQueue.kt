@@ -151,6 +151,8 @@ internal class EventQueue(
 
         private const val ROOT_DIR = "flowbiz_onsite"
 
-        private fun queueFile(dir: File, appId: String) = File(File(File(dir, ROOT_DIR), appId), "queue.jsonl")
+        fun stateDir(dir: File, appId: String) = File(File(dir, ROOT_DIR), appId)
+
+        private fun queueFile(dir: File, appId: String) = File(stateDir(dir, appId), "queue.jsonl")
     }
 }

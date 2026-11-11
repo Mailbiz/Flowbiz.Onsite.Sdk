@@ -7,6 +7,7 @@ internal class FlowbizCore(
     internal val config: FlowbizConfig,
     store: KeyValueStore,
     queueFactory: () -> EventQueue,
+    pushTokenFile: () -> java.io.File,
     private val sender: HttpSender,
     private val scheduler: TaskScheduler,
     private val clock: Clock,
@@ -17,7 +18,7 @@ internal class FlowbizCore(
     private val identityStore = IdentityStore(store)
     private val sessionManager = SessionManager(store, clock)
     private val enabledState = EnabledState(store)
-    private val pushTokenStore = PushTokenStore(store)
+    private val pushTokenStore = PushTokenStore(pushTokenFile, store)
     private val dedupStore = DedupStore(store, clock)
 
     // Lazy: the constructor reads the queue file, which must not happen on the caller's main thread.
