@@ -5,6 +5,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import kotlin.random.Random
@@ -47,7 +48,7 @@ class PushParserTest {
                 assertPushMatches(name, expected as JSONObject, push!!)
             }
             if (sample.has("expected_recovery")) {
-                assertRecoveryMatches(name, sample.getJSONObject("expected_recovery"), push!!.recoveryPayload)
+                assertRecoveryMatches(name, sample.getJSONObject("expected_recovery"), RecoveryLinkParser.parse(push!!.deepLinkString))
             }
         }
     }
@@ -112,5 +113,12 @@ class PushParserTest {
             }
             Flowbiz.handlePush(mapOf("flowbiz" to garbage))
         }
+    }
+
+    @Test
+    fun aPushExposesNoRecoveryDecodeOfItsOwn() {
+        // handlePushOpened is the only tap path: it captures the UTMs and checks the tenant.
+        val accessors = FlowbizPush::class.java.methods.map { it.name }
+        assertTrue(accessors.toString(), accessors.none { it.contains("ecoveryPayload") })
     }
 }

@@ -13,11 +13,6 @@ public struct FlowbizPush: Sendable {
     public let data: [String: JSONValue]
 
     let deepLinkString: String?
-
-    /// Pure decode (no UTM capture, no tenant check); on tap, call `Flowbiz.handlePushOpened` instead.
-    public var recoveryPayload: RecoveryPayload? {
-        RecoveryLinkParser.parse(deepLinkString)
-    }
 }
 
 // The marker is a JSON string, as FCM data is a flat map; APNs may nest an object, hence parse(object:).

@@ -188,7 +188,6 @@ import Testing
         try Flowbiz.$taskCore.withValue(h.core) {
             let push = try #require(Flowbiz.handlePush(["flowbiz": String(decoding: marker, as: UTF8.self)]))
             #expect(push.deepLink?.absoluteString.contains("carrinho%20abandonado") == true)
-            _ = push.recoveryPayload
             #expect(try trackProbe(h) == nil)
             #expect(Flowbiz.handlePushOpened(push)?.cartId == "cart-abc-001")
         }

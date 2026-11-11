@@ -73,17 +73,11 @@ struct SettingsView: View {
             lastPush = nil
             return
         }
-        let recovery = push.recoveryPayload
         var summary = "FlowbizPush: v=\(push.version) type=\(push.type)\n"
         summary += "title=\(push.title ?? "-")\n"
         summary += "body=\(push.body ?? "-")\n"
         summary += "deepLink=\(push.deepLink?.absoluteString ?? "-")\n"
-        summary += "data=\(push.data)\n"
-        if let recovery {
-            summary += "recoveryPayload: cart \(recovery.cartId), user \(recovery.userId), \(recovery.products.count) item(ns)"
-        } else {
-            summary += "recoveryPayload=nil"
-        }
+        summary += "data=\(push.data)"
         lastPushSummary = summary
         lastPush = push
     }

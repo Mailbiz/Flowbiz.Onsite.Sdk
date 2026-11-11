@@ -56,10 +56,10 @@ root (`path: ../..`) is wired by `project.yml`.
   link works for UTMs, with or without `_mb_cr_`.
 - **Push without APNs**: Settings ▸ "Simular push" feeds the canned
   cart-recovery payload from `shared/push-samples/samples.json` into
-  `Flowbiz.handlePush` and renders the parsed `FlowbizPush`, including its
-  `recoveryPayload`. "Abrir notificação" plays the tap:
-  `Flowbiz.handlePushOpened(push)` captures the deep link's UTMs and
-  returns the tenant-checked payload.
+  `Flowbiz.handlePush` and renders the parsed `FlowbizPush`. "Abrir
+  notificação" plays the tap: `Flowbiz.handlePushOpened(push)`, the only way
+  to a push's recovery payload, captures the deep link's UTMs and returns
+  the tenant-checked payload.
 - **Offline behavior**: the default collectorUrl failing is expected and
   demonstrates the durable queue + backoff. Logs: os_log subsystem
   `br.com.flowbiz.onsite`, category `FlowbizOnsite` (debug=true).

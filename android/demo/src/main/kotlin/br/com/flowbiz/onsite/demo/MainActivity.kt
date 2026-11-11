@@ -312,19 +312,13 @@ class MainActivity : Activity() {
             dialog("handlePush", "null — payload não é do Flowbiz")
             return
         }
-        val recovery = push.recoveryPayload
         val message = buildString {
             appendLine("FlowbizPush:")
             appendLine("v=${push.version} type=${push.type}")
             appendLine("title=${push.title}")
             appendLine("body=${push.body}")
             appendLine("deepLink=${push.deepLink}")
-            appendLine("data=${push.data}")
-            appendLine()
-            append(
-                if (recovery == null) "recoveryPayload=null"
-                else "recoveryPayload: cart ${recovery.cartId}, user ${recovery.userId}, ${recovery.products.size} item(ns)"
-            )
+            append("data=${push.data}")
         }
         val openRecovery: (Pair<String, () -> Unit>)? = push.deepLink?.let { deepLink ->
             "Abrir notificação" to {

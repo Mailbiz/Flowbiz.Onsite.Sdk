@@ -21,10 +21,6 @@ class FlowbizPush internal constructor(
         } catch (t: Throwable) {
             null
         }
-
-    /** Pure decode (no UTM capture, no tenant check); on tap, call [Flowbiz.handlePushOpened] instead. */
-    val recoveryPayload: RecoveryPayload?
-        get() = RecoveryLinkParser.parse(deepLinkString)
 }
 
 internal object PushPayloadParser {
