@@ -119,7 +119,8 @@ public enum Flowbiz {
                 clock: SystemClock(),
                 deviceContext: makeDeviceContext(),
                 reachability: PathMonitorReachability(queue: serialQueue),
-                transportScheduler: DispatchTaskScheduler(queue: DispatchQueue(label: "br.com.flowbiz.onsite.transport"))
+                transportScheduler: DispatchTaskScheduler(queue: DispatchQueue(label: "br.com.flowbiz.onsite.transport")),
+                backgroundTask: backgroundTask
             )
         }) else {
             SdkLog.debug("initialize ignored: already initialized (first config wins)")
@@ -305,6 +306,11 @@ public enum Flowbiz {
         }
     }
 
+    // The core asks from its own queue; a background task is begun on the main thread.
+    private static let backgroundTask: BackgroundFlush.Runner? = { flush in
+        DispatchQueue.main.async { BackgroundFlush.run(begin: beginBackgroundTask, flush: flush) }
+    }
+
     // Called where the notification is posted, the main thread. Nil when iOS grants no background time.
     private static func beginBackgroundTask(_ onExpire: @escaping @Sendable () -> Void) -> (@Sendable () -> Void)? {
         guard Thread.isMainThread else { return nil }
@@ -324,6 +330,7 @@ public enum Flowbiz {
         }
     }
     #else
+    private static let backgroundTask: BackgroundFlush.Runner? = nil
     private static func startLifecycleTracking(_ core: FlowbizCore) {}
     #endif
 }

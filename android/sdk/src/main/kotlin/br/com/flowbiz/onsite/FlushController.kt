@@ -9,6 +9,8 @@ internal class FlushController(
     private val clock: Clock,
     private val batchSize: Int = MAX_BATCH_SIZE,
     private val isActive: () -> Boolean = { true },
+    // On the transport thread, after every drain: whether it left entries behind for a scheduled retry.
+    private val onDrainEnded: (retryScheduled: Boolean) -> Unit = {},
 ) {
 
     enum class FlushReason { EVENT_TRACKED, APP_FOREGROUND, APP_BACKGROUND, NETWORK_RESTORED, EXPLICIT }
@@ -54,6 +56,7 @@ internal class FlushController(
             draining = true
             takeWaiters()
         }
+        var retryScheduled = false
         try {
             if (!isActive()) SdkLog.debug("drain skipped: SDK disabled")
             // isActive again per batch: setEnabled(false) no longer waits for this thread.
@@ -61,6 +64,7 @@ internal class FlushController(
                 val outcome = drainPrefix(batchSize)
                 if (outcome == Outcome.STOP_AND_RETRY) {
                     scheduleRetry()
+                    retryScheduled = true
                     break
                 }
             }
@@ -74,7 +78,16 @@ internal class FlushController(
                 a
             }
             notify(waiting)
-            if (again) scheduler.execute { drain() }
+            // A follow-up pass reports for both.
+            if (again) scheduler.execute { drain() } else reportDrainEnded(retryScheduled)
+        }
+    }
+
+    private fun reportDrainEnded(retryScheduled: Boolean) {
+        try {
+            onDrainEnded(retryScheduled)
+        } catch (t: Throwable) {
+            SdkLog.debug("drain report failed: ${t.javaClass.simpleName}")
         }
     }
 

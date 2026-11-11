@@ -100,6 +100,68 @@ import Testing
         #expect(flushed.count == 1)
     }
 
+    // MARK: an event tracked outside the foreground
+
+    private final class FakeBackgroundTask: @unchecked Sendable {
+        let began = Counter()
+        let ended = Counter()
+
+        func run(_ flush: @escaping @Sendable (_ finished: @escaping @Sendable () -> Void) -> Void) {
+            began.increment()
+            flush { [ended] in ended.increment() }
+        }
+    }
+
+    private func backgrounded(_ task: FakeBackgroundTask) -> CoreHarness {
+        let h = CoreHarness(backgroundTask: { task.run($0) })
+        h.core.onForeground()
+        h.core.onBackground(flushed: {})
+        return h
+    }
+
+    @Test func anEventTrackedAfterBackgroundingIsFlushedInsideABackgroundTask() throws {
+        let task = FakeBackgroundTask()
+        let h = backgrounded(task)
+
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "tracked-after-leaving"))
+
+        #expect(task.began.count == 1)
+        #expect(try h.lastEntry()["event"] as? String == "cart.setcoupon")
+        #expect(h.queue.size == 0)
+        #expect(task.ended.count == 1)
+    }
+
+    @Test func thatTaskEndsAfterTheOneAttemptWhenTheEventCannotBeDelivered() {
+        let task = FakeBackgroundTask()
+        let h = backgrounded(task)
+
+        queueOneOffline(h)
+
+        #expect(task.began.count == 1)
+        #expect(task.ended.count == 1)
+    }
+
+    @Test func aPushTokenSyncedAfterBackgroundingIsFlushedInsideABackgroundTaskToo() {
+        let task = FakeBackgroundTask()
+        let h = backgrounded(task)
+
+        h.core.setPushToken("apns-token-abc123")
+
+        #expect(task.began.count == 1)
+        #expect(task.ended.count == 1)
+    }
+
+    @Test func anEventTrackedInTheForegroundHoldsNoBackgroundTask() {
+        let task = FakeBackgroundTask()
+        let h = CoreHarness(backgroundTask: { task.run($0) })
+        h.core.onForeground()
+
+        h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "tracked-in-the-app"))
+
+        #expect(task.began.count == 0)
+        #expect(h.queue.size == 0)
+    }
+
     @Test func backgroundingStillStopsTheHeartbeat() {
         let h = CoreHarness()
         h.core.onForeground()

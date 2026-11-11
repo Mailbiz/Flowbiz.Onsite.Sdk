@@ -20,6 +20,7 @@ final class FlowbizCore: @unchecked Sendable {
     private let deviceContext: DeviceContext
     private let reachability: any ReachabilityMonitor
     private let heartbeatIntervalMillis: Int64
+    private let backgroundTask: BackgroundFlush.Runner?
 
     // Lazy: EventQueue's init reads the file, which must stay off the caller's thread at initialize.
     private let queueFactory: () -> EventQueue
@@ -36,6 +37,8 @@ final class FlowbizCore: @unchecked Sendable {
     struct PageState { let title: String?; let url: String? }
     private var lastPage: PageState?
     private var foregrounded = false
+    // After didEnterBackground, not merely before the first foreground: a launch must not wait on the main thread.
+    private var backgrounded = false
     private var utmContext: String?
 
     init(
@@ -48,7 +51,8 @@ final class FlowbizCore: @unchecked Sendable {
         clock: any Clock,
         deviceContext: DeviceContext,
         reachability: any ReachabilityMonitor,
-        transportScheduler: (any TaskScheduler)? = nil
+        transportScheduler: (any TaskScheduler)? = nil,
+        backgroundTask: BackgroundFlush.Runner? = nil
     ) {
         self.config = config
         self.identityStore = IdentityStore(store: store)
@@ -65,6 +69,7 @@ final class FlowbizCore: @unchecked Sendable {
         self.deviceContext = deviceContext
         self.reachability = reachability
         self.heartbeatIntervalMillis = Int64(config.heartbeatInterval * 1000)
+        self.backgroundTask = backgroundTask
 
         reachability.start { [weak self] in
             guard let self, self.enabledState.isEnabled else { return }
@@ -133,7 +138,7 @@ final class FlowbizCore: @unchecked Sendable {
                     utm: core.utmContext
                 )
                 core.queue.append(try CanonicalJSON.render(entry))
-                core.flushController.requestFlush(.eventTracked)
+                core.flushTrackedEvent()
             } catch {
                 SdkLog.debug("event dropped: serialization failed")
             }
@@ -211,6 +216,7 @@ final class FlowbizCore: @unchecked Sendable {
         submit { core in
             guard !core.foregrounded else { return }
             core.foregrounded = true
+            core.backgrounded = false
             core.sessionManager.onForeground()
             core.refreshUtm(link: nil, slideExpiry: true)
             if core.enabledState.isEnabled {
@@ -224,6 +230,7 @@ final class FlowbizCore: @unchecked Sendable {
     func onBackground(flushed: (@Sendable () -> Void)? = nil) {
         submit { core in
             core.foregrounded = false
+            core.backgrounded = true
             core.heartbeat.stop()
             guard core.enabledState.isEnabled else {
                 flushed?()
@@ -233,6 +240,18 @@ final class FlowbizCore: @unchecked Sendable {
             // and a user who never returns was never seen abandoning the cart.
             core.flushController.requestFlush(.appBackground, onDrained: flushed)
         }
+    }
+
+    // An event tracked after the app left the foreground (in the host's own didEnterBackground handler, say):
+    // the task held for onBackground's flush may be over, and iOS suspends the app within seconds.
+    // One attempt, as there: the task ends with the drain, delivered or not.
+    private func flushTrackedEvent() {
+        guard backgrounded, let backgroundTask else {
+            flushController.requestFlush(.eventTracked)
+            return
+        }
+        let controller = flushController
+        backgroundTask { finished in controller.requestFlush(.eventTracked, onDrained: finished) }
     }
 
     private func buildPingEntry() -> String? {
@@ -317,7 +336,7 @@ final class FlowbizCore: @unchecked Sendable {
                 utm: utmContext
             )
             queue.append(try CanonicalJSON.render(entry))
-            flushController.requestFlush(.eventTracked)
+            flushTrackedEvent()
         } catch {
             SdkLog.debug("\(wireName) dropped: serialization failed")
         }

@@ -125,7 +125,7 @@ object Flowbiz {
     /** For the background job: false when there is no core to flush with, else [finished] gets whether the queue is empty. */
     internal fun backgroundFlush(finished: (queueEmpty: Boolean) -> Unit): Boolean = try {
         val current = core
-        current?.flush(finished)
+        current?.flushFromJob(finished)
         current != null
     } catch (t: Throwable) {
         SdkLog.debug("background flush failed: ${t.javaClass.simpleName}")

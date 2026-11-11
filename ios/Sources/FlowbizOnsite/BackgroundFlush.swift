@@ -3,6 +3,9 @@ import Foundation
 // Holds an OS background task for one flush: iOS suspends the app seconds after it leaves the foreground.
 enum BackgroundFlush {
 
+    /// Runs `flush` inside an OS background task; `flush` reports when it is over.
+    typealias Runner = @Sendable (_ flush: @escaping @Sendable (_ finished: @escaping @Sendable () -> Void) -> Void) -> Void
+
     /// `begin` starts the task and returns how to end it, or nil when iOS grants none (the flush still runs).
     /// The task is ended once: when the flush reports, or when iOS calls time through `onExpire`.
     static func run(

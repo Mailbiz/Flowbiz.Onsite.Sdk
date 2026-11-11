@@ -27,7 +27,11 @@ internal class FlowbizCore(
     // Lazy: the constructor reads the queue file, which must not happen on the caller's main thread.
     private val queue: EventQueue by lazy(queueFactory)
     private val flushController: FlushController by lazy {
-        FlushController(queue, sender, transportScheduler, clock, isActive = { enabledState.isEnabled })
+        FlushController(
+            queue, sender, transportScheduler, clock,
+            isActive = { enabledState.isEnabled },
+            onDrainEnded = ::onDrainEnded,
+        )
     }
 
     private val heartbeat = HeartbeatScheduler(scheduler, sender, transportScheduler) { buildPingEntry() }
@@ -37,6 +41,11 @@ internal class FlowbizCore(
     private var lastPage: PageState? = null
 
     private var foregrounded = false
+
+    // Whether the system holds the flush job, as far as this process knows. Scheduling it again would
+    // replace it, backoff included: with the network up and the collector failing, each retry would start
+    // the job at once, and the job the next retry.
+    private var flushJobScheduled = false
 
     // Declared before init: an inline scheduler runs the startup refresh during construction.
     private val utmStore = UtmStore(store, clock)
@@ -173,6 +182,15 @@ internal class FlowbizCore(
         flushController.requestFlush(FlushController.FlushReason.EXPLICIT, drained?.let { { it(queue.size == 0) } })
     }
 
+    /** The job's flush. The system holds the job while it runs, and reschedules it when [finished] gets false. */
+    fun flushFromJob(finished: (queueEmpty: Boolean) -> Unit) {
+        submit("jobStarted") { flushJobScheduled = true }
+        flush { queueEmpty ->
+            finished(queueEmpty)
+            if (queueEmpty) submit("jobFinished") { flushJobScheduled = false }
+        }
+    }
+
     fun onForeground() = submit("onForeground") {
         if (foregrounded) return@submit
         foregrounded = true
@@ -192,15 +210,33 @@ internal class FlowbizCore(
         // a user who never returns was never seen abandoning the cart. Try now; the job is for a
         // connection too poor for that, and is scheduled first in case the process dies meanwhile.
         if (queue.size > 0) {
-            backgroundFlush.schedule()
+            scheduleFlushJob()
             flushController.requestFlush(FlushController.FlushReason.APP_BACKGROUND) {
                 // Back on this thread, serialized with schedule(): decided on the transport's, the cancel
                 // could land after an event was tracked and a second onBackground had scheduled its job.
                 submit("backgroundFlushed") {
-                    if (queue.size == 0) backgroundFlush.cancel()
+                    if (queue.size == 0) cancelFlushJob()
                 }
             }
         }
+    }
+
+    // An event tracked after onBackground (a CartSync in onStop, from a service or a receiver) that could
+    // not be sent: the in-process retry dies with the process, so the job has to carry it.
+    private fun onDrainEnded(retryScheduled: Boolean) = submit("drainEnded") {
+        if (retryScheduled && !foregrounded && enabledState.isEnabled) scheduleFlushJob()
+    }
+
+    private fun scheduleFlushJob() {
+        if (flushJobScheduled) return
+        flushJobScheduled = true
+        backgroundFlush.schedule()
+    }
+
+    private fun cancelFlushJob() {
+        if (!flushJobScheduled) return
+        flushJobScheduled = false
+        backgroundFlush.cancel()
     }
 
     private fun identify(user: User) {

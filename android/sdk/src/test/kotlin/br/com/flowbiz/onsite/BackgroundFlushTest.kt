@@ -83,6 +83,63 @@ class BackgroundFlushTest {
     }
 
     @Test
+    fun anEventTrackedOfflineAfterBackgroundingLeavesAJob() {
+        val h = harness()
+        h.core.onBackground() // nothing queued yet: no job
+        assertEquals(emptyList<String>(), job.calls)
+
+        h.queueOneOffline() // a CartSync in onStop after super.onStop(), or from a service
+
+        assertEquals(listOf("schedule"), job.calls)
+    }
+
+    @Test
+    fun anEventTrackedOfflineInTheForegroundLeavesNoJob() {
+        val h = harness()
+        h.queueOneOffline()
+        assertEquals(emptyList<String>(), job.calls)
+    }
+
+    @Test
+    fun theRetriesOfTheProcessKeepTheOneJob() {
+        val h = harness()
+        h.core.onBackground()
+        h.queueOneOffline()
+
+        h.scheduler.runLastScheduled() // the in-process retry fails again
+        h.core.onBackground()
+
+        // Scheduling again would replace the job, and with the network up it would start at once.
+        assertEquals(listOf("schedule"), job.calls)
+    }
+
+    @Test
+    fun aJobWhoseFlushFailsIsLeftForTheSystemToReschedule() {
+        val h = CoreHarness(temp.newFolder(), backgroundFlush = job) // a process started for the job
+        h.queue.append("{\"event\":\"cart.sync\"}")
+        h.sender.defaultResult = SendResult.RETRIABLE_ERROR
+        val reports = mutableListOf<Boolean>()
+
+        h.core.flushFromJob { reports += it }
+
+        assertEquals(listOf(false), reports) // jobFinished(reschedule = true)
+        assertEquals(emptyList<String>(), job.calls)
+    }
+
+    @Test
+    fun afterAJobEmptiedTheQueueALaterEventGetsANewOne() {
+        val h = CoreHarness(temp.newFolder(), backgroundFlush = job)
+        h.queue.append("{\"event\":\"cart.sync\"}")
+        val reports = mutableListOf<Boolean>()
+
+        h.core.flushFromJob { reports += it }
+        assertEquals(listOf(true), reports) // the system drops the job
+        h.queueOneOffline()
+
+        assertEquals(listOf("schedule"), job.calls)
+    }
+
+    @Test
     fun anEmptyQueueSchedulesNothing() {
         val h = harness()
         h.core.track(Event.PageView("home"))
