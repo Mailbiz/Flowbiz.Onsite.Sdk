@@ -252,7 +252,10 @@ identified, abandoned and recovered, the backend needs:
   does: both are lowercased, an invalid email or a placeholder `userId`
   (`"0"`, `"null"`, a single character…) is left out, and
   `identity.user_id` is the `userId`, or the email without one. An account
-  event left with neither is not sent.
+  event left with neither is not sent. One difference from the web: an email
+  with no `@` or with a space (`"maria"`) makes the web tag reject the whole
+  account event; the SDK leaves only that email out and still sends the
+  event with a valid `userId`, so the user stays identified.
 - **`User.createdAt` in ISO 8601** (`2026-10-19T14:03:00-03:00`): any other
   format drops the account event.
 - **`items = emptyList()` / `items: []` to empty a cart**: a `CartSync`
