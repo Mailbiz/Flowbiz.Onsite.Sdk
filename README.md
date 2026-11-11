@@ -494,7 +494,8 @@ under the tag / category `FlowbizOnsite`):
    demo, then go back online. The log shows
    `flush requested: NETWORK_RESTORED` (or `APP_FOREGROUND`, opened online)
    and `background flush job cancelled`; the POST succeeds and the job is
-   gone from `dumpsys`. Repeat with
+   gone from `dumpsys`. The job may start as well when the network returns
+   (one `flush requested: EXPLICIT`); it is cancelled all the same. Repeat with
    `adb shell am kill br.com.flowbiz.onsite.demo` before opening the demo:
    the job a previous process left is cancelled the same way.
 7. Opt-out: offline with a job pending, open the demo and turn the
