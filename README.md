@@ -491,7 +491,10 @@ under the tag / category `FlowbizOnsite`):
    `override fun onStop() { super.onStop(); Flowbiz.track(Event.CartSync(DemoCart.toCart())) }`.
    Launch it online (the queue empties, no job in `dumpsys`), go offline and
    press Home. The log shows `flush requested: EVENT_TRACKED` with no
-   `APP_BACKGROUND` before it, and `dumpsys` lists the job.
+   `APP_BACKGROUND` before it, and `dumpsys` lists the job. Change the cart
+   (add a product or a coupon) before each rerun: an identical `cart.sync`
+   is deduplicated for 20 minutes, also across launches, and logs
+   `event suppressed: duplicate cart.sync` instead.
 6. Cancel on foreground: with that job pending and still offline, open the
    demo, then go back online. The log shows
    `flush requested: NETWORK_RESTORED` (or `APP_FOREGROUND`, opened online)
