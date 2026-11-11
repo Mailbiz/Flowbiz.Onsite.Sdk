@@ -197,6 +197,19 @@ class BackgroundFlushTest {
     }
 
     @Test
+    fun disablingCancelsTheJobItLeft() {
+        val h = harness()
+        h.queueOneOffline()
+        h.core.onBackground()
+        assertEquals(listOf("schedule"), job.calls)
+
+        h.core.setEnabled(false)
+
+        // After an opt-out the SDK must not wake the app, even for a job that would send nothing.
+        assertEquals(listOf("schedule", "cancel"), job.calls)
+    }
+
+    @Test
     fun theJobFlushesThroughTheCoreAndReportsWhetherTheQueueIsEmpty() {
         val h = harness()
         h.queueOneOffline()

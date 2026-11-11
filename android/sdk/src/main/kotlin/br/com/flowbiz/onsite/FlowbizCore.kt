@@ -160,6 +160,8 @@ internal class FlowbizCore(
         enabledState.setEnabled(enabled)
         if (!enabled) {
             heartbeat.stop()
+            // The job would send nothing, but it would still start the app's process after the opt-out.
+            cancelFlushJob()
             SdkLog.debug("SDK disabled: heartbeat stopped, events dropped, network gated")
         } else if (!wasEnabled) {
             if (foregrounded) heartbeat.start(heartbeatIntervalMillis)

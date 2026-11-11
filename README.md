@@ -312,8 +312,9 @@ nothing to set up in the host app:
   namespace.
 
 While the SDK is disabled neither sends anything, and no job is scheduled. A
-job scheduled before the opt-out is not cancelled: Android may still start
-the process for it, where it ends at once without a network call. Neither
+job the running process scheduled is cancelled at the opt-out. One left by a
+previous process is not: Android may still start the process for it, where
+it ends at once without a network call. Neither
 tracks anything: only events the app already tracked are sent, and no
 heartbeat runs in the background.
 
