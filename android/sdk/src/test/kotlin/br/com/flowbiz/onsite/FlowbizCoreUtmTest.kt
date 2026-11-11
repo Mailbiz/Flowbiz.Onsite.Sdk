@@ -253,6 +253,22 @@ class FlowbizCoreUtmTest {
     }
 
     @Test
+    fun onlyTheLastTwentyLinksForwardedBeforeInitializeAreKept() {
+        val h = harness()
+        try {
+            Flowbiz.forwardLink("https://store.com/?utm_medium=the-oldest")
+            repeat(20) { Flowbiz.forwardLink("https://store.com/?utm_source=link-${it + 1}") }
+            val field = Flowbiz::class.java.getDeclaredField("pendingLinks").apply { isAccessible = true }
+            assertEquals(20, (field.get(null) as Collection<*>).size)
+            withInstalledCore(h.core) {
+                assertEquals("""{"utm_source":"link-20"}""", h.trackProbe())
+            }
+        } finally {
+            discardPendingLinks()
+        }
+    }
+
+    @Test
     fun theLandingPageViewCarriesANewCaptureWhileAnIdenticalPayloadStaysDeduped() {
         val h = harness()
         val coupon = Event.CartSetCoupon(cartId = "c-1", coupon = "same")

@@ -19,7 +19,9 @@ object Flowbiz {
     private var core: FlowbizCore? = null
 
     // Links forwarded before initialize; their UTMs are captured when it runs. Guarded by this.
+    // Capped: initialize may never succeed, and the newest links win the merge anyway.
     private val pendingLinks = ArrayDeque<String>()
+    private const val MAX_PENDING_LINKS = 20
 
     /** Call once, from `Application.onCreate`; later calls are ignored. */
     @JvmStatic
@@ -126,7 +128,10 @@ object Flowbiz {
     internal fun forwardLink(link: String?): RecoveryPayload? {
         if (link == null) return null
         val current = synchronized(this) {
-            if (core == null) pendingLinks.addLast(link)
+            if (core == null) {
+                if (pendingLinks.size >= MAX_PENDING_LINKS) pendingLinks.removeFirst()
+                pendingLinks.addLast(link)
+            }
             core
         }
         return handleLink(link, current)

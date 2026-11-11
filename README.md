@@ -231,7 +231,7 @@ Forward every link the app is opened with, recovery link or not:
 - **Push tap**: `handlePushOpened(push)`; `handlePush` never captures.
 
 A link forwarded before `initialize` is still decoded, and its UTMs are
-captured when `initialize` runs. Capturing sends nothing: after forwarding a
+captured when `initialize` runs (the last 20 such links are kept). Capturing sends nothing: after forwarding a
 link, on a cold or a warm open, track the screen's `PageView`, so the campaign
 goes out at once. An `OrderComplete` with a real `orderId` is credited to the
 campaign on its own `context.utm`, which replaces the cart's; an order sent

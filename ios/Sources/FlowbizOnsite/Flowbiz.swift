@@ -12,7 +12,9 @@ public enum Flowbiz {
         private var core: FlowbizCore?
         private var observers: [NSObjectProtocol] = []
         // Links forwarded before initialize; their UTMs are captured when it runs.
+        // Capped: initialize may never succeed, and the newest links win the merge anyway.
         private var pendingLinks: [String] = []
+        private static let maxPendingLinks = 20
 
         var currentCore: FlowbizCore? {
             lock.lock()
@@ -36,7 +38,10 @@ public enum Flowbiz {
         func coreOrPending(_ link: String) -> FlowbizCore? {
             lock.lock()
             defer { lock.unlock() }
-            if core == nil { pendingLinks.append(link) }
+            if core == nil {
+                if pendingLinks.count >= Self.maxPendingLinks { pendingLinks.removeFirst() }
+                pendingLinks.append(link)
+            }
             return core
         }
 

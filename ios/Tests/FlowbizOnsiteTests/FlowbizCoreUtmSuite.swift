@@ -216,6 +216,17 @@ import Testing
         #expect(try trackProbe(h) == journey.expected)
     }
 
+    @Test func onlyTheLastTwentyLinksForwardedBeforeInitializeAreKept() throws {
+        let state = Flowbiz.State()
+        let h = harness()
+        _ = Flowbiz.forwardLink("https://store.com/?utm_medium=the-oldest", state: state)
+        for index in 1...20 {
+            _ = Flowbiz.forwardLink("https://store.com/?utm_source=link-\(index)", state: state)
+        }
+        _ = state.installIfAbsent { h.core }
+        #expect(try trackProbe(h) == #"{"utm_source":"link-20"}"#)
+    }
+
     @Test func thePublicHandleLinkReachesTheInstalledCore() throws {
         let link = journey.url.replacingOccurrences(of: "|", with: "%7C")
         for (appId, cartId) in [("77777", "cart-abc-001"), ("88888", nil)] as [(String, String?)] {
