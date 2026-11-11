@@ -18,7 +18,15 @@ internal class FakeTaskScheduler : TaskScheduler {
     val allScheduleDelays: List<Long>
         get() = scheduled.filter { !it.repeating }.map { it.delayMillis }
 
-    override fun execute(task: Runnable) = task.run()
+    // Set to hold execute() tasks until runNextDeferred(), as a busy serial thread would.
+    var deferExecute = false
+    val deferred = ArrayDeque<Runnable>()
+
+    override fun execute(task: Runnable) {
+        if (deferExecute) deferred += task else task.run()
+    }
+
+    fun runNextDeferred() = deferred.removeFirst().run()
 
     override fun schedule(delayMillis: Long, task: Runnable): ScheduledHandle =
         FakeHandle(delayMillis, task, repeating = false).also { scheduled += it }

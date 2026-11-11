@@ -20,7 +20,8 @@ class BackgroundFlushTest {
 
     private val job = FakeBackgroundFlush()
 
-    private fun harness() = CoreHarness(temp.newFolder(), backgroundFlush = job)
+    // In the foreground, as an app is before it can go to the background.
+    private fun harness() = CoreHarness(temp.newFolder(), backgroundFlush = job).also { it.core.onForeground() }
 
     private fun CoreHarness.queueOneOffline() {
         sender.defaultResult = SendResult.RETRIABLE_ERROR
@@ -60,6 +61,24 @@ class BackgroundFlushTest {
 
         h.core.onBackground()
 
+        assertEquals(listOf("schedule", "cancel"), job.calls)
+    }
+
+    @Test
+    fun theJobIsCancelledOnTheSdkThreadWhereItIsScheduled() {
+        val h = CoreHarness(temp.newFolder(), backgroundFlush = job, transportScheduler = FakeTaskScheduler())
+        h.core.onForeground()
+        h.queueOneOffline()
+        h.sender.defaultResult = SendResult.SUCCESS
+
+        h.scheduler.deferExecute = true
+        h.core.onBackground()
+        h.scheduler.runNextDeferred() // onBackground; the transport drains inline and empties the queue
+
+        // Not from the transport thread: there it could cancel the job a later onBackground scheduled.
+        assertEquals(0, h.queue.size)
+        assertEquals(listOf("schedule"), job.calls)
+        h.scheduler.runNextDeferred()
         assertEquals(listOf("schedule", "cancel"), job.calls)
     }
 

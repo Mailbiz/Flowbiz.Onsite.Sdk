@@ -36,6 +36,7 @@ internal class CoreHarness(
     val device: FakeDeviceContext = FakeDeviceContext(),
     val reachability: FakeReachability = FakeReachability(),
     backgroundFlush: BackgroundFlush = BackgroundFlush.None,
+    transportScheduler: TaskScheduler = scheduler,
 ) {
     val queue = EventQueue(File(queueDir, "queue.jsonl"))
     private val pushTokenFile = File(queueDir, "push_token")
@@ -51,6 +52,7 @@ internal class CoreHarness(
         clock = clock,
         deviceContext = device,
         reachability = reachability,
+        transportScheduler = transportScheduler,
         backgroundFlush = backgroundFlush,
     )
 

@@ -194,7 +194,11 @@ internal class FlowbizCore(
         if (queue.size > 0) {
             backgroundFlush.schedule()
             flushController.requestFlush(FlushController.FlushReason.APP_BACKGROUND) {
-                if (queue.size == 0) backgroundFlush.cancel()
+                // Back on this thread, serialized with schedule(): decided on the transport's, the cancel
+                // could land after an event was tracked and a second onBackground had scheduled its job.
+                submit("backgroundFlushed") {
+                    if (queue.size == 0) backgroundFlush.cancel()
+                }
             }
         }
     }
