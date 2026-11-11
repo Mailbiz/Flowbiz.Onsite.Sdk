@@ -489,18 +489,23 @@ under the tag / category `FlowbizOnsite`):
 5. Event after backgrounding. The demo tracks nothing outside an activity,
    so add to `MainActivity`, locally and uncommitted:
    `override fun onStop() { super.onStop(); Flowbiz.track(Event.CartSync(DemoCart.toCart())) }`.
-   Launch it online (the queue empties, no job in `dumpsys`), go offline and
-   press Home. The log shows `flush requested: EVENT_TRACKED` with no
-   `APP_BACKGROUND` before it, and `dumpsys` lists the job. Change the cart
-   (add a product or a coupon) before each rerun: an identical `cart.sync`
-   is deduplicated for 20 minutes, also across launches, and logs
+   Launch it online and add a product (the queue empties, no job in
+   `dumpsys`). Go offline, tap +1 or apply a coupon, and press Home. The log
+   shows `flush requested: EVENT_TRACKED` with no `APP_BACKGROUND` before it,
+   and `dumpsys` lists the job. The +1 or coupon is what makes the `onStop`
+   `cart.sync` differ from the one "Adicionar ao carrinho" already tracked.
+   The demo cart resets on a cold launch, so use a different quantity or
+   coupon code on each rerun: an identical `cart.sync` is deduplicated for
+   20 minutes, also across launches, and logs
    `event suppressed: duplicate cart.sync` instead.
 6. Cancel on foreground: with that job pending and still offline, open the
    demo, then go back online. The log shows
    `flush requested: NETWORK_RESTORED` (or `APP_FOREGROUND`, opened online)
    and `background flush job cancelled`; the POST succeeds and the job is
    gone from `dumpsys`. The job may start as well when the network returns
-   (one `flush requested: EXPLICIT`); it is cancelled all the same. Repeat with
+   (one `flush requested: EXPLICIT`); if it finishes before the cancel,
+   `background flush job cancelled` is not logged, but the job is gone from
+   `dumpsys` all the same. Repeat with
    `adb shell am kill br.com.flowbiz.onsite.demo` before opening the demo:
    the job a previous process left is cancelled the same way.
 7. Opt-out: offline with a job pending, open the demo and turn the
