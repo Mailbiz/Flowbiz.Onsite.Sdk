@@ -5,8 +5,11 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
+import android.view.View
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -342,7 +345,30 @@ class MainActivity : Activity() {
         }
         column.label(title, size = 22f, bold = true)
         column.build()
-        setContentView(ScrollView(this).apply { addView(column) })
+        setContentView(ScrollView(this).apply {
+            addView(column)
+            padForSystemBars()
+        })
+    }
+
+    // Edge to edge is enforced from Android 15 on (targetSdk 35): unpadded, the first views of a screen
+    // sit under the action bar, which takes their taps. Every screen is built by content().
+    private fun View.padForSystemBars() {
+        setOnApplyWindowInsetsListener { view, insets ->
+            if (Build.VERSION.SDK_INT >= 30) {
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            } else {
+                @Suppress("DEPRECATION")
+                view.setPadding(
+                    insets.systemWindowInsetLeft,
+                    insets.systemWindowInsetTop,
+                    insets.systemWindowInsetRight,
+                    insets.systemWindowInsetBottom,
+                )
+            }
+            insets
+        }
     }
 
     private fun LinearLayout.label(text: String, size: Float = 14f, bold: Boolean = false): TextView {
