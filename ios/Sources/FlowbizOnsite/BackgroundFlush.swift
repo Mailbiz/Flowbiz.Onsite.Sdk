@@ -10,10 +10,14 @@ enum BackgroundFlush {
     /// The task is ended once: when the flush reports, or when iOS calls time through `onExpire`.
     static func run(
         begin: (_ onExpire: @escaping @Sendable () -> Void) -> (@Sendable () -> Void)?,
-        flush: (_ finished: @escaping @Sendable () -> Void) -> Void
+        flush: (_ finished: @escaping @Sendable () -> Void) -> Void,
+        log: @escaping @Sendable (String) -> Void = { SdkLog.debug($0) }
     ) {
         let task = EndOnce()
-        task.set(end: begin { task.finish() })
+        let end = begin { task.finish() }
+        // What a release check reads: the begin and the end of the task, once each.
+        log(end == nil ? "background task not granted" : "background task begun")
+        task.set(end: end.map { end in { end(); log("background task ended") } })
         flush { task.finish() }
     }
 

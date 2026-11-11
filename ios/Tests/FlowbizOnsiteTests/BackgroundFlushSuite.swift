@@ -54,6 +54,26 @@ import Testing
         #expect(ended.count == 1)
     }
 
+    @Test func theTaskIsLoggedWhenBegunAndWhenEnded() {
+        let log = LogCapture()
+        let done = Callback()
+        BackgroundFlush.run(
+            begin: { _ in {} },
+            flush: { finished in done.run = finished },
+            log: { log.append($0) }
+        )
+        #expect(log.messages == ["background task begun"])
+        done.run?()
+        done.run?()
+        #expect(log.messages == ["background task begun", "background task ended"])
+    }
+
+    @Test func aRefusedTaskIsLoggedAsNotGranted() {
+        let log = LogCapture()
+        BackgroundFlush.run(begin: { _ in nil }, flush: { finished in finished() }, log: { log.append($0) })
+        #expect(log.messages == ["background task not granted"])
+    }
+
     @Test func aRefusedTaskStillFlushes() {
         let flushed = Counter()
         BackgroundFlush.run(begin: { _ in nil }, flush: { finished in flushed.increment(); finished() })

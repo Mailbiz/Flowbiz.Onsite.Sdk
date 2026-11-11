@@ -484,13 +484,32 @@ under the tag / category `FlowbizOnsite`):
    single `START` / `STOP … app called jobFinished`, the job still pending.
 4. `adb shell cmd connectivity airplane-mode disable`: the job runs again
    within a minute, the POST succeeds and the job is gone from `dumpsys`.
+5. Event after backgrounding. The demo tracks nothing outside an activity,
+   so add to `MainActivity`, locally and uncommitted:
+   `override fun onStop() { super.onStop(); Flowbiz.track(Event.CartSync(DemoCart.toCart())) }`.
+   Launch it online (the queue empties, no job in `dumpsys`), go offline and
+   press Home. The log shows `flush requested: EVENT_TRACKED` with no
+   `APP_BACKGROUND` before it, and `dumpsys` lists the job.
+6. Cancel on foreground: with that job pending and still offline, open the
+   demo, then go back online. The log shows
+   `flush requested: NETWORK_RESTORED` (or `APP_FOREGROUND`, opened online)
+   and `background flush job cancelled`; the POST succeeds and the job is
+   gone from `dumpsys`. Repeat with
+   `adb shell am kill br.com.flowbiz.onsite.demo` before opening the demo:
+   the job a previous process left is cancelled the same way.
+7. Opt-out: offline with a job pending, open the demo and turn the
+   `setEnabled` switch off: `background flush job cancelled`, and the job is
+   gone from `dumpsys`.
 
 **iOS** (simulator, demo bundle id `br.com.flowbiz.onsite.FlowbizDemo`):
 
 1. `xcrun simctl spawn booted log stream --level debug --predicate 'subsystem == "br.com.flowbiz.onsite"'`
 2. `xcrun simctl launch booted br.com.flowbiz.onsite.FlowbizDemo`, then send
    it to the background with `xcrun simctl launch booted com.apple.Preferences`:
-   the log shows `flush requested: appBackground`.
+   the log shows `background task begun`, `flush requested: appBackground`
+   and, once the flush is over, a single `background task ended`.
+   `background task not granted` instead of the pair means iOS gave the
+   flush no background time.
 3. Launch the demo again: same process id, `flush requested: appForeground`.
 
 ### Releasing a new version
