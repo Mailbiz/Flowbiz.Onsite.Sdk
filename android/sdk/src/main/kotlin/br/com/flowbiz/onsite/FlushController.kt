@@ -18,6 +18,7 @@ internal class FlushController(
     private val lock = Any()
     private var draining = false
     private var drainAgain = false
+    private var drainQueued = false
     private var backoffMillis = INITIAL_BACKOFF_MS
     private var retryHandle: ScheduledHandle? = null
 
@@ -29,6 +30,11 @@ internal class FlushController(
                 retryHandle = null
             }
             SdkLog.debug("flush requested: $reason")
+            // One waiting drain is enough: triggers that arrive while a send blocks would only repeat it.
+            synchronized(lock) {
+                if (drainQueued) return
+                drainQueued = true
+            }
             scheduler.execute { drain() }
         } catch (t: Throwable) {
             SdkLog.debug("requestFlush failed: ${t.javaClass.simpleName}")
@@ -36,6 +42,7 @@ internal class FlushController(
     }
 
     private fun drain() {
+        synchronized(lock) { drainQueued = false }
         if (!isActive()) {
             SdkLog.debug("drain skipped: SDK disabled")
             return
@@ -49,8 +56,9 @@ internal class FlushController(
             draining = true
         }
         try {
-            while (queue.size > 0) {
-                val outcome = drainPrefix(minOf(batchSize, queue.size))
+            // isActive again per batch: setEnabled(false) no longer waits for this thread.
+            while (queue.size > 0 && isActive()) {
+                val outcome = drainPrefix(batchSize)
                 if (outcome == Outcome.STOP_AND_RETRY) {
                     scheduleRetry()
                     break
@@ -70,11 +78,12 @@ internal class FlushController(
     }
 
     private fun drainPrefix(count: Int): Outcome {
-        val entries = queue.peek(count)
+        val batch = queue.peek(count)
+        val entries = batch.entries
         if (entries.isEmpty()) return Outcome.CONTINUE
         return when (sender.send(buildBody(entries))) {
             SendResult.SUCCESS -> {
-                queue.removeOldest(entries.size)
+                queue.remove(batch)
                 Outcome.CONTINUE
             }
 
@@ -84,7 +93,7 @@ internal class FlushController(
             SendResult.PAYLOAD_TOO_LARGE, SendResult.PERMANENT_ERROR -> {
                 if (entries.size == 1) {
                     SdkLog.debug("dropping poison event (rejected by collector)")
-                    queue.removeOldest(1)
+                    queue.remove(batch)
                     Outcome.CONTINUE
                 } else {
                     val half = entries.size / 2

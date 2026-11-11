@@ -10,7 +10,7 @@ internal enum class SendResult {
     PAYLOAD_TOO_LARGE,
 }
 
-// Blocking by design: only ever called on the SDK's serial scheduler, never the caller's thread.
+// Blocking by design: only ever called on the transport's serial scheduler, never the caller's or the SDK's.
 internal interface HttpSender {
     fun send(body: String): SendResult
 }

@@ -41,19 +41,20 @@ object Flowbiz {
                 }
                 val sanitized = ConfigSanitizer.sanitize(config) ?: return
                 val appContext = context.applicationContext
-                val executor = Executors.newSingleThreadScheduledExecutor { runnable ->
-                    Thread(runnable, "flowbiz-onsite").apply { isDaemon = true }
-                }
+                fun serialScheduler(name: String) = ExecutorTaskScheduler(
+                    Executors.newSingleThreadScheduledExecutor { runnable -> Thread(runnable, name).apply { isDaemon = true } }
+                )
                 val created = FlowbizCore(
                     config = sanitized,
                     store = SharedPreferencesStore(appContext, sanitized.appId),
                     queueFactory = { EventQueue(EventQueue.defaultFile(appContext, sanitized.appId), nowMillis = AndroidClock::wallMillis) },
                     pushTokenFile = { PushTokenStore.defaultFile(appContext, sanitized.appId) },
                     sender = HttpUrlSender(sanitized.collectorUrl, FlowbizCore.PLATFORM),
-                    scheduler = ExecutorTaskScheduler(executor),
+                    scheduler = serialScheduler("flowbiz-onsite"),
                     clock = AndroidClock,
                     deviceContext = AndroidDeviceContext(appContext),
                     reachability = AndroidReachability(appContext),
+                    transportScheduler = serialScheduler("flowbiz-onsite-transport"),
                 )
                 install(created)
                 val application = appContext as? Application

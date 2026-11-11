@@ -14,6 +14,8 @@ final class FlowbizCore: @unchecked Sendable {
     private let utmStore: UtmStore
     private let sender: any HttpSender
     private let scheduler: any TaskScheduler
+    // Its own serial queue: a blocking POST must not hold the SDK queue, where track() persists the event.
+    private let transportScheduler: any TaskScheduler
     private let clock: any Clock
     private let deviceContext: DeviceContext
     private let reachability: any ReachabilityMonitor
@@ -25,7 +27,9 @@ final class FlowbizCore: @unchecked Sendable {
     private var lazyQueue: EventQueue?
     private var lazyFlushController: FlushController?
 
-    private lazy var heartbeat = HeartbeatScheduler(scheduler: scheduler, sender: sender) { [weak self] in
+    private lazy var heartbeat = HeartbeatScheduler(
+        scheduler: scheduler, sender: sender, transport: transportScheduler
+    ) { [weak self] in
         self?.buildPingEntry()
     }
 
@@ -43,7 +47,8 @@ final class FlowbizCore: @unchecked Sendable {
         scheduler: any TaskScheduler,
         clock: any Clock,
         deviceContext: DeviceContext,
-        reachability: any ReachabilityMonitor
+        reachability: any ReachabilityMonitor,
+        transportScheduler: (any TaskScheduler)? = nil
     ) {
         self.config = config
         self.identityStore = IdentityStore(store: store)
@@ -55,6 +60,7 @@ final class FlowbizCore: @unchecked Sendable {
         self.queueFactory = queueFactory
         self.sender = sender
         self.scheduler = scheduler
+        self.transportScheduler = transportScheduler ?? scheduler
         self.clock = clock
         self.deviceContext = deviceContext
         self.reachability = reachability
@@ -358,7 +364,7 @@ final class FlowbizCore: @unchecked Sendable {
         let controller = FlushController(
             queue: queue,
             sender: sender,
-            scheduler: scheduler,
+            scheduler: transportScheduler,
             clock: clock,
             isActive: { enabledState.isEnabled }
         )

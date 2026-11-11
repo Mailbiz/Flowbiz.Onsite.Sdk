@@ -2,7 +2,14 @@ import Foundation
 
 // At-least-once: removed lines stay in the file until compaction, so a crash can re-send delivered events
 // (the collector does not deduplicate on `hash`).
-final class EventQueue {
+// Shared by two queues: the SDK's appends while the transport's peeks, sends and removes.
+final class EventQueue: @unchecked Sendable {
+
+    /// A prefix of the queue as `peek` saw it.
+    struct Batch {
+        let entries: [String]
+        fileprivate let endSequence: Int64
+    }
 
     static let defaultCapacity = 1000
     static let compactStaleThreshold = 64
@@ -13,7 +20,11 @@ final class EventQueue {
     private let fileURL: URL
     private let tmpURL: URL
     private let capacity: Int
+    private let lock = NSLock()
     private var pending: [String] = []
+
+    // Sequence number of the head: entries evicted at capacity while a batch is in flight are not removed twice.
+    private var headSequence: Int64 = 0
 
     private var staleLines = 0
 
@@ -31,14 +42,22 @@ final class EventQueue {
         load(nowMillis: nowMillis())
     }
 
-    var size: Int { pending.count }
+    var size: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return pending.count
+    }
 
-    func peek(_ max: Int) -> [String] {
-        guard max > 0, !pending.isEmpty else { return [] }
-        return Array(pending.prefix(max))
+    func peek(_ max: Int) -> Batch {
+        lock.lock()
+        defer { lock.unlock() }
+        let entries = Array(pending.prefix(Swift.max(max, 0)))
+        return Batch(entries: entries, endSequence: headSequence + Int64(entries.count))
     }
 
     func append(_ entry: String) {
+        lock.lock()
+        defer { lock.unlock() }
         guard !entry.contains("\n"), !entry.contains("\r"),
               !entry.trimmingCharacters(in: .whitespaces).isEmpty else {
             SdkLog.debug("queue rejected malformed entry")
@@ -46,6 +65,7 @@ final class EventQueue {
         }
         if pending.count >= capacity {
             pending.removeFirst()
+            headSequence += 1
             staleLines += 1
             SdkLog.debug("queue at capacity \(capacity), dropped oldest event")
         }
@@ -59,10 +79,14 @@ final class EventQueue {
         compactIfNeeded()
     }
 
-    func removeOldest(_ count: Int) {
-        let removable = min(count, pending.count)
+    /// Removes what is still queued of `batch`.
+    func remove(_ batch: Batch) {
+        lock.lock()
+        defer { lock.unlock() }
+        let removable = Int(min(batch.endSequence - headSequence, Int64(pending.count)))
         if removable > 0 {
             pending.removeFirst(removable)
+            headSequence += Int64(removable)
             staleLines += removable
         }
         compactIfNeeded()

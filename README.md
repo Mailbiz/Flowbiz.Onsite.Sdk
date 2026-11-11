@@ -302,7 +302,9 @@ never blocks and survives offline: events are persisted to a disk queue
 (cap 1000, drop-oldest; an event still undelivered 7 days after it was
 tracked is dropped when the queue next loads, at the first use after a
 process start) and flushed with exponential backoff on network
-restore, app foreground, the next track, or `flush()`. Identical payloads per
+restore, app foreground, the next track, or `flush()`. An event reaches the
+disk at once, also while a send is in flight: the network runs on its own
+thread, apart from the one that persists. Identical payloads per
 event type are deduplicated for 20 minutes, except `PageView`, which is always
 sent (as on web); nothing else is filtered: a `cartSync` with an empty cart is
 sent. There is no runtime schema validation

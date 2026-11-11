@@ -1,13 +1,18 @@
 package br.com.flowbiz.onsite
 
+import java.util.concurrent.atomic.AtomicBoolean
+
+// Ticks on the SDK scheduler, where the envelope is built; the blocking POST goes to the transport's.
 internal class HeartbeatScheduler(
     private val scheduler: TaskScheduler,
     private val sender: HttpSender,
+    private val transport: TaskScheduler = scheduler,
     private val envelopeProvider: () -> String?,
 ) {
 
     private val lock = Any()
     private var handle: ScheduledHandle? = null
+    private val sending = AtomicBoolean(false)
 
     fun start(intervalMillis: Long) {
         synchronized(lock) {
@@ -29,11 +34,26 @@ internal class HeartbeatScheduler(
     }
 
     private fun tick() {
+        // A ping still waiting behind a slow send is not joined by another.
+        if (!sending.compareAndSet(false, true)) return
         try {
-            val entry = envelopeProvider() ?: return
-            // Straight to the sender, result ignored: queued offline pings would evict real events.
-            sender.send("{\"data\":[$entry]}")
+            val entry = envelopeProvider()
+            if (entry == null) {
+                sending.set(false)
+                return
+            }
+            transport.execute {
+                try {
+                    // Straight to the sender, result ignored: queued offline pings would evict real events.
+                    sender.send("{\"data\":[$entry]}")
+                } catch (t: Throwable) {
+                    SdkLog.debug("heartbeat send failed: ${t.javaClass.simpleName}")
+                } finally {
+                    sending.set(false)
+                }
+            }
         } catch (t: Throwable) {
+            sending.set(false)
             SdkLog.debug("heartbeat tick failed: ${t.javaClass.simpleName}")
         }
     }

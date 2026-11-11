@@ -10,13 +10,22 @@ import java.time.Instant
 
 // At-least-once: removed lines stay in the file until compaction, so a crash can re-send delivered events
 // (the collector does not deduplicate on `hash`).
+// Shared by two threads: the SDK thread appends while the transport thread peeks, sends and removes.
 internal class EventQueue(
     private val file: File,
     private val capacity: Int = DEFAULT_CAPACITY,
     nowMillis: () -> Long = System::currentTimeMillis,
 ) {
 
+    /** A prefix of the queue as [peek] saw it. */
+    class Batch internal constructor(val entries: List<String>, internal val endSequence: Long)
+
+    private val lock = Any()
+
     private val pending = ArrayDeque<String>()
+
+    // Sequence number of the head: entries evicted at capacity while a batch is in flight are not removed twice.
+    private var headSequence = 0L
 
     private var staleLines = 0
 
@@ -58,21 +67,21 @@ internal class EventQueue(
     }
 
     val size: Int
-        get() = pending.size
+        get() = synchronized(lock) { pending.size }
 
-    fun peek(max: Int): List<String> {
-        if (max <= 0 || pending.isEmpty()) return emptyList()
-        val count = minOf(max, pending.size)
-        return List(count) { pending[it] }
+    fun peek(max: Int): Batch = synchronized(lock) {
+        val count = minOf(maxOf(max, 0), pending.size)
+        Batch(List(count) { pending[it] }, headSequence + count)
     }
 
-    fun append(entry: String) {
+    fun append(entry: String) = synchronized(lock) {
         if (entry.isBlank() || entry.contains('\n') || entry.contains('\r')) {
             SdkLog.debug("queue rejected malformed entry")
             return
         }
         if (pending.size >= capacity) {
             pending.removeFirst()
+            headSequence += 1
             staleLines += 1
             SdkLog.debug("queue at capacity $capacity, dropped oldest event")
         }
@@ -94,10 +103,12 @@ internal class EventQueue(
         compactIfNeeded()
     }
 
-    fun removeOldest(count: Int) {
-        var remaining = minOf(count, pending.size)
+    /** Removes what is still queued of [batch]. */
+    fun remove(batch: Batch) = synchronized(lock) {
+        var remaining = minOf(batch.endSequence - headSequence, pending.size.toLong())
         while (remaining > 0) {
             pending.removeFirst()
+            headSequence += 1
             staleLines += 1
             remaining -= 1
         }

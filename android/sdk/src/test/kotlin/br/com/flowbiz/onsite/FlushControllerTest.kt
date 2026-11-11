@@ -64,7 +64,7 @@ class FlushControllerTest {
         (1..5).forEach { queue.append(entry(it)) }
         sender.results.addAll(listOf(SendResult.SUCCESS, SendResult.RETRIABLE_ERROR))
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
-        assertEquals(listOf(entry(4), entry(5)), queue.peek(10))
+        assertEquals(listOf(entry(4), entry(5)), queue.peek(10).entries)
     }
 
     @Test
@@ -139,7 +139,7 @@ class FlushControllerTest {
         sender.results.add(SendResult.SUCCESS)
         sender.defaultResult = SendResult.RETRIABLE_ERROR
         c.requestFlush(FlushController.FlushReason.EXPLICIT)
-        assertEquals(listOf(entry(3), entry(4), entry(5)), queue.peek(10))
+        assertEquals(listOf(entry(3), entry(4), entry(5)), queue.peek(10).entries)
         assertEquals(2, sender.bodies.size)
         assertEquals(listOf(FlushController.INITIAL_BACKOFF_MS), scheduler.allScheduleDelays)
     }

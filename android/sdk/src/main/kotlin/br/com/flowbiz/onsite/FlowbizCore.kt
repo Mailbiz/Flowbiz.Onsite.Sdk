@@ -13,6 +13,8 @@ internal class FlowbizCore(
     private val clock: Clock,
     private val deviceContext: DeviceContext,
     reachability: ReachabilityMonitor,
+    // Its own serial thread: a blocking POST must not hold the SDK thread, where track() persists the event.
+    private val transportScheduler: TaskScheduler = scheduler,
 ) {
 
     private val identityStore = IdentityStore(store)
@@ -24,10 +26,10 @@ internal class FlowbizCore(
     // Lazy: the constructor reads the queue file, which must not happen on the caller's main thread.
     private val queue: EventQueue by lazy(queueFactory)
     private val flushController: FlushController by lazy {
-        FlushController(queue, sender, scheduler, clock, isActive = { enabledState.isEnabled })
+        FlushController(queue, sender, transportScheduler, clock, isActive = { enabledState.isEnabled })
     }
 
-    private val heartbeat = HeartbeatScheduler(scheduler, sender) { buildPingEntry() }
+    private val heartbeat = HeartbeatScheduler(scheduler, sender, transportScheduler) { buildPingEntry() }
     private val heartbeatIntervalMillis = config.heartbeatIntervalSeconds * 1000L
 
     internal data class PageState(val title: String?, val url: String?)

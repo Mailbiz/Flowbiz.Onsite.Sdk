@@ -25,6 +25,7 @@ final class FlushController: @unchecked Sendable {
     private let lock = NSLock()
     private var draining = false
     private var drainAgain = false
+    private var drainQueued = false
     private var backoffMillis: Int64 = FlushController.initialBackoffMillis
     private var retryHandle: (any ScheduledHandle)?
 
@@ -49,12 +50,19 @@ final class FlushController: @unchecked Sendable {
         backoffMillis = Self.initialBackoffMillis
         retryHandle?.cancel()
         retryHandle = nil
+        // One waiting drain is enough: triggers that arrive while a send blocks would only repeat it.
+        let alreadyQueued = drainQueued
+        drainQueued = true
         lock.unlock()
         SdkLog.debug("flush requested: \(reason.rawValue)")
+        if alreadyQueued { return }
         scheduler.execute { [weak self] in self?.drain() }
     }
 
     private func drain() {
+        lock.lock()
+        drainQueued = false
+        lock.unlock()
         guard isActive() else {
             SdkLog.debug("drain skipped: SDK disabled")
             return
@@ -69,8 +77,9 @@ final class FlushController: @unchecked Sendable {
         draining = true
         lock.unlock()
 
-        while queue.size > 0 {
-            if drainPrefix(min(batchSize, queue.size)) == .stopAndRetry {
+        // isActive again per batch: setEnabled(false) no longer waits for this queue.
+        while queue.size > 0, isActive() {
+            if drainPrefix(batchSize) == .stopAndRetry {
                 scheduleRetry()
                 break
             }
@@ -87,11 +96,12 @@ final class FlushController: @unchecked Sendable {
     }
 
     private func drainPrefix(_ count: Int) -> Outcome {
-        let entries = queue.peek(count)
+        let batch = queue.peek(count)
+        let entries = batch.entries
         if entries.isEmpty { return .proceed }
         switch sender.send(body: buildBody(entries)) {
         case .success:
-            queue.removeOldest(entries.count)
+            queue.remove(batch)
             return .proceed
 
         case .retriableError:
@@ -101,7 +111,7 @@ final class FlushController: @unchecked Sendable {
             // A 4xx rejects the whole POST: bisect so only the poison entries are dropped.
             if entries.count == 1 {
                 SdkLog.debug("dropping poison event (rejected by collector)")
-                queue.removeOldest(1)
+                queue.remove(batch)
                 return .proceed
             }
             let half = entries.count / 2

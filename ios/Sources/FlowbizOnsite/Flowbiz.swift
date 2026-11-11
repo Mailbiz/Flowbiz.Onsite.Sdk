@@ -118,7 +118,8 @@ public enum Flowbiz {
                 scheduler: DispatchTaskScheduler(queue: serialQueue),
                 clock: SystemClock(),
                 deviceContext: makeDeviceContext(),
-                reachability: PathMonitorReachability(queue: serialQueue)
+                reachability: PathMonitorReachability(queue: serialQueue),
+                transportScheduler: DispatchTaskScheduler(queue: DispatchQueue(label: "br.com.flowbiz.onsite.transport"))
             )
         }) else {
             SdkLog.debug("initialize ignored: already initialized (first config wins)")

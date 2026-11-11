@@ -19,23 +19,23 @@ import Testing
         let queue = EventQueue(fileURL: file)
         (1...5).forEach { queue.append(entry($0)) }
         #expect(queue.size == 5)
-        #expect(queue.peek(10) == (1...5).map { entry($0) })
+        #expect(queue.peek(10).entries == (1...5).map { entry($0) })
         #expect(queue.size == 5)
-        #expect(queue.peek(2) == [entry(1), entry(2)])
+        #expect(queue.peek(2).entries == [entry(1), entry(2)])
     }
 
     @Test func queueSurvivesReload() {
         let queue = EventQueue(fileURL: file)
         (1...3).forEach { queue.append(entry($0)) }
         let reloaded = EventQueue(fileURL: file)
-        #expect(reloaded.peek(10) == (1...3).map { entry($0) })
+        #expect(reloaded.peek(10).entries == (1...3).map { entry($0) })
     }
 
-    @Test func removeOldestConsumesFromTheHead() {
+    @Test func removeConsumesTheBatchFromTheHead() {
         let queue = EventQueue(fileURL: file)
         (1...4).forEach { queue.append(entry($0)) }
-        queue.removeOldest(2)
-        #expect(queue.peek(10) == [entry(3), entry(4)])
+        queue.remove(queue.peek(2))
+        #expect(queue.peek(10).entries == [entry(3), entry(4)])
     }
 
     @Test func truncatedAndGarbageLinesAreSkippedNotFatal() throws {
@@ -50,7 +50,7 @@ import Testing
             + "{\"event\":\"e3\",\"ha"
         try Data(content.utf8).write(to: file)
         let queue = EventQueue(fileURL: file)
-        #expect(queue.peek(10) == [entry(1), entry(2)])
+        #expect(queue.peek(10).entries == [entry(1), entry(2)])
         #expect(try fileText() == entry(1) + "\n" + entry(2) + "\n")
     }
 
@@ -65,39 +65,39 @@ import Testing
         let queue = EventQueue(fileURL: file, capacity: 5)
         (1...8).forEach { queue.append(entry($0)) }
         #expect(queue.size == 5)
-        #expect(queue.peek(10) == (4...8).map { entry($0) })
+        #expect(queue.peek(10).entries == (4...8).map { entry($0) })
     }
 
     @Test func overCapacityFileIsTrimmedToNewestAtLoad() {
         let queue = EventQueue(fileURL: file, capacity: 10)
         (1...10).forEach { queue.append(entry($0)) }
         let smaller = EventQueue(fileURL: file, capacity: 4)
-        #expect(smaller.peek(10) == (7...10).map { entry($0) })
+        #expect(smaller.peek(10).entries == (7...10).map { entry($0) })
     }
 
     @Test func compactionTriggersAtStaleThresholdAndPreservesOrder() throws {
         let queue = EventQueue(fileURL: file)
         let total = EventQueue.compactStaleThreshold + 6
         (1...total).forEach { queue.append(entry($0)) }
-        queue.removeOldest(EventQueue.compactStaleThreshold)
+        queue.remove(queue.peek(EventQueue.compactStaleThreshold))
         let expected = ((EventQueue.compactStaleThreshold + 1)...total).map { entry($0) }
-        #expect(queue.peek(100) == expected)
+        #expect(queue.peek(100).entries == expected)
         #expect(try fileText() == expected.map { $0 + "\n" }.joined())
     }
 
     @Test func belowThresholdConsumedLinesStayInFileUntilCompaction() throws {
         let queue = EventQueue(fileURL: file)
         (1...6).forEach { queue.append(entry($0)) }
-        queue.removeOldest(2)
+        queue.remove(queue.peek(2))
         let lines = try fileText().split(separator: "\n")
         #expect(lines.count == 6)
-        #expect(queue.peek(10) == [entry(3), entry(4), entry(5), entry(6)])
+        #expect(queue.peek(10).entries == [entry(3), entry(4), entry(5), entry(6)])
     }
 
     @Test func drainingToEmptyTruncatesTheFile() throws {
         let queue = EventQueue(fileURL: file)
         (1...3).forEach { queue.append(entry($0)) }
-        queue.removeOldest(3)
+        queue.remove(queue.peek(3))
         #expect(queue.size == 0)
         #expect(try fileText().isEmpty)
     }
@@ -110,7 +110,7 @@ import Testing
         let tmp = URL(fileURLWithPath: file.path + ".tmp")
         try Data((entry(99) + "\n").utf8).write(to: tmp)
         let queue = EventQueue(fileURL: file)
-        #expect(queue.peek(10) == [entry(1), entry(2)])
+        #expect(queue.peek(10).entries == [entry(1), entry(2)])
         #expect(!FileManager.default.fileExists(atPath: tmp.path))
         #expect(try fileText() == entry(1) + "\n" + entry(2) + "\n")
     }
@@ -121,14 +121,14 @@ import Testing
         queue.append("   ")
         #expect(queue.size == 0)
         queue.append(entry(1))
-        #expect(queue.peek(10) == [entry(1)])
+        #expect(queue.peek(10).entries == [entry(1)])
     }
 
     @Test func appendCreatesMissingDirectories() {
         let queue = EventQueue(fileURL: file)
         queue.append(entry(1))
         #expect(FileManager.default.fileExists(atPath: file.path))
-        #expect(EventQueue(fileURL: file).peek(10) == [entry(1)])
+        #expect(EventQueue(fileURL: file).peek(10).entries == [entry(1)])
     }
 
     @Test func failedAppendForcesRewriteSoATornTailCannotMergeWithTheNextAppend() throws {
@@ -147,7 +147,7 @@ import Testing
         try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
         try manager.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.path)
         queue.append(entry(4))
-        #expect(EventQueue(fileURL: file).peek(10) == (1...4).map { entry($0) })
+        #expect(EventQueue(fileURL: file).peek(10).entries == (1...4).map { entry($0) })
     }
 
     @Test func defaultQueueDirectoryIsExcludedFromBackup() throws {
@@ -179,7 +179,7 @@ import Testing
         try Data(([stale] + kept + [stale]).map { $0 + "\n" }.joined().utf8).write(to: file)
 
         let queue = EventQueue(fileURL: file, nowMillis: { now })
-        #expect(queue.peek(10) == kept)
+        #expect(queue.peek(10).entries == kept)
         #expect(try fileText() == kept.map { $0 + "\n" }.joined())
     }
 
@@ -188,7 +188,38 @@ import Testing
         let queue = EventQueue(fileURL: file, nowMillis: { now })
         let old = #"{"event":"old","timings":{"created_at":"\#(EnvelopeBuilder.isoMillis(now - 30 * 24 * 60 * minuteMs))"}}"#
         queue.append(old)
-        #expect(queue.peek(10) == [old])
+        #expect(queue.peek(10).entries == [old])
+    }
+
+    @Test func anEntryEvictedWhileItsBatchIsInFlightIsNotRemovedTwice() {
+        let queue = EventQueue(fileURL: file, capacity: 3)
+        (1...3).forEach { queue.append(entry($0)) }
+        let inFlight = queue.peek(2)
+        queue.append(entry(4)) // at capacity: evicts entry 1, which the batch holds
+        queue.remove(inFlight)
+        #expect(queue.peek(10).entries == [entry(3), entry(4)])
+        queue.remove(inFlight)
+        #expect(queue.peek(10).entries == [entry(3), entry(4)])
+    }
+
+    @Test func appendsFromOneThreadAndRemovalsFromAnotherLoseNothing() {
+        let queue = EventQueue(fileURL: file)
+        let total = 600
+        let removed = LogCapture()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue(label: "tests.consumer").async {
+            while removed.messages.count < total {
+                let batch = queue.peek(7)
+                batch.entries.forEach(removed.append)
+                queue.remove(batch)
+            }
+            done.signal()
+        }
+        (1...total).forEach { queue.append(entry($0)) }
+        #expect(done.wait(timeout: .now() + 20) == .success)
+        #expect(removed.messages == (1...total).map { entry($0) })
+        #expect(queue.size == 0)
+        #expect(EventQueue(fileURL: file).peek(10).entries.isEmpty)
     }
 }
 #endif
