@@ -211,20 +211,21 @@ internal class FlowbizCore(
         // connection too poor for that, and is scheduled first in case the process dies meanwhile.
         if (queue.size > 0) {
             scheduleFlushJob()
-            flushController.requestFlush(FlushController.FlushReason.APP_BACKGROUND) {
-                // Back on this thread, serialized with schedule(): decided on the transport's, the cancel
-                // could land after an event was tracked and a second onBackground had scheduled its job.
-                submit("backgroundFlushed") {
-                    if (queue.size == 0) cancelFlushJob()
-                }
-            }
+            flushController.requestFlush(FlushController.FlushReason.APP_BACKGROUND)
         }
     }
 
     // An event tracked after onBackground (a CartSync in onStop, from a service or a receiver) that could
     // not be sent: the in-process retry dies with the process, so the job has to carry it.
+    // Nothing left: the job would wake the process for nothing, whichever flush emptied the queue.
+    // Through submit, serialized with the scheduling: decided on the transport thread, a cancel could land
+    // after an event was tracked and a second onBackground had scheduled its job.
     private fun onDrainEnded(retryScheduled: Boolean) = submit("drainEnded") {
-        if (retryScheduled && !foregrounded && enabledState.isEnabled) scheduleFlushJob()
+        if (queue.size == 0) {
+            cancelFlushJob()
+        } else if (retryScheduled && !foregrounded && enabledState.isEnabled) {
+            scheduleFlushJob()
+        }
     }
 
     private fun scheduleFlushJob() {

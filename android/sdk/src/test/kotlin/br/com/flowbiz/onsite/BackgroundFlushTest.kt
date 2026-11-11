@@ -140,6 +140,20 @@ class BackgroundFlushTest {
     }
 
     @Test
+    fun theJobIsCancelledWhenTheAppComesBackAndEmptiesTheQueue() {
+        val h = harness()
+        h.queueOneOffline()
+        h.core.onBackground()
+        assertEquals(listOf("schedule"), job.calls)
+        h.sender.defaultResult = SendResult.SUCCESS
+
+        h.core.onForeground()
+
+        assertEquals(0, h.queue.size)
+        assertEquals(listOf("schedule", "cancel"), job.calls) // else it wakes the process for nothing
+    }
+
+    @Test
     fun anEmptyQueueSchedulesNothing() {
         val h = harness()
         h.core.track(Event.PageView("home"))
