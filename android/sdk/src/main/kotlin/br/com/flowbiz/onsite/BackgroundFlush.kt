@@ -47,7 +47,8 @@ internal class JobSchedulerBackgroundFlush(context: Context) : BackgroundFlush {
 
     override fun cancel() {
         try {
-            scheduler()?.cancel(JOB_ID)
+            val scheduler = scheduler() ?: return
+            scheduler.cancel(JOB_ID)
             SdkLog.debug("background flush job cancelled")
         } catch (t: Throwable) {
             SdkLog.debug("background flush job not cancelled: ${t.javaClass.simpleName}")
