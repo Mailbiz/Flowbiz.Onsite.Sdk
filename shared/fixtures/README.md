@@ -92,7 +92,10 @@ backend's `Coupons` is a `string`; an array makes Cart.Worker drop the event);
 `user.created_at` must parse as ISO 8601 or the account event is dropped; a
 `cart.sync` without `items` keeps the stored products, `items: []` empties
 them; no cart email goes out until an account event ties the `anonymous_id`
-to a contact. `identity.visit_count` is sent as a number, as on web, but the
+to a contact; an `order.complete` whose `order_id` is absent or blank closes
+the cart without crediting the order's `context.utm` (one with a real id
+replaces the cart's UTMs with its own), and `order_id` `"0"` closes nothing.
+`identity.visit_count` is sent as a number, as on web, but the
 collector reads a string, so it is lost on both.
 
 Responses: 2xx is delivered; 5xx, 408, 429 and network errors are retried with

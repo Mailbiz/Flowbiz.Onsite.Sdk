@@ -233,8 +233,10 @@ Forward every link the app is opened with, recovery link or not:
 A link forwarded before `initialize` is still decoded, and its UTMs are
 captured when `initialize` runs. Capturing sends nothing: after forwarding a
 link, on a cold or a warm open, track the screen's `PageView`, so the campaign
-goes out at once. An order is credited to a campaign through its cart's last
-`CartSync`, so after restoring a recovered cart, track `CartSync` with it.
+goes out at once. An `OrderComplete` with a real `orderId` is credited to the
+campaign on its own `context.utm`, which replaces the cart's; an order sent
+without UTMs keeps the ones of its cart's last `CartSync`, so after restoring
+a recovered cart, still track `CartSync` with it.
 Links are still captured while the SDK is disabled and ride on the events
 after `setEnabled(true)`; `logout()` keeps them.
 
@@ -251,6 +253,11 @@ identified, abandoned and recovered, the backend needs:
   without `items` keeps the products the backend already has.
 - **`coupons` as one string**, several codes joined with a comma, as the web
   tag sends them.
+- **`OrderComplete` only once the order is confirmed, with its `orderId`**.
+  The SDK has no "temporary order" (the web's `OrderComplete` without
+  `order_id`): without an id, or with a blank one, the backend still closes
+  the cart but never credits the order's UTMs to a campaign, and an `orderId`
+  of `"0"` closes nothing. The event is sent as built; `debug` logs a warning.
 
 ### Consent / opt-out
 

@@ -85,6 +85,29 @@ final class LogCapture: @unchecked Sendable {
         #expect(!capture.messages.contains { $0.contains("Q7x") || $0.contains("eyJ0") || $0.contains("utm_") })
     }
 
+    @Test func anOrderWithoutARealOrderIdIsSentWithAWarningThatOmitsTheId() throws {
+        let warning = "order.complete without a real orderId"
+        func order(_ orderId: String?) -> Event {
+            .orderComplete(order: Order(
+                cartId: "cart-probe", orderId: orderId, subtotal: 1, total: 1, freight: 0, tax: 0, discounts: 0
+            ))
+        }
+        for orderId in [nil, "", " \t", "0", " 0 "] {
+            let capture = LogCapture()
+            SdkLog.sink = { capture.append($0) }
+            defer { SdkLog.sink = nil }
+            let harness = CoreHarness()
+            harness.core.track(order(orderId))
+            #expect(try harness.lastEntry()["event"] as? String == "order.complete", "'\(orderId ?? "nil")' must still be sent")
+            #expect(capture.messages.filter { $0.contains(warning) }.count == 1, "'\(orderId ?? "nil")': \(capture.messages)")
+        }
+        let capture = LogCapture()
+        SdkLog.sink = { capture.append($0) }
+        defer { SdkLog.sink = nil }
+        CoreHarness().core.track(order("PED-probe-778812"))
+        #expect(!capture.messages.contains { $0.contains(warning) || $0.contains("probe") }, "\(capture.messages)")
+    }
+
     @Test func pureHandlersWorkBeforeInitializeWithoutWarnings() {
         let capture = LogCapture()
         SdkLog.sink = { capture.append($0) }

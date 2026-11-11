@@ -64,6 +64,10 @@ internal class FlowbizCore(
             is Event.AccountSync -> identityStore.setUser(event.user.userId, event.user.email)
             else -> Unit
         }
+        // Sent anyway: Cart.Worker still closes the cart, but credits no UTMs to an order without a real id.
+        if (event is Event.OrderComplete && !isRealOrderId(event.order.orderId)) {
+            SdkLog.debug("order.complete without a real orderId: its campaign is not credited; track it once the order is confirmed")
+        }
         sessionManager.touch()
         val session = sessionManager.currentSession()
         try {
@@ -301,6 +305,9 @@ internal class FlowbizCore(
 
     companion object {
         const val PLATFORM = "android"
+
+        // The backend's OrderUtmAttribution.IsRealOrderId.
+        fun isRealOrderId(orderId: String?): Boolean = !orderId.isNullOrBlank() && orderId.trim() != "0"
 
         fun formatTimezoneOffset(offsetMinutes: Int): String {
             val sign = if (offsetMinutes < 0) "-" else "+"

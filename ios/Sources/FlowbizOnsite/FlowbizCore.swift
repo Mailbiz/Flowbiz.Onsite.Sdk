@@ -81,6 +81,10 @@ final class FlowbizCore: @unchecked Sendable {
             default:
                 break
             }
+            // Sent anyway: Cart.Worker still closes the cart, but credits no UTMs to an order without a real id.
+            if case .orderComplete(let order) = event, !Self.isRealOrderId(order.orderId) {
+                SdkLog.debug("order.complete without a real orderId: its campaign is not credited; track it once the order is confirmed")
+            }
             core.sessionManager.touch()
             let session = core.sessionManager.currentSession()
             do {
@@ -353,6 +357,12 @@ final class FlowbizCore: @unchecked Sendable {
         )
         lazyFlushController = controller
         return controller
+    }
+
+    // The backend's OrderUtmAttribution.IsRealOrderId.
+    static func isRealOrderId(_ orderId: String?) -> Bool {
+        let trimmed = orderId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !trimmed.isEmpty && trimmed != "0"
     }
 
     static func formatTimezoneOffset(minutes: Int) -> String {
