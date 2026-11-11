@@ -35,6 +35,7 @@ internal class CoreHarness(
     val scheduler: FakeTaskScheduler = FakeTaskScheduler(),
     val device: FakeDeviceContext = FakeDeviceContext(),
     val reachability: FakeReachability = FakeReachability(),
+    backgroundFlush: BackgroundFlush = BackgroundFlush.None,
 ) {
     val queue = EventQueue(File(queueDir, "queue.jsonl"))
     private val pushTokenFile = File(queueDir, "push_token")
@@ -50,6 +51,7 @@ internal class CoreHarness(
         clock = clock,
         deviceContext = device,
         reachability = reachability,
+        backgroundFlush = backgroundFlush,
     )
 
     fun sentEntries(): List<JSONObject> = sender.bodies.flatMap { body ->

@@ -3,7 +3,7 @@ import Foundation
 final class FlushController: @unchecked Sendable {
 
     enum FlushReason: String, Sendable {
-        case eventTracked, appForeground, networkRestored, explicit
+        case eventTracked, appForeground, appBackground, networkRestored, explicit
     }
 
     private enum Outcome {
@@ -26,6 +26,7 @@ final class FlushController: @unchecked Sendable {
     private var draining = false
     private var drainAgain = false
     private var drainQueued = false
+    private var waiters: [@Sendable () -> Void] = []
     private var backoffMillis: Int64 = FlushController.initialBackoffMillis
     private var retryHandle: (any ScheduledHandle)?
 
@@ -45,11 +46,13 @@ final class FlushController: @unchecked Sendable {
         self.isActive = isActive
     }
 
-    func requestFlush(_ reason: FlushReason) {
+    /// `onDrained` runs once the drain this request joins is over: queue empty, a retry scheduled, or SDK disabled.
+    func requestFlush(_ reason: FlushReason, onDrained: (@Sendable () -> Void)? = nil) {
         lock.lock()
         backoffMillis = Self.initialBackoffMillis
         retryHandle?.cancel()
         retryHandle = nil
+        if let onDrained { waiters.append(onDrained) }
         // One waiting drain is enough: triggers that arrive while a send blocks would only repeat it.
         let alreadyQueued = drainQueued
         drainQueued = true
@@ -62,12 +65,6 @@ final class FlushController: @unchecked Sendable {
     private func drain() {
         lock.lock()
         drainQueued = false
-        lock.unlock()
-        guard isActive() else {
-            SdkLog.debug("drain skipped: SDK disabled")
-            return
-        }
-        lock.lock()
         if draining {
             // Re-entrant with an inline executor (a trigger mid-drain): coalesce into one follow-up pass.
             drainAgain = true
@@ -75,8 +72,11 @@ final class FlushController: @unchecked Sendable {
             return
         }
         draining = true
+        let waiting = waiters
+        waiters = []
         lock.unlock()
 
+        if !isActive() { SdkLog.debug("drain skipped: SDK disabled") }
         // isActive again per batch: setEnabled(false) no longer waits for this queue.
         while queue.size > 0, isActive() {
             if drainPrefix(batchSize) == .stopAndRetry {
@@ -90,6 +90,7 @@ final class FlushController: @unchecked Sendable {
         let again = drainAgain
         drainAgain = false
         lock.unlock()
+        waiting.forEach { $0() }
         if again {
             scheduler.execute { [weak self] in self?.drain() }
         }

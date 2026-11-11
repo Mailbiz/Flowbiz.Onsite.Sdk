@@ -15,6 +15,7 @@ internal class FlowbizCore(
     reachability: ReachabilityMonitor,
     // Its own serial thread: a blocking POST must not hold the SDK thread, where track() persists the event.
     private val transportScheduler: TaskScheduler = scheduler,
+    private val backgroundFlush: BackgroundFlush = BackgroundFlush.None,
 ) {
 
     private val identityStore = IdentityStore(store)
@@ -162,12 +163,14 @@ internal class FlowbizCore(
 
     fun captureUtm(link: String) = submit("captureUtm") { refreshUtm(link, slideExpiry = true) }
 
-    fun flush() = submit("flush") {
+    /** [drained] gets whether nothing is left for a later attempt: the queue is empty, or the SDK is disabled. */
+    fun flush(drained: ((Boolean) -> Unit)? = null) = submit("flush") {
         if (!enabledState.isEnabled) {
             SdkLog.debug("flush ignored: SDK disabled")
+            drained?.invoke(true)
             return@submit
         }
-        flushController.requestFlush(FlushController.FlushReason.EXPLICIT)
+        flushController.requestFlush(FlushController.FlushReason.EXPLICIT, drained?.let { { it(queue.size == 0) } })
     }
 
     fun onForeground() = submit("onForeground") {
@@ -184,6 +187,16 @@ internal class FlowbizCore(
     fun onBackground() = submit("onBackground") {
         foregrounded = false
         heartbeat.stop()
+        if (!enabledState.isEnabled) return@submit
+        // The last cart.sync before the user leaves: without this it waited for the next app open, and
+        // a user who never returns was never seen abandoning the cart. Try now; the job is for a
+        // connection too poor for that, and is scheduled first in case the process dies meanwhile.
+        if (queue.size > 0) {
+            backgroundFlush.schedule()
+            flushController.requestFlush(FlushController.FlushReason.APP_BACKGROUND) {
+                if (queue.size == 0) backgroundFlush.cancel()
+            }
+        }
     }
 
     private fun identify(user: User) {

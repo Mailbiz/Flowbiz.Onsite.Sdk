@@ -265,6 +265,30 @@ identified, abandoned and recovered, the backend needs:
   the cart but never credits the order's UTMs to a campaign, and an `orderId`
   of `"0"` closes nothing. The event is sent as built; `debug` logs a warning.
 
+### Background delivery
+
+When the app goes to the background the SDK sends what is still queued, with
+nothing to set up in the host app:
+
+- **iOS**: the flush runs inside a `UIApplication` background task
+  (`beginBackgroundTask`), ended when the flush finishes or when iOS calls
+  time. It is one attempt in the seconds iOS grants: what a dead connection
+  leaves queued goes out at the next app open.
+- **Android**: the flush is tried at once, and if events are still queued a
+  platform `JobScheduler` job with a network constraint sends them when the
+  connection is back, also after the process was killed. The SDK's manifest
+  merges the job's service (`FlowbizFlushJobService`); it needs no permission
+  beyond `ACCESS_NETWORK_STATE`. A job started in a new process finds the SDK
+  only if `initialize` runs in `Application.onCreate`, otherwise it ends
+  without sending. It is not persisted: a reboot or a force stop drops it,
+  and the next app open flushes instead. Below Android 14, where job ids are
+  shared by the whole app, it uses id `1179402842` (`0x464C425A`); from
+  Android 14 on it lives in the `br.com.flowbiz.onsite` job namespace.
+
+Neither runs while the SDK is disabled, and neither tracks anything: only
+events the app already tracked are sent, and no heartbeat runs in the
+background.
+
 ### Consent / opt-out
 
 `Flowbiz.setEnabled(false)` is the LGPD/GDPR consent hook: persisted across
@@ -302,9 +326,11 @@ never blocks and survives offline: events are persisted to a disk queue
 (cap 1000, drop-oldest; an event still undelivered 7 days after it was
 tracked is dropped when the queue next loads, at the first use after a
 process start) and flushed with exponential backoff on network
-restore, app foreground, the next track, or `flush()`. An event reaches the
+restore, app foreground, app background, the next track, or `flush()`. An event reaches the
 disk at once, also while a send is in flight: the network runs on its own
-thread, apart from the one that persists. Identical payloads per
+thread, apart from the one that persists. Leaving the app flushes what is
+queued, so the last `CartSync` does not wait for the next open (see
+Background delivery). Identical payloads per
 event type are deduplicated for 20 minutes, except `PageView`, which is always
 sent (as on web); nothing else is filtered: a `cartSync` with an empty cart is
 sent. There is no runtime schema validation
@@ -343,7 +369,7 @@ envelope, identity and session, queueing) and `Mailbiz.One.Collector`
 | Event → wire payload | `EventSerializer`, `UserSanitizer`, `UrlResolver`, `CanonicalJson`/`CanonicalJSON`, `EnvelopeBuilder` |
 | Identity & session | `IdentityStore`, `SessionManager`, `Clock` + `AndroidClock`/`SystemClock` |
 | Dedup, heartbeat, opt-out | `DedupStore`, `HeartbeatScheduler`, `EnabledState` |
-| Offline queue & transport | `EventQueue`, `FlushController`, `HttpSender`, `Reachability` |
+| Offline queue & transport | `EventQueue`, `FlushController`, `HttpSender`, `Reachability`, `BackgroundFlush` |
 | Push & recovery links | `PushTokenStore`, `FlowbizPush`, `RecoveryLinkParser`, `RecoveryPayload` |
 | UTM attribution | `UtmLinkParser`, `UtmStore` |
 | Persistence | `KeyValueStore` + `SharedPreferencesStore`/`UserDefaultsStore` |

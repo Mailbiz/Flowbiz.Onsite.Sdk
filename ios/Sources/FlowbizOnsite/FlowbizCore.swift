@@ -220,10 +220,18 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    func onBackground() {
+    /// `flushed` runs when the flush this starts is over, delivered or not; the caller holds a background task for it.
+    func onBackground(flushed: (@Sendable () -> Void)? = nil) {
         submit { core in
             core.foregrounded = false
             core.heartbeat.stop()
+            guard core.enabledState.isEnabled else {
+                flushed?()
+                return
+            }
+            // The last cart.sync before the user leaves: without this it waited for the next app open,
+            // and a user who never returns was never seen abandoning the cart.
+            core.flushController.requestFlush(.appBackground, onDrained: flushed)
         }
     }
 

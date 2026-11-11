@@ -293,12 +293,33 @@ public enum Flowbiz {
         ) { _ in core.onForeground() })
         tokens.append(center.addObserver(
             forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil
-        ) { _ in core.onBackground() })
+        ) { _ in
+            BackgroundFlush.run(begin: beginBackgroundTask) { finished in core.onBackground(flushed: finished) }
+        })
         state.retain(observers: tokens)
         // Initialized while already active: no notification fires for this session, so probe once.
         Task { @MainActor in
             if UIApplication.shared.applicationState != .background {
                 core.onForeground()
+            }
+        }
+    }
+
+    // Called where the notification is posted, the main thread. Nil when iOS grants no background time.
+    private static func beginBackgroundTask(_ onExpire: @escaping @Sendable () -> Void) -> (@Sendable () -> Void)? {
+        guard Thread.isMainThread else { return nil }
+        return MainActor.assumeIsolated {
+            let identifier = UIApplication.shared.beginBackgroundTask(withName: "br.com.flowbiz.onsite.flush") {
+                onExpire()
+            }
+            guard identifier != .invalid else { return nil }
+            return {
+                // Inline on the main thread: the expiration handler must have ended the task when it returns.
+                if Thread.isMainThread {
+                    MainActor.assumeIsolated { UIApplication.shared.endBackgroundTask(identifier) }
+                } else {
+                    Task { @MainActor in UIApplication.shared.endBackgroundTask(identifier) }
+                }
             }
         }
     }

@@ -11,7 +11,7 @@ internal class FlushController(
     private val isActive: () -> Boolean = { true },
 ) {
 
-    enum class FlushReason { EVENT_TRACKED, APP_FOREGROUND, NETWORK_RESTORED, EXPLICIT }
+    enum class FlushReason { EVENT_TRACKED, APP_FOREGROUND, APP_BACKGROUND, NETWORK_RESTORED, EXPLICIT }
 
     private enum class Outcome { CONTINUE, STOP_AND_RETRY }
 
@@ -19,43 +19,43 @@ internal class FlushController(
     private var draining = false
     private var drainAgain = false
     private var drainQueued = false
+    private val waiters = mutableListOf<() -> Unit>()
     private var backoffMillis = INITIAL_BACKOFF_MS
     private var retryHandle: ScheduledHandle? = null
 
-    fun requestFlush(reason: FlushReason) {
+    /** [onDrained] runs once the drain this request joins is over: queue empty, a retry scheduled, or SDK disabled. */
+    fun requestFlush(reason: FlushReason, onDrained: (() -> Unit)? = null) {
         try {
-            synchronized(lock) {
+            SdkLog.debug("flush requested: $reason")
+            // One waiting drain is enough: triggers that arrive while a send blocks would only repeat it.
+            val alreadyQueued = synchronized(lock) {
                 backoffMillis = INITIAL_BACKOFF_MS
                 retryHandle?.cancel()
                 retryHandle = null
+                if (onDrained != null) waiters += onDrained
+                drainQueued.also { drainQueued = true }
             }
-            SdkLog.debug("flush requested: $reason")
-            // One waiting drain is enough: triggers that arrive while a send blocks would only repeat it.
-            synchronized(lock) {
-                if (drainQueued) return
-                drainQueued = true
-            }
-            scheduler.execute { drain() }
+            if (!alreadyQueued) scheduler.execute { drain() }
         } catch (t: Throwable) {
             SdkLog.debug("requestFlush failed: ${t.javaClass.simpleName}")
+            // No drain is coming: nobody may wait on it, and the next request must queue one.
+            notify(synchronized(lock) { drainQueued = false; takeWaiters() })
         }
     }
 
     private fun drain() {
-        synchronized(lock) { drainQueued = false }
-        if (!isActive()) {
-            SdkLog.debug("drain skipped: SDK disabled")
-            return
-        }
-        synchronized(lock) {
+        val waiting = synchronized(lock) {
+            drainQueued = false
             // Re-entrant with an inline executor (a trigger mid-drain): coalesce into one follow-up pass.
             if (draining) {
                 drainAgain = true
                 return
             }
             draining = true
+            takeWaiters()
         }
         try {
+            if (!isActive()) SdkLog.debug("drain skipped: SDK disabled")
             // isActive again per batch: setEnabled(false) no longer waits for this thread.
             while (queue.size > 0 && isActive()) {
                 val outcome = drainPrefix(batchSize)
@@ -73,7 +73,20 @@ internal class FlushController(
                 drainAgain = false
                 a
             }
+            notify(waiting)
             if (again) scheduler.execute { drain() }
+        }
+    }
+
+    private fun takeWaiters(): List<() -> Unit> = waiters.toList().also { waiters.clear() }
+
+    private fun notify(waiting: List<() -> Unit>) {
+        for (onDrained in waiting) {
+            try {
+                onDrained()
+            } catch (t: Throwable) {
+                SdkLog.debug("flush callback failed: ${t.javaClass.simpleName}")
+            }
         }
     }
 

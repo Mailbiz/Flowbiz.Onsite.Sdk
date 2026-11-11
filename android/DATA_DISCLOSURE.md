@@ -22,7 +22,11 @@ sent by the SDK).
 
 Data is collected **only for events the host app explicitly tracks** (plus
 the automatic `page.ping` heartbeat while the app is foregrounded and the
-SDK is enabled). `Flowbiz.setEnabled(false)` stops all collection and
+SDK is enabled). Nothing is collected in the background: when the app
+leaves the foreground the SDK only sends the events already queued, at once
+and, if the connection is too poor, from a `JobScheduler` job
+(`FlowbizFlushJobService`, merged from the SDK's manifest) that runs when
+the network is back. `Flowbiz.setEnabled(false)` stops all collection and
 network traffic, persistently, until re-enabled — this is the hook for
 LGPD/GDPR consent gating.
 
@@ -48,8 +52,10 @@ LGPD/GDPR consent gating.
 
 The SDK never accesses: advertising ID (AAID), Android ID, IMEI, location
 APIs, contacts, or any permission-gated data. Its manifest merges only the
-normal-level `ACCESS_NETWORK_STATE` permission; the host app must hold
-`INTERNET` (virtually always already declared) for delivery to work.
+normal-level `ACCESS_NETWORK_STATE` permission and one non-exported service,
+the background flush job (bound by the system only, through
+`BIND_JOB_SERVICE`); the host app must hold `INTERNET` (virtually always
+already declared) for delivery to work.
 
 The SDK does no fingerprinting: language, screen resolution and timezone are
 sent as context next to the random `anonymous_id`, never combined into an
@@ -121,7 +127,8 @@ Additional form answers relevant to the SDK:
   identity) and `setEnabled(false)` (stops collection). Server-side
   deletion requests go through the Flowbiz platform.
 - **Data collected is user-initiated**: all business events are explicit
-  host-app `track()` calls; only the foreground heartbeat is automatic.
+  host-app `track()` calls; only the foreground heartbeat is automatic. The
+  background job sends queued events and collects nothing.
 
 ## Debug logging
 

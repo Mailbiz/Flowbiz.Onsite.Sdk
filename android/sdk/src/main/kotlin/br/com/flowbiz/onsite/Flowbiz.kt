@@ -55,6 +55,7 @@ object Flowbiz {
                     deviceContext = AndroidDeviceContext(appContext),
                     reachability = AndroidReachability(appContext),
                     transportScheduler = serialScheduler("flowbiz-onsite-transport"),
+                    backgroundFlush = JobSchedulerBackgroundFlush(appContext),
                 )
                 install(created)
                 val application = appContext as? Application
@@ -119,6 +120,16 @@ object Flowbiz {
         forwardLink(url?.toString())
     } catch (t: Throwable) {
         null
+    }
+
+    /** For the background job: false when there is no core to flush with, else [finished] gets whether the queue is empty. */
+    internal fun backgroundFlush(finished: (queueEmpty: Boolean) -> Unit): Boolean = try {
+        val current = core
+        current?.flush(finished)
+        current != null
+    } catch (t: Throwable) {
+        SdkLog.debug("background flush failed: ${t.javaClass.simpleName}")
+        false
     }
 
     internal fun install(created: FlowbizCore) = synchronized(this) {
