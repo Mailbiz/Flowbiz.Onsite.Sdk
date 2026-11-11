@@ -288,22 +288,34 @@ nothing to set up in the host app:
 
 - **iOS**: the flush runs inside a `UIApplication` background task
   (`beginBackgroundTask`), ended when the flush finishes or when iOS calls
-  time. It is one attempt in the seconds iOS grants: what a dead connection
-  leaves queued goes out at the next app open.
+  time. It is one attempt in the background time iOS grants, with no
+  `BGTaskScheduler` follow-up, which would need entries in the host app's
+  Info.plist: what a dead connection leaves queued goes out at the next app
+  open. An event tracked after the app left the foreground gets the same,
+  one attempt inside its own background task.
 - **Android**: the flush is tried at once, and if events are still queued a
   platform `JobScheduler` job with a network constraint sends them when the
-  connection is back, also after the process was killed. The SDK's manifest
+  connection is back, also after the process was killed. An event tracked
+  after the app left the foreground (in `onStop`, from a service or a
+  receiver) that cannot be sent gets the same job, and the job is cancelled
+  once any flush empties the queue. Android decides when the job runs: under
+  app-standby buckets and job quotas it can start well after the network is
+  back. The SDK's manifest
   merges the job's service (`FlowbizFlushJobService`); it needs no permission
   beyond `ACCESS_NETWORK_STATE`. A job started in a new process finds the SDK
   only if `initialize` runs in `Application.onCreate`, otherwise it ends
   without sending. It is not persisted: a reboot or a force stop drops it,
   and the next app open flushes instead. Below Android 14, where job ids are
-  shared by the whole app, it uses id `1179402842` (`0x464C425A`); from
-  Android 14 on it lives in the `br.com.flowbiz.onsite` job namespace.
+  shared by the whole app, it uses the fixed id `1179402842` (`0x464C425A`):
+  a job of the host app with that same id and the SDK's would replace each
+  other. From Android 14 on it lives in the `br.com.flowbiz.onsite` job
+  namespace.
 
-Neither runs while the SDK is disabled, and neither tracks anything: only
-events the app already tracked are sent, and no heartbeat runs in the
-background.
+While the SDK is disabled neither sends anything, and no job is scheduled. A
+job scheduled before the opt-out is not cancelled: Android may still start
+the process for it, where it ends at once without a network call. Neither
+tracks anything: only events the app already tracked are sent, and no
+heartbeat runs in the background.
 
 ### Consent / opt-out
 
@@ -341,7 +353,9 @@ No public API throws: a failure costs at most a dropped event. `track()`
 never blocks and survives offline: events are persisted to a disk queue
 (cap 1000, drop-oldest; an event still undelivered 7 days after it was
 tracked is dropped when the queue next loads, at the first use after a
-process start) and flushed with exponential backoff on network
+process start; the age is checked only then, so a process that stays alive
+longer still sends such an event, and a device clock set forward drops old
+entries at the next load) and flushed with exponential backoff on network
 restore, app foreground, app background, the next track, or `flush()`. An event reaches the
 disk at once, also while a send is in flight: the network runs on its own
 thread, apart from the one that persists. Leaving the app flushes what is

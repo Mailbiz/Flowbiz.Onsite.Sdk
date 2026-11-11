@@ -22,13 +22,17 @@ sent by the SDK).
 
 Data is collected **only for events the host app explicitly tracks** (plus
 the automatic `page.ping` heartbeat while the app is foregrounded and the
-SDK is enabled). Nothing is collected in the background: when the app
-leaves the foreground the SDK only sends the events already queued, at once
-and, if the connection is too poor, from a `JobScheduler` job
+SDK is enabled). The SDK collects nothing on its own in the background:
+when the app leaves the foreground it only sends the events already queued,
+at once and, if the connection is too poor, from a `JobScheduler` job
 (`FlowbizFlushJobService`, merged from the SDK's manifest) that runs when
-the network is back. `Flowbiz.setEnabled(false)` stops all collection and
-network traffic, persistently, until re-enabled — this is the hook for
-LGPD/GDPR consent gating.
+the network is back. An event the app itself tracks after leaving the
+foreground that cannot be sent gets the same job. Android decides when the
+job runs: under app-standby buckets and job quotas it can be deferred.
+`Flowbiz.setEnabled(false)` stops all collection and network traffic,
+persistently, until re-enabled (a job scheduled before the opt-out may
+still start the process, and ends at once without a network call) — this
+is the hook for LGPD/GDPR consent gating.
 
 ## Data types collected (transmitted to the collector)
 
@@ -67,7 +71,7 @@ or websites.
 | Storage | Location | Contents | Cleared by |
 |---|---|---|---|
 | SharedPreferences `flowbiz_onsite_<appId>` | App-private storage | `anonymous_id`; `user_id` + `email` (after account events); `session_id`, `visit_count`, `last_activity_wall_ms`; `enabled` opt-out flag; `dedup_digest_<event>` / `dedup_at_<event>` (SHA-256 digests of last payloads — digests, not payloads); `utm_data` + `utm_expires_at_wall_ms` (campaign parameters of forwarded links) | `logout()` clears user identity; campaign parameters are kept on the device for 30 days after the last forwarded link or app foreground (also while opted out, when nothing is sent); uninstall clears all, unless Auto Backup restores it (see Backup) |
-| Event queue `no_backup/flowbiz_onsite/<appId>/queue.jsonl` | App-private storage (`noBackupFilesDir`), never backed up | Pending event envelopes (may contain the PII above) until successfully delivered; capped at 1000 events and 7 days, compacted after flushes | Successful delivery; 7 days undelivered (dropped at the next process start); uninstall |
+| Event queue `no_backup/flowbiz_onsite/<appId>/queue.jsonl` | App-private storage (`noBackupFilesDir`), never backed up | Pending event envelopes (may contain the PII above) until successfully delivered; capped at 1000 events and 7 days, compacted after flushes | Successful delivery; 7 days undelivered, by the device clock (dropped at the next process start, not while a process stays alive); uninstall |
 | Push token `no_backup/flowbiz_onsite/<appId>/push_token` | App-private storage (`noBackupFilesDir`), never backed up | The last registered FCM token | `logout()`, `removePushToken()`; uninstall |
 
 All storage is app-private (`MODE_PRIVATE` / `noBackupFilesDir`); nothing is
