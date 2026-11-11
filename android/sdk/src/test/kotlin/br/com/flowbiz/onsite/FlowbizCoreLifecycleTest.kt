@@ -200,6 +200,40 @@ class FlowbizCoreLifecycleTest {
     }
 
     @Test
+    fun theNetworkCallbackOnlyHandsOffToTheSdkThread() {
+        // The connectivity thread must not build the queue (file I/O) nor touch the flush state.
+        val pending = ArrayDeque<Runnable>()
+        val scheduler = object : TaskScheduler by FakeTaskScheduler() {
+            override fun execute(task: Runnable) { pending += task }
+        }
+        var queueBuilds = 0
+        val sender = FakeHttpSender()
+        val folder = temp.newFolder()
+        FlowbizCore(
+            config = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
+            store = FakeKeyValueStore(),
+            queueFactory = {
+                queueBuilds += 1
+                EventQueue(java.io.File(folder, "queue.jsonl")).also { it.append("""{"event":"page.view"}""") }
+            },
+            sender = sender,
+            scheduler = scheduler,
+            clock = FakeClock(),
+            deviceContext = FakeDeviceContext(),
+            reachability = object : ReachabilityMonitor {
+                override fun start(onNetworkAvailable: Runnable) = onNetworkAvailable.run()
+                override fun stop() = Unit
+            },
+        )
+        assertEquals(0, queueBuilds)
+        assertTrue(sender.bodies.isEmpty())
+
+        while (pending.isNotEmpty()) pending.removeFirst().run()
+        assertEquals(1, queueBuilds)
+        assertEquals(1, sender.bodies.size)
+    }
+
+    @Test
     fun reEnableResumesHeartbeatAndFlushesBacklog() {
         val h = harness()
         h.core.onForeground()

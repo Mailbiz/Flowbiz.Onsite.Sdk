@@ -40,13 +40,12 @@ internal class FlowbizCore(
     private var utmContext: String? = null
 
     init {
+        // Through submit: the callback arrives on the system's connectivity thread.
         reachability.start {
-            try {
+            submit("networkRestored") {
                 if (enabledState.isEnabled) {
                     flushController.requestFlush(FlushController.FlushReason.NETWORK_RESTORED)
                 }
-            } catch (t: Throwable) {
-                SdkLog.debug("network-restored flush failed: ${t.javaClass.simpleName}")
             }
         }
         // A process start may be a push or a background job, not a visit: load without sliding the expiry.
