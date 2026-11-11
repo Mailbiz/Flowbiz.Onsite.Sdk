@@ -159,7 +159,20 @@ class BackgroundFlushTest {
         assertEquals(listOf(true), reports) // the system drops the job
         h.queueOneOffline()
 
-        assertEquals(listOf("schedule"), job.calls)
+        assertEquals(listOf("cancel", "schedule"), job.calls)
+    }
+
+    @Test
+    fun aJobThatEmptiedTheQueueIsCancelledInCaseTheSystemRescheduledIt() {
+        val h = CoreHarness(temp.newFolder(), backgroundFlush = job)
+        h.queue.append("{\"event\":\"cart.sync\"}")
+        val reports = mutableListOf<Boolean>()
+
+        h.core.flushFromJob { reports += it }
+
+        // Stopped mid-run (onStopJob returns true), the job is pending again and its jobFinished is ignored.
+        assertEquals(listOf(true), reports)
+        assertEquals(listOf("cancel"), job.calls)
     }
 
     @Test

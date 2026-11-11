@@ -194,7 +194,9 @@ internal class FlowbizCore(
         submit("jobStarted") { flushJobScheduled = true }
         flush { queueEmpty ->
             finished(queueEmpty)
-            if (queueEmpty) submit("jobFinished") { flushJobScheduled = false }
+            // Cancelled, not only forgotten: stopped mid-run the job was rescheduled (onStopJob returns
+            // true) and its jobFinished is ignored, so it would run once more for nothing.
+            if (queueEmpty) submit("jobFinished") { cancelFlushJob() }
         }
     }
 
@@ -231,6 +233,7 @@ internal class FlowbizCore(
         if (queue.size == 0) {
             cancelFlushJob()
         } else if (retryScheduled && !foregrounded && enabledState.isEnabled) {
+            // !foregrounded on purpose (iOS gates on "backgrounded"): a cold launch for a service or receiver counts.
             scheduleFlushJob()
         }
     }
