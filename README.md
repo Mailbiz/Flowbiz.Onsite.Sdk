@@ -332,8 +332,9 @@ public APIs are callable from any thread, and — with the exception of
 links without the tenant check) and keep links' UTMs for `initialize` — they
 are no-ops before `initialize`. A second `initialize` is ignored: the first
 config wins. The event queue and the push token live in files left out of
-device backups (Android `noBackupFilesDir`; iOS Application Support, flagged
-`isExcludedFromBackup`), so neither follows the user to another phone.
+device backups: Android `noBackupFilesDir`; iOS Application Support, flagged
+`isExcludedFromBackup`, which Apple documents as excluding a file from
+backups. A restored backup therefore brings neither to another phone.
 `debug = true` logs diagnostics but never PII.
 
 ## Development
