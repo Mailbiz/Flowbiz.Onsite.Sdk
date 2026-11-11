@@ -7,6 +7,7 @@ internal class HeartbeatScheduler(
     private val scheduler: TaskScheduler,
     private val sender: HttpSender,
     private val transport: TaskScheduler = scheduler,
+    private val isActive: () -> Boolean = { true },
     private val envelopeProvider: () -> String?,
 ) {
 
@@ -44,8 +45,9 @@ internal class HeartbeatScheduler(
             }
             transport.execute {
                 try {
+                    // Built while enabled, but it may have waited here behind a slow drain: not after an opt-out.
                     // Straight to the sender, result ignored: queued offline pings would evict real events.
-                    sender.send("{\"data\":[$entry]}")
+                    if (isActive()) sender.send("{\"data\":[$entry]}")
                 } catch (t: Throwable) {
                     SdkLog.debug("heartbeat send failed: ${t.javaClass.simpleName}")
                 } finally {

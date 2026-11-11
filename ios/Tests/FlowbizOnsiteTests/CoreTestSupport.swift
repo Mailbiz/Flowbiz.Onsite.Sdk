@@ -42,7 +42,8 @@ final class CoreHarness: @unchecked Sendable {
         config: FlowbizConfig = FlowbizConfig(appId: "77777", baseUri: "https://store.com"),
         store: FakeKeyValueStore = FakeKeyValueStore(),
         clock: FakeClock = FakeClock(),
-        backgroundTask: BackgroundFlush.Runner? = nil
+        backgroundTask: BackgroundFlush.Runner? = nil,
+        transportScheduler: FakeTaskScheduler? = nil
     ) {
         let sender = FakeHttpSender()
         let scheduler = FakeTaskScheduler()
@@ -74,6 +75,7 @@ final class CoreHarness: @unchecked Sendable {
                 timezoneOffsetMinutes: { _ in offset.value }
             ),
             reachability: reachability,
+            transportScheduler: transportScheduler,
             backgroundTask: backgroundTask
         )
     }

@@ -35,6 +35,32 @@ import Testing
         ])
     }
 
+    @Test func aPingWaitingOnTheTransportIsNotSentAfterTheOptOut() {
+        let transport = FakeTaskScheduler()
+        transport.deferExecute = true
+        let h = CoreHarness(transportScheduler: transport)
+        h.core.onForeground()
+        h.scheduler.tickRepeating() // built while enabled; waits behind a slow drain
+
+        h.core.setEnabled(false)
+        transport.runDeferred()
+
+        #expect(h.sender.bodies.isEmpty)
+    }
+
+    @Test func aPingWaitingOnTheTransportIsSentWhileEnabled() {
+        let transport = FakeTaskScheduler()
+        transport.deferExecute = true
+        let h = CoreHarness(transportScheduler: transport)
+        h.core.onForeground()
+        h.scheduler.tickRepeating()
+
+        transport.runDeferred()
+
+        #expect(h.sender.bodies.count == 1)
+        #expect(h.sender.bodies.first?.contains("page.ping") == true)
+    }
+
     @Test func stopCancelsTheTimer() {
         heartbeat.start(intervalMillis: 60_000)
         let handle = scheduler.activeRepeating()!

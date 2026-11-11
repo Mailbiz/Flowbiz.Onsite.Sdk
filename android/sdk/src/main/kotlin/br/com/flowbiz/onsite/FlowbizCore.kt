@@ -34,7 +34,9 @@ internal class FlowbizCore(
         )
     }
 
-    private val heartbeat = HeartbeatScheduler(scheduler, sender, transportScheduler) { buildPingEntry() }
+    private val heartbeat = HeartbeatScheduler(
+        scheduler, sender, transportScheduler, isActive = { enabledState.isEnabled },
+    ) { buildPingEntry() }
     private val heartbeatIntervalMillis = config.heartbeatIntervalSeconds * 1000L
 
     internal data class PageState(val title: String?, val url: String?)

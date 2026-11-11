@@ -29,7 +29,8 @@ final class FlowbizCore: @unchecked Sendable {
     private var lazyFlushController: FlushController?
 
     private lazy var heartbeat = HeartbeatScheduler(
-        scheduler: scheduler, sender: sender, transport: transportScheduler
+        scheduler: scheduler, sender: sender, transport: transportScheduler,
+        isActive: { [enabledState] in enabledState.isEnabled }
     ) { [weak self] in
         self?.buildPingEntry()
     }
