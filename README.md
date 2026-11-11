@@ -44,6 +44,19 @@ Host apps need no R8/ProGuard keep rules for the SDK.
 There is no CocoaPods pod. Both SDKs version in lockstep; one `vX.Y.Z` tag
 releases both.
 
+## Upgrading from 0.1.x
+
+Three source-breaking changes, the same on both platforms:
+
+- **`User.userId` and `User.email` are optional** (`String?`): pass either
+  or both. Code that builds a `User` with both still compiles; code that
+  reads them back must handle `null` / `nil`.
+- **`FlowbizPush.recoveryPayload` is removed.** Call
+  `Flowbiz.handlePushOpened(push)` on the notification tap instead: it
+  returns the same `RecoveryPayload` and also captures the push's UTMs.
+- **`Cart.coupons` and `Order.coupons` are one `String`**, no longer a list:
+  join several codes with a comma, as the web tag sends them.
+
 ## Quickstart
 
 ### Public API surface (complete)
