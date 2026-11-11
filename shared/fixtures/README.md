@@ -49,6 +49,13 @@ their unit tests.
   email without one), also what the SDK stores. `"dropped": true` replaces
   `data`, `data_canonical` and `identity_user_id` when neither is left: the
   event is not sent and the identity does not change.
+- One deliberate divergence from the web, pinned by
+  `account_login_email_without_at`: the web validates the user with yup
+  before sanitizing, so an email that fails yup's `.email()` (no `@`, a
+  space: `"maria"`) rejects the whole account event there, valid `user_id`
+  or not. The SDK only leaves that email out and still sends the event: an
+  identified user is worth more than strict parity. (An email yup accepts
+  but the sanitizer rejects, `maria@gmail`, loses only the email on both.)
 
 Covered edge cases: pageView with path+title, path only, title only, an empty
 call, and an absolute URL with no `baseUri`; productView and addToCart with
@@ -56,7 +63,7 @@ relative/protocol-relative/absolute URLs resolved against `baseUri`; cartSync
 full vs empty-cart; productView multi-variant with nested `properties` /
 `recovery_properties`; orderComplete with payment/delivery methods and minimal;
 account events with mixed case, only an email, only a `user_id`, an invalid
-email, a placeholder `user_id`, a `user_id` that is another email or the same
+email, an email the web's yup validation rejects, a placeholder `user_id`, a `user_id` that is another email or the same
 one, and no valid identity at all; orderCancel with only `order_id`, only
 `cart_id`, and both ids; multi-item
 addToCart; and number/escaping edge cases (`19.99`, `0.1`, whole-number double

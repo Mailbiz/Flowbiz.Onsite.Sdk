@@ -91,6 +91,30 @@ class EnabledStatePushTokenTest {
         assertFalse(store.values.containsKey(StorageKeys.PUSH_TOKEN))
     }
 
+    // The token file's directory cannot be created: a regular file sits where it should be.
+    private fun unwritableTokens(): PushTokenStore {
+        val blocker = temp.newFile("blocker")
+        return PushTokenStore({ File(blocker, "push_token") }, store)
+    }
+
+    @Test
+    fun aMigrationThatCannotWriteKeepsTheTokenInThePreferencesForTheNextStart() {
+        store.values[StorageKeys.PUSH_TOKEN] = "fcm-token-0.1"
+        assertNull(unwritableTokens().token)
+        assertEquals("fcm-token-0.1", store.values[StorageKeys.PUSH_TOKEN])
+
+        assertEquals("fcm-token-0.1", tokens().token)
+        assertFalse(store.values.containsKey(StorageKeys.PUSH_TOKEN))
+    }
+
+    @Test
+    fun clearingDropsATokenTheMigrationCouldNotMove() {
+        store.values[StorageKeys.PUSH_TOKEN] = "fcm-token-0.1"
+        unwritableTokens().clear()
+        assertFalse(store.values.containsKey(StorageKeys.PUSH_TOKEN))
+        assertNull(tokens().token)
+    }
+
     @Test
     fun anUnusableFileReadsAsNoTokenAndNeverThrows() {
         val tokens = PushTokenStore({ temp.root }, store) // a directory

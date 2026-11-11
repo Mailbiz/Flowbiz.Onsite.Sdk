@@ -206,6 +206,7 @@ final class EventQueue: @unchecked Sendable {
                 .appendingPathComponent(appId, isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             var values = URLResourceValues()
+            // Apple documents this flag for backups only; nothing is assumed about a direct device transfer.
             values.isExcludedFromBackup = true
             try? directory.setResourceValues(values)
             return directory.appendingPathComponent("queue.jsonl")

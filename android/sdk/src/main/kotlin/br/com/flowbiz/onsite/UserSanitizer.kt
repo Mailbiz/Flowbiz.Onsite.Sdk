@@ -2,6 +2,8 @@ package br.com.flowbiz.onsite
 
 // The web's account pipeline: the universal vendor's userSchema lowercases, then onsite-core's
 // sanitizeAccountUser drops an invalid email and a user_id that identifies nobody.
+// One divergence, on purpose: an email that fails yup's .email() ("maria") rejects the whole event on the
+// web; here only the email is left out, so a valid user_id still identifies the user.
 internal object UserSanitizer {
 
     /** The event as the web would send it, or null when an account event is left with no valid user_id or email. */

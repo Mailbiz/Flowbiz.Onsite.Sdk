@@ -44,6 +44,19 @@ Host apps need no R8/ProGuard keep rules for the SDK.
 There is no CocoaPods pod. Both SDKs version in lockstep; one `vX.Y.Z` tag
 releases both.
 
+## Upgrading from 0.1.x
+
+Three source-breaking changes, the same on both platforms:
+
+- **`User.userId` and `User.email` are optional** (`String?`): pass either
+  or both. Code that builds a `User` with both still compiles; code that
+  reads them back must handle `null` / `nil`.
+- **`FlowbizPush.recoveryPayload` is removed.** Call
+  `Flowbiz.handlePushOpened(push)` on the notification tap instead: it
+  returns the same `RecoveryPayload` and also captures the push's UTMs.
+- **`Cart.coupons` and `Order.coupons` are one `String`**, no longer a list:
+  join several codes with a comma, as the web tag sends them.
+
 ## Quickstart
 
 ### Public API surface (complete)
@@ -252,7 +265,10 @@ identified, abandoned and recovered, the backend needs:
   does: both are lowercased, an invalid email or a placeholder `userId`
   (`"0"`, `"null"`, a single character…) is left out, and
   `identity.user_id` is the `userId`, or the email without one. An account
-  event left with neither is not sent.
+  event left with neither is not sent. One difference from the web: an email
+  with no `@` or with a space (`"maria"`) makes the web tag reject the whole
+  account event; the SDK leaves only that email out and still sends the
+  event with a valid `userId`, so the user stays identified.
 - **`User.createdAt` in ISO 8601** (`2026-10-19T14:03:00-03:00`): any other
   format drops the account event.
 - **`items = emptyList()` / `items: []` to empty a cart**: a `CartSync`
@@ -344,8 +360,9 @@ public APIs are callable from any thread, and — with the exception of
 links without the tenant check) and keep links' UTMs for `initialize` — they
 are no-ops before `initialize`. A second `initialize` is ignored: the first
 config wins. The event queue and the push token live in files left out of
-device backups (Android `noBackupFilesDir`; iOS Application Support, flagged
-`isExcludedFromBackup`), so neither follows the user to another phone.
+device backups: Android `noBackupFilesDir`; iOS Application Support, flagged
+`isExcludedFromBackup`, which Apple documents as excluding a file from
+backups. A restored backup therefore brings neither to another phone.
 `debug = true` logs diagnostics but never PII.
 
 ## Development
