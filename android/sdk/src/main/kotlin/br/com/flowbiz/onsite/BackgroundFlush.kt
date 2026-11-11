@@ -48,6 +48,8 @@ internal class JobSchedulerBackgroundFlush(context: Context) : BackgroundFlush {
     override fun cancel() {
         try {
             val scheduler = scheduler() ?: return
+            // Never a job of the host app that took the same id.
+            if (!ownsFlushJob(scheduler.getPendingJob(JOB_ID)?.service?.className)) return
             scheduler.cancel(JOB_ID)
             SdkLog.debug("background flush job cancelled")
         } catch (t: Throwable) {
@@ -57,7 +59,7 @@ internal class JobSchedulerBackgroundFlush(context: Context) : BackgroundFlush {
 
     override fun isPending(): Boolean =
         try {
-            scheduler()?.getPendingJob(JOB_ID) != null
+            ownsFlushJob(scheduler()?.getPendingJob(JOB_ID)?.service?.className)
         } catch (t: Throwable) {
             SdkLog.debug("background flush job not looked up: ${t.javaClass.simpleName}")
             false
@@ -76,6 +78,11 @@ internal class JobSchedulerBackgroundFlush(context: Context) : BackgroundFlush {
         const val JOB_ID = 0x464C425A
     }
 }
+
+// Below Android 14 the id is shared with the host app: a pending job is the SDK's only if it runs the
+// SDK's service.
+internal fun ownsFlushJob(pendingServiceClassName: String?): Boolean =
+    pendingServiceClassName == FlowbizFlushJobService::class.java.name
 
 /** Declared in the SDK's manifest; started by the system, never by the host app. */
 class FlowbizFlushJobService : JobService() {

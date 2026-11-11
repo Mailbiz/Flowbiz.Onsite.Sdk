@@ -294,6 +294,23 @@ class BackgroundFlushTest {
     }
 
     @Test
+    fun aPendingJobOfTheSdksServiceIsTheSdks() {
+        assertTrue(ownsFlushJob("br.com.flowbiz.onsite.FlowbizFlushJobService"))
+    }
+
+    @Test
+    fun aPendingJobOfTheHostAppUnderTheSameIdIsNotTheSdks() {
+        // Below Android 14 job ids are shared by the whole app: counted as held, the SDK would never
+        // schedule its own job and would cancel the host's once the queue is empty.
+        assertFalse(ownsFlushJob("com.example.host.SyncJobService"))
+    }
+
+    @Test
+    fun noPendingJobIsNotTheSdks() {
+        assertFalse(ownsFlushJob(null))
+    }
+
+    @Test
     fun aDrainReportsToEveryCallerThatWaitedOnIt() {
         val waiting = ArrayDeque<Runnable>()
         val scheduler = FakeTaskScheduler()

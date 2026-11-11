@@ -308,9 +308,11 @@ nothing to set up in the host app:
   without sending. It is not persisted: a reboot or a force stop drops it,
   and the next app open flushes instead. Below Android 14, where job ids are
   shared by the whole app, it uses the fixed id `1179402842` (`0x464C425A`):
-  a job of the host app with that same id and the SDK's would replace each
-  other. From Android 14 on it lives in the `br.com.flowbiz.onsite` job
-  namespace.
+  scheduling a job of the host app with that same id replaces the SDK's, and
+  the SDK's replaces the host's. The SDK counts a pending job as its own, and
+  cancels it, only if it runs `FlowbizFlushJobService`: a host job under that
+  id is neither taken for the SDK's nor cancelled. From Android 14 on it
+  lives in the `br.com.flowbiz.onsite` job namespace.
 
 While the SDK is disabled neither sends anything, and no job is scheduled. A
 pending job is cancelled at the opt-out, also one that a previous process
