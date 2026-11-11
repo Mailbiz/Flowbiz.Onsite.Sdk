@@ -461,6 +461,37 @@ If `xcode-select` points at the Command Line Tools, prefix the commands with
 For an end-to-end check against a collector, run a demo app (see
 [Demo apps](#demo-apps)); debug builds point at the staging collector.
 
+### Release checks
+
+The OS side of background delivery (the Android job service and its manifest
+merge, the iOS background task) is only faked in the unit tests. Before a
+release, run it once on a device or emulator with a demo app (`debug` logs
+under the tag / category `FlowbizOnsite`):
+
+**Android** (demo package `br.com.flowbiz.onsite.demo`):
+
+1. The service is in the merged manifest:
+   `aapt2 dump xmltree --file AndroidManifest.xml demo/build/outputs/apk/debug/demo-debug.apk | grep -A3 "E: service"`
+   shows `FlowbizFlushJobService`, `exported=false`, `BIND_JOB_SERVICE`.
+2. Offline (`adb shell cmd connectivity airplane-mode enable`), cold-launch
+   the demo and press Home. `adb shell dumpsys jobscheduler | grep 1179402842`
+   lists the job, its network constraint unsatisfied.
+3. `adb shell am kill br.com.flowbiz.onsite.demo`, then force the job:
+   `adb shell cmd jobscheduler run -f -n br.com.flowbiz.onsite br.com.flowbiz.onsite.demo 1179402842`
+   (drop `-n br.com.flowbiz.onsite` below API 34). The process starts, logs
+   one `flush requested: EXPLICIT`, and the job history in `dumpsys` shows a
+   single `START` / `STOP … app called jobFinished`, the job still pending.
+4. `adb shell cmd connectivity airplane-mode disable`: the job runs again
+   within a minute, the POST succeeds and the job is gone from `dumpsys`.
+
+**iOS** (simulator, demo bundle id `br.com.flowbiz.onsite.FlowbizDemo`):
+
+1. `xcrun simctl spawn booted log stream --level debug --predicate 'subsystem == "br.com.flowbiz.onsite"'`
+2. `xcrun simctl launch booted br.com.flowbiz.onsite.FlowbizDemo`, then send
+   it to the background with `xcrun simctl launch booted com.apple.Preferences`:
+   the log shows `flush requested: appBackground`.
+3. Launch the demo again: same process id, `flush requested: appForeground`.
+
 ### Releasing a new version
 
 Both SDKs version in lockstep and one `vX.Y.Z` tag releases both: the AAR
