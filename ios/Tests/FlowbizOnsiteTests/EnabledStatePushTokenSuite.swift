@@ -78,6 +78,29 @@ import Testing
         #expect(store[StorageKeys.pushToken] == nil)
     }
 
+    // The token file's directory cannot be created: a regular file sits where it should be.
+    private func unwritableTokens() throws -> PushTokenStore {
+        let blocker = FileManager.default.temporaryDirectory.appendingPathComponent("flowbiz-blocker-\(UUID().uuidString)")
+        try Data().write(to: blocker)
+        return PushTokenStore(fileURL: { blocker.appendingPathComponent("push_token") }, legacy: store)
+    }
+
+    @Test func aMigrationThatCannotWriteKeepsTheTokenInTheDefaultsForTheNextStart() throws {
+        store[StorageKeys.pushToken] = "apns-token-0.1"
+        #expect(try unwritableTokens().token == nil)
+        #expect(store[StorageKeys.pushToken] as? String == "apns-token-0.1")
+
+        #expect(tokens().token == "apns-token-0.1")
+        #expect(store[StorageKeys.pushToken] == nil)
+    }
+
+    @Test func clearingDropsATokenTheMigrationCouldNotMove() throws {
+        store[StorageKeys.pushToken] = "apns-token-0.1"
+        try unwritableTokens().clear()
+        #expect(store[StorageKeys.pushToken] == nil)
+        #expect(tokens().token == nil)
+    }
+
     @Test func anUnusableFileReadsAsNoToken() {
         let directory = FileManager.default.temporaryDirectory
         let tokens = PushTokenStore(fileURL: { directory }, legacy: store)

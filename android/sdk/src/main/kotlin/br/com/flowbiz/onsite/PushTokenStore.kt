@@ -28,13 +28,16 @@ internal class PushTokenStore(
     }
 
     fun clear() {
+        guarded("clear") { migrate() }
         guarded("clear") {
-            migrate()
+            // Also a token the migration could not move: it must not come back at the next start.
+            legacy.remove(StorageKeys.PUSH_TOKEN)
             if (file.isFile) file.delete()
         }
     }
 
     // 0.1.x kept the token in the preferences. Once: a token found there later came from a restored backup.
+    // A write that throws keeps it there for the next start.
     private fun migrate() {
         if (migrated) return
         migrated = true
