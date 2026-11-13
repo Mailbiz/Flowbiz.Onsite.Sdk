@@ -29,7 +29,7 @@ import Testing
                 assertPushMatches(name, expected: expectedPush, push: actual)
             }
             if let expectedRecovery = sample["expected_recovery"] as? [String: Any] {
-                let actual = try #require(push?.recoveryPayload, "sample '\(name)': recoveryPayload")
+                let actual = try #require(RecoveryLinkParser.parse(push?.deepLinkString), "sample '\(name)': recovery")
                 try assertRecoveryMatches(name, expected: expectedRecovery, recovery: actual)
             }
         }

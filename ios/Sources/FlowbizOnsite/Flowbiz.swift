@@ -7,10 +7,14 @@ import UIKit
 /// Every call is thread-safe, returns at once and never throws; before `initialize` only the decoders work.
 public enum Flowbiz {
 
-    private final class State: @unchecked Sendable {
+    final class State: @unchecked Sendable {
         private let lock = NSLock()
         private var core: FlowbizCore?
         private var observers: [NSObjectProtocol] = []
+        // Links forwarded before initialize; their UTMs are captured when it runs.
+        // Capped: initialize may never succeed, and the newest links win the merge anyway.
+        private var pendingLinks: [String] = []
+        private static let maxPendingLinks = 20
 
         var currentCore: FlowbizCore? {
             lock.lock()
@@ -25,7 +29,20 @@ public enum Flowbiz {
             // Built under the lock so a losing initialize never starts an NWPathMonitor; it does no I/O.
             let newCore = makeCore()
             core = newCore
+            pendingLinks.forEach { newCore.captureUtm(fromLink: $0) }
+            pendingLinks.removeAll()
             return newCore
+        }
+
+        /// The installed core, or nil after keeping `link` for the coming initialize.
+        func coreOrPending(_ link: String) -> FlowbizCore? {
+            lock.lock()
+            defer { lock.unlock() }
+            if core == nil {
+                if pendingLinks.count >= Self.maxPendingLinks { pendingLinks.removeFirst() }
+                pendingLinks.append(link)
+            }
+            return core
         }
 
         var isInitialized: Bool {
@@ -41,7 +58,7 @@ public enum Flowbiz {
         }
     }
 
-    private static let state = State()
+    static let state = State()
 
     private final class DebugSinkBox: @unchecked Sendable {
         private let lock = NSLock()
@@ -90,12 +107,20 @@ public enum Flowbiz {
             return FlowbizCore(
                 config: sanitized,
                 store: UserDefaultsStore(appId: sanitized.appId),
-                queueFactory: { EventQueue(fileURL: queueFileURL(appId: sanitized.appId)) },
+                queueFactory: {
+                    EventQueue(fileURL: queueFileURL(appId: sanitized.appId), nowMillis: SystemClock().wallMillis)
+                },
+                // Beside the queue: that directory is excluded from backups.
+                pushTokenFileURL: {
+                    queueFileURL(appId: sanitized.appId).deletingLastPathComponent().appendingPathComponent("push_token")
+                },
                 sender: URLSessionHttpSender(collectorUrl: sanitized.collectorUrl, platform: FlowbizCore.platform),
                 scheduler: DispatchTaskScheduler(queue: serialQueue),
                 clock: SystemClock(),
                 deviceContext: makeDeviceContext(),
-                reachability: PathMonitorReachability(queue: serialQueue)
+                reachability: PathMonitorReachability(queue: serialQueue),
+                transportScheduler: DispatchTaskScheduler(queue: DispatchQueue(label: "br.com.flowbiz.onsite.transport")),
+                backgroundTask: backgroundTask
             )
         }) else {
             SdkLog.debug("initialize ignored: already initialized (first config wins)")
@@ -151,13 +176,21 @@ public enum Flowbiz {
     /// Decodes a cart-recovery link and captures its campaign UTMs; forward every incoming link.
     @discardableResult
     public static func handleLink(_ url: URL?) -> RecoveryPayload? {
-        handleLink(url?.absoluteString, core: currentCore)
+        forwardLink(url?.absoluteString)
     }
 
     /// Call on notification tap: `handleLink` over the push's raw deep link.
     @discardableResult
     public static func handlePushOpened(_ push: FlowbizPush?) -> RecoveryPayload? {
-        handleLink(push?.deepLinkString, core: currentCore)
+        forwardLink(push?.deepLinkString)
+    }
+
+    static func forwardLink(_ link: String?, state: State = Flowbiz.state) -> RecoveryPayload? {
+        guard let link else { return nil }
+        #if DEBUG
+        if let taskCore { return handleLink(link, core: taskCore) }
+        #endif
+        return handleLink(link, core: state.coreOrPending(link))
     }
 
     // Not withCore: without a core the link is still decoded.
@@ -261,7 +294,9 @@ public enum Flowbiz {
         ) { _ in core.onForeground() })
         tokens.append(center.addObserver(
             forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil
-        ) { _ in core.onBackground() })
+        ) { _ in
+            BackgroundFlush.run(begin: beginBackgroundTask) { finished in core.onBackground(flushed: finished) }
+        })
         state.retain(observers: tokens)
         // Initialized while already active: no notification fires for this session, so probe once.
         Task { @MainActor in
@@ -270,7 +305,32 @@ public enum Flowbiz {
             }
         }
     }
+
+    // The core asks from its own queue; a background task is begun on the main thread.
+    private static let backgroundTask: BackgroundFlush.Runner? = { flush in
+        DispatchQueue.main.async { BackgroundFlush.run(begin: beginBackgroundTask, flush: flush) }
+    }
+
+    // Called where the notification is posted, the main thread. Nil when iOS grants no background time.
+    private static func beginBackgroundTask(_ onExpire: @escaping @Sendable () -> Void) -> (@Sendable () -> Void)? {
+        guard Thread.isMainThread else { return nil }
+        return MainActor.assumeIsolated {
+            let identifier = UIApplication.shared.beginBackgroundTask(withName: "br.com.flowbiz.onsite.flush") {
+                onExpire()
+            }
+            guard identifier != .invalid else { return nil }
+            return {
+                // Inline on the main thread: the expiration handler must have ended the task when it returns.
+                if Thread.isMainThread {
+                    MainActor.assumeIsolated { UIApplication.shared.endBackgroundTask(identifier) }
+                } else {
+                    Task { @MainActor in UIApplication.shared.endBackgroundTask(identifier) }
+                }
+            }
+        }
+    }
     #else
+    private static let backgroundTask: BackgroundFlush.Runner? = nil
     private static func startLifecycleTracking(_ core: FlowbizCore) {}
     #endif
 }

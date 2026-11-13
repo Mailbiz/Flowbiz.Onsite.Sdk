@@ -14,10 +14,13 @@ final class FlowbizCore: @unchecked Sendable {
     private let utmStore: UtmStore
     private let sender: any HttpSender
     private let scheduler: any TaskScheduler
+    // Its own serial queue: a blocking POST must not hold the SDK queue, where track() persists the event.
+    private let transportScheduler: any TaskScheduler
     private let clock: any Clock
     private let deviceContext: DeviceContext
     private let reachability: any ReachabilityMonitor
     private let heartbeatIntervalMillis: Int64
+    private let backgroundTask: BackgroundFlush.Runner?
 
     // Lazy: EventQueue's init reads the file, which must stay off the caller's thread at initialize.
     private let queueFactory: () -> EventQueue
@@ -25,39 +28,49 @@ final class FlowbizCore: @unchecked Sendable {
     private var lazyQueue: EventQueue?
     private var lazyFlushController: FlushController?
 
-    private lazy var heartbeat = HeartbeatScheduler(scheduler: scheduler, sender: sender) { [weak self] in
+    private lazy var heartbeat = HeartbeatScheduler(
+        scheduler: scheduler, sender: sender, transport: transportScheduler,
+        isActive: { [enabledState] in enabledState.isEnabled }
+    ) { [weak self] in
         self?.buildPingEntry()
     }
 
     struct PageState { let title: String?; let url: String? }
     private var lastPage: PageState?
     private var foregrounded = false
+    // After didEnterBackground, not merely before the first foreground: a launch must not wait on the main thread.
+    private var backgrounded = false
     private var utmContext: String?
 
     init(
         config: FlowbizConfig,
         store: any KeyValueStore,
         queueFactory: @escaping () -> EventQueue,
+        pushTokenFileURL: @escaping () -> URL,
         sender: any HttpSender,
         scheduler: any TaskScheduler,
         clock: any Clock,
         deviceContext: DeviceContext,
-        reachability: any ReachabilityMonitor
+        reachability: any ReachabilityMonitor,
+        transportScheduler: (any TaskScheduler)? = nil,
+        backgroundTask: BackgroundFlush.Runner? = nil
     ) {
         self.config = config
         self.identityStore = IdentityStore(store: store)
         self.sessionManager = SessionManager(store: store, clock: clock)
         self.enabledState = EnabledState(store: store)
-        self.pushTokenStore = PushTokenStore(store: store)
+        self.pushTokenStore = PushTokenStore(fileURL: pushTokenFileURL, legacy: store)
         self.dedupStore = DedupStore(store: store, clock: clock)
         self.utmStore = UtmStore(store: store, clock: clock)
         self.queueFactory = queueFactory
         self.sender = sender
         self.scheduler = scheduler
+        self.transportScheduler = transportScheduler ?? scheduler
         self.clock = clock
         self.deviceContext = deviceContext
         self.reachability = reachability
         self.heartbeatIntervalMillis = Int64(config.heartbeatInterval * 1000)
+        self.backgroundTask = backgroundTask
 
         reachability.start { [weak self] in
             guard let self, self.enabledState.isEnabled else { return }
@@ -68,18 +81,28 @@ final class FlowbizCore: @unchecked Sendable {
         submit { core in core.refreshUtm(link: nil, slideExpiry: false) }
     }
 
-    func track(_ event: Event) {
+    func track(_ tracked: Event) {
         submit { core in
             guard core.enabledState.isEnabled else {
                 SdkLog.debug("track dropped: SDK disabled")
                 return
             }
+            guard let event = UserSanitizer.sanitize(tracked) else {
+                SdkLog.debug("account event dropped: no valid user_id or email")
+                return
+            }
             // Before the envelope is built, so the login event itself carries user_id.
             switch event {
             case .accountLogin(let user), .accountSync(let user):
-                core.identityStore.setUser(userId: user.userId, email: user.email)
+                if let userId = UserSanitizer.identityUserId(user) {
+                    core.identityStore.setUser(userId: userId, email: user.email)
+                }
             default:
                 break
+            }
+            // Sent anyway: Cart.Worker still closes the cart, but credits no UTMs to an order without a real id.
+            if case .orderComplete(let order) = event, !Self.isRealOrderId(order.orderId) {
+                SdkLog.debug("order.complete without a real orderId: its campaign is not credited; track it once the order is confirmed")
             }
             core.sessionManager.touch()
             let session = core.sessionManager.currentSession()
@@ -116,7 +139,7 @@ final class FlowbizCore: @unchecked Sendable {
                     utm: core.utmContext
                 )
                 core.queue.append(try CanonicalJSON.render(entry))
-                core.flushController.requestFlush(.eventTracked)
+                core.flushTrackedEvent()
             } catch {
                 SdkLog.debug("event dropped: serialization failed")
             }
@@ -194,6 +217,7 @@ final class FlowbizCore: @unchecked Sendable {
         submit { core in
             guard !core.foregrounded else { return }
             core.foregrounded = true
+            core.backgrounded = false
             core.sessionManager.onForeground()
             core.refreshUtm(link: nil, slideExpiry: true)
             if core.enabledState.isEnabled {
@@ -203,11 +227,32 @@ final class FlowbizCore: @unchecked Sendable {
         }
     }
 
-    func onBackground() {
+    /// `flushed` runs when the flush this starts is over, delivered or not; the caller holds a background task for it.
+    func onBackground(flushed: (@Sendable () -> Void)? = nil) {
         submit { core in
             core.foregrounded = false
+            core.backgrounded = true
             core.heartbeat.stop()
+            guard core.enabledState.isEnabled else {
+                flushed?()
+                return
+            }
+            // The last cart.sync before the user leaves: without this it waited for the next app open,
+            // and a user who never returns was never seen abandoning the cart.
+            core.flushController.requestFlush(.appBackground, onDrained: flushed)
         }
+    }
+
+    // An event tracked after the app left the foreground (in the host's own didEnterBackground handler, say):
+    // the task held for onBackground's flush may be over, and iOS suspends the app within seconds.
+    // One attempt, as there: the task ends with the drain, delivered or not.
+    private func flushTrackedEvent() {
+        guard backgrounded, let backgroundTask else {
+            flushController.requestFlush(.eventTracked)
+            return
+        }
+        let controller = flushController
+        backgroundTask { finished in controller.requestFlush(.eventTracked, onDrained: finished) }
     }
 
     private func buildPingEntry() -> String? {
@@ -292,7 +337,7 @@ final class FlowbizCore: @unchecked Sendable {
                 utm: utmContext
             )
             queue.append(try CanonicalJSON.render(entry))
-            flushController.requestFlush(.eventTracked)
+            flushTrackedEvent()
         } catch {
             SdkLog.debug("\(wireName) dropped: serialization failed")
         }
@@ -347,12 +392,18 @@ final class FlowbizCore: @unchecked Sendable {
         let controller = FlushController(
             queue: queue,
             sender: sender,
-            scheduler: scheduler,
+            scheduler: transportScheduler,
             clock: clock,
             isActive: { enabledState.isEnabled }
         )
         lazyFlushController = controller
         return controller
+    }
+
+    // The backend's OrderUtmAttribution.IsRealOrderId.
+    static func isRealOrderId(_ orderId: String?) -> Bool {
+        let trimmed = orderId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !trimmed.isEmpty && trimmed != "0"
     }
 
     static func formatTimezoneOffset(minutes: Int) -> String {

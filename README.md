@@ -44,6 +44,19 @@ Host apps need no R8/ProGuard keep rules for the SDK.
 There is no CocoaPods pod. Both SDKs version in lockstep; one `vX.Y.Z` tag
 releases both.
 
+## Upgrading from 0.1.x
+
+Three source-breaking changes, the same on both platforms:
+
+- **`User.userId` and `User.email` are optional** (`String?`): pass either
+  or both. Code that builds a `User` with both still compiles; code that
+  reads them back must handle `null` / `nil`.
+- **`FlowbizPush.recoveryPayload` is removed.** Call
+  `Flowbiz.handlePushOpened(push)` on the notification tap instead: it
+  returns the same `RecoveryPayload` and also captures the push's UTMs.
+- **`Cart.coupons` and `Order.coupons` are one `String`**, no longer a list:
+  join several codes with a comma, as the web tag sends them.
+
 ## Quickstart
 
 ### Public API surface (complete)
@@ -57,7 +70,7 @@ Flowbiz.setEnabled(enabled: Boolean)    // opt-out switch, see Consent below; pe
 Flowbiz.setPushToken(token: String)
 Flowbiz.removePushToken()
 Flowbiz.handlePush(payload: Map<String, String>): FlowbizPush?   // null = not ours
-Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch); once initialized, UTMs are captured either way
+Flowbiz.handleLink(url: Uri): RecoveryPayload?                   // null = no decodable _mb_cr_ link (or utm_source / tenant mismatch); UTMs are captured either way (before initialize: when it runs)
 Flowbiz.handlePushOpened(push: FlowbizPush): RecoveryPayload?    // on notification tap: handleLink over the push's deep link
 Flowbiz.flush()                         // force queue flush (optional nicety, fire-and-forget)
 ```
@@ -97,7 +110,8 @@ apps get the same defaults via `@JvmOverloads`).
 
 Invalid values never throw: each one is sanitized at `initialize` with a
 `debug` log line, and the sanitized copy is what the SDK runs with. Session
-timeout (30 min), dedup window (20 min), queue cap (1000) and the connection
+timeout (30 min), dedup window (20 min), queue cap (1000), queue max age
+(7 days) and the connection
 timeout are internal constants, not configuration.
 
 ### Android
@@ -127,8 +141,9 @@ if (push != null) {
     // push.type, push.title, push.body, push.deepLink, push.data — display/route as you wish
 }
 
-// Notification tap — in the Activity it opens (extrasAsMap: your helper reading the
-// data map its PendingIntent carried); route with tappedPush?.deepLink as usual
+// Notification tap — in the Activity it opens, once per intent like deep links (see Campaign
+// attribution); extrasAsMap: your helper reading the data map its PendingIntent carried.
+// Route with tappedPush?.deepLink as usual
 val tappedPush: FlowbizPush? = Flowbiz.handlePush(extrasAsMap(intent.extras))
 val tapped: RecoveryPayload? = Flowbiz.handlePushOpened(tappedPush)   // non-null: restore, then track CartSync
 
@@ -210,10 +225,11 @@ push via `handlePushOpened`, ride as `context.utm` on every event, as the web
 tag reports them; they are kept 30 days, renewed on each app open or new link.
 Forward every link the app is opened with, recovery link or not:
 
-- **Android**: the deep-link Activity's `onCreate` and `onNewIntent`, once per
-  intent (in `onCreate` only when `savedInstanceState == null` and the intent
-  lacks `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, so a rotation or a relaunch
-  from Recents does not forward an old link again).
+- **Android**: the Activity's `onCreate` and `onNewIntent`, for deep links and
+  notification taps alike, once per intent (in `onCreate` only when
+  `savedInstanceState == null` and the intent lacks
+  `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, so a rotation or a relaunch from
+  Recents does not forward an old link or push again).
 - **iOS**: SwiftUI `onOpenURL`, and for a cold launch also
   `application(_:configurationForConnecting:options:)` through
   `@UIApplicationDelegateAdaptor` (`options.urlContexts` and
@@ -228,13 +244,81 @@ Forward every link the app is opened with, recovery link or not:
   `URL(string:)`, it can lose or alter its UTMs.
 - **Push tap**: `handlePushOpened(push)`; `handlePush` never captures.
 
-Call `initialize` at launch, before forwarding links: links forwarded before
-it are not captured. Forward the launch link before tracking the landing
-screen's `PageView`, so that page view carries the new campaign. An order is
-credited to a campaign through its cart's last `CartSync`, so after restoring
-a recovered cart, track `CartSync` with it. Links are still captured while
-the SDK is disabled and ride on the events after `setEnabled(true)`;
-`logout()` keeps them.
+A link forwarded before `initialize` is still decoded, and its UTMs are
+captured when `initialize` runs (the last 20 such links are kept). Capturing sends nothing: after forwarding a
+link, on a cold or a warm open, track the screen's `PageView`, so the campaign
+goes out at once. An `OrderComplete` with a real `orderId` is credited to the
+campaign on its own `context.utm`, which replaces the cart's; an order sent
+without UTMs keeps the ones of its cart's last `CartSync`, so after restoring
+a recovered cart, still track `CartSync` with it.
+Links are still captured while the SDK is disabled and ride on the events
+after `setEnabled(true)`; `logout()` keeps them.
+
+### What the backend needs
+
+The SDK sends what you build without validating it. For carts to be
+identified, abandoned and recovered, the backend needs:
+
+- **An identified user**: `AccountLogin` or `AccountSync` at least once per
+  install. Until then no cart email can go out for that device. `User` takes
+  a `userId`, an `email` or both, and the SDK normalises them as the web tag
+  does: both are lowercased, an invalid email or a placeholder `userId`
+  (`"0"`, `"null"`, a single character…) is left out, and
+  `identity.user_id` is the `userId`, or the email without one. An account
+  event left with neither is not sent. One difference from the web: an email
+  with no `@` or with a space (`"maria"`) makes the web tag reject the whole
+  account event; the SDK leaves only that email out and still sends the
+  event with a valid `userId`, so the user stays identified.
+- **`User.createdAt` in ISO 8601** (`2026-10-19T14:03:00-03:00`): any other
+  format drops the account event.
+- **`items = emptyList()` / `items: []` to empty a cart**: a `CartSync`
+  without `items` keeps the products the backend already has.
+- **`coupons` as one string**, several codes joined with a comma, as the web
+  tag sends them.
+- **`OrderComplete` only once the order is confirmed, with its `orderId`**.
+  The SDK has no "temporary order" (the web's `OrderComplete` without
+  `order_id`): without an id, or with a blank one, the backend still closes
+  the cart but never credits the order's UTMs to a campaign, and an `orderId`
+  of `"0"` closes nothing. The event is sent as built; `debug` logs a warning.
+
+### Background delivery
+
+When the app goes to the background the SDK sends what is still queued, with
+nothing to set up in the host app:
+
+- **iOS**: the flush runs inside a `UIApplication` background task
+  (`beginBackgroundTask`), ended when the flush finishes or when iOS calls
+  time. It is one attempt in the background time iOS grants, with no
+  `BGTaskScheduler` follow-up, which would need entries in the host app's
+  Info.plist: what a dead connection leaves queued goes out at the next app
+  open. An event tracked after the app left the foreground gets the same,
+  one attempt inside its own background task.
+- **Android**: the flush is tried at once, and if events are still queued a
+  platform `JobScheduler` job with a network constraint sends them when the
+  connection is back, also after the process was killed. An event tracked
+  after the app left the foreground (in `onStop`, from a service or a
+  receiver) that cannot be sent gets the same job, and the job is cancelled
+  once any flush empties the queue, also a job that a previous process of
+  the app left pending. Android decides when the job runs: under
+  app-standby buckets and job quotas it can start well after the network is
+  back. The SDK's manifest
+  merges the job's service (`FlowbizFlushJobService`); it needs no permission
+  beyond `ACCESS_NETWORK_STATE`. A job started in a new process finds the SDK
+  only if `initialize` runs in `Application.onCreate`, otherwise it ends
+  without sending. It is not persisted: a reboot or a force stop drops it,
+  and the next app open flushes instead. Below Android 14, where job ids are
+  shared by the whole app, it uses the fixed id `1179402842` (`0x464C425A`):
+  scheduling a job of the host app with that same id replaces the SDK's, and
+  the SDK's replaces the host's. The SDK counts a pending job as its own, and
+  cancels it, only if it runs `FlowbizFlushJobService`: a host job under that
+  id is neither taken for the SDK's nor cancelled. From Android 14 on it
+  lives in the `br.com.flowbiz.onsite` job namespace.
+
+While the SDK is disabled neither sends anything, and no job is scheduled. A
+pending job is cancelled at the opt-out, also one that a previous process
+left. Neither
+tracks anything: only events the app already tracked are sent, and no
+heartbeat runs in the background.
 
 ### Consent / opt-out
 
@@ -243,8 +327,10 @@ launches; while disabled the SDK drops new events, stops the heartbeat and
 makes no network calls. Re-enabling resumes normal operation and re-syncs a
 push token registered while disabled. The consent UI/decision is
 the host app's responsibility — the SDK collects by default until told
-otherwise. UTMs of links forwarded while disabled are still stored on the
-device, and sent only after re-enabling.
+otherwise. Keep `initialize` at launch even before consent, and call
+`setEnabled(false)` right after it until the user agrees, rather than
+delaying `initialize`. UTMs of links forwarded while disabled are still
+stored on the device, and sent only after re-enabling.
 
 ## Demo apps
 
@@ -268,18 +354,32 @@ queue + backoff.
 
 No public API throws: a failure costs at most a dropped event. `track()`
 never blocks and survives offline: events are persisted to a disk queue
-(cap 1000, drop-oldest) and flushed with exponential backoff on network
-restore, app foreground, the next track, or `flush()`. Identical payloads per
+(cap 1000, drop-oldest; an event still undelivered 7 days after it was
+tracked is dropped when the queue next loads, at the first use after a
+process start; the age is checked only then, so a process that stays alive
+longer still sends such an event, and a device clock set forward drops old
+entries at the next load) and flushed with exponential backoff on network
+restore, app foreground, app background, the next track, or `flush()`. An event reaches the
+disk at once, also while a send is in flight: the network runs on its own
+thread, apart from the one that persists. Leaving the app flushes what is
+queued, so the last `CartSync` does not wait for the next open (see
+Background delivery). Identical payloads per
 event type are deduplicated for 20 minutes, except `PageView`, which is always
 sent (as on web); nothing else is filtered: a `cartSync` with an empty cart is
 sent. There is no runtime schema validation
-or field enrichment; the SDK sends the typed payload you build. A `page.ping`
+or field enrichment; the SDK sends the typed payload you build, with one
+exception: the account `User` is normalised as on web (see What the backend
+needs). A `page.ping`
 heartbeat (default 60 s, configurable ≥ 15 s) runs while foregrounded,
 best-effort and never queued. Sessions rotate after 30 min of inactivity. All
 public APIs are callable from any thread, and — with the exception of
 `handlePush`/`handleLink`/`handlePushOpened`, which still decode (recovery
-links without the tenant check) — they are no-ops before `initialize`. A
-second `initialize` is ignored: the first config wins.
+links without the tenant check) and keep links' UTMs for `initialize` — they
+are no-ops before `initialize`. A second `initialize` is ignored: the first
+config wins. The event queue and the push token live in files left out of
+device backups: Android `noBackupFilesDir`; iOS Application Support, flagged
+`isExcludedFromBackup`, which Apple documents as excluding a file from
+backups. A restored backup therefore brings neither to another phone.
 `debug = true` logs diagnostics but never PII.
 
 ## Development
@@ -300,10 +400,10 @@ envelope, identity and session, queueing) and `Mailbiz.One.Collector`
 |---|---|
 | Public surface | `Flowbiz`, `FlowbizConfig`, `Event`, `Models` |
 | Engine (wires everything: lifecycle, logout, heartbeat, flush triggers) | `FlowbizCore` |
-| Event → wire payload | `EventSerializer`, `UrlResolver`, `CanonicalJson`/`CanonicalJSON`, `EnvelopeBuilder` |
+| Event → wire payload | `EventSerializer`, `UserSanitizer`, `UrlResolver`, `CanonicalJson`/`CanonicalJSON`, `EnvelopeBuilder` |
 | Identity & session | `IdentityStore`, `SessionManager`, `Clock` + `AndroidClock`/`SystemClock` |
 | Dedup, heartbeat, opt-out | `DedupStore`, `HeartbeatScheduler`, `EnabledState` |
-| Offline queue & transport | `EventQueue`, `FlushController`, `HttpSender`, `Reachability` |
+| Offline queue & transport | `EventQueue`, `FlushController`, `HttpSender`, `Reachability`, `BackgroundFlush` |
 | Push & recovery links | `PushTokenStore`, `FlowbizPush`, `RecoveryLinkParser`, `RecoveryPayload` |
 | UTM attribution | `UtmLinkParser`, `UtmStore` |
 | Persistence | `KeyValueStore` + `SharedPreferencesStore`/`UserDefaultsStore` |
@@ -363,6 +463,65 @@ If `xcode-select` points at the Command Line Tools, prefix the commands with
 
 For an end-to-end check against a collector, run a demo app (see
 [Demo apps](#demo-apps)); debug builds point at the staging collector.
+
+### Release checks
+
+The OS side of background delivery (the Android job service and its manifest
+merge, the iOS background task) is only faked in the unit tests. Before a
+release, run it once on a device or emulator with a demo app (`debug` logs
+under the tag / category `FlowbizOnsite`):
+
+**Android** (demo package `br.com.flowbiz.onsite.demo`):
+
+1. The service is in the merged manifest:
+   `aapt2 dump xmltree --file AndroidManifest.xml demo/build/outputs/apk/debug/demo-debug.apk | grep -A3 "E: service"`
+   shows `FlowbizFlushJobService`, `exported=false`, `BIND_JOB_SERVICE`.
+2. Offline (`adb shell cmd connectivity airplane-mode enable`), cold-launch
+   the demo and press Home. `adb shell dumpsys jobscheduler | grep 1179402842`
+   lists the job, its network constraint unsatisfied.
+3. `adb shell am kill br.com.flowbiz.onsite.demo`, then force the job:
+   `adb shell cmd jobscheduler run -f -n br.com.flowbiz.onsite br.com.flowbiz.onsite.demo 1179402842`
+   (drop `-n br.com.flowbiz.onsite` below API 34). The process starts, logs
+   one `flush requested: EXPLICIT`, and the job history in `dumpsys` shows a
+   single `START` / `STOP … app called jobFinished`, the job still pending.
+4. `adb shell cmd connectivity airplane-mode disable`: the job runs again
+   within a minute, the POST succeeds and the job is gone from `dumpsys`.
+5. Event after backgrounding. The demo tracks nothing outside an activity,
+   so add to `MainActivity`, locally and uncommitted:
+   `override fun onStop() { super.onStop(); Flowbiz.track(Event.CartSync(DemoCart.toCart())) }`.
+   Launch it online and add a product (the queue empties, no job in
+   `dumpsys`). Go offline, tap +1 or apply a coupon, and press Home. The log
+   shows `flush requested: EVENT_TRACKED` with no `APP_BACKGROUND` before it,
+   and `dumpsys` lists the job. The +1 or coupon is what makes the `onStop`
+   `cart.sync` differ from the one "Adicionar ao carrinho" already tracked.
+   The demo cart resets on a cold launch, so use a different quantity or
+   coupon code on each rerun: an identical `cart.sync` is deduplicated for
+   20 minutes, also across launches, and logs
+   `event suppressed: duplicate cart.sync` instead.
+6. Cancel on foreground: with that job pending and still offline, open the
+   demo, then go back online. The log shows
+   `flush requested: NETWORK_RESTORED` (or `APP_FOREGROUND`, opened online)
+   and `background flush job cancelled`; the POST succeeds and the job is
+   gone from `dumpsys`. The job may start as well when the network returns
+   (one `flush requested: EXPLICIT`); if it finishes before the cancel,
+   `background flush job cancelled` is not logged, but the job is gone from
+   `dumpsys` all the same. Repeat with
+   `adb shell am kill br.com.flowbiz.onsite.demo` before opening the demo:
+   the job a previous process left is cancelled the same way.
+7. Opt-out: offline with a job pending, open the demo and turn the
+   `setEnabled` switch off: `background flush job cancelled`, and the job is
+   gone from `dumpsys`.
+
+**iOS** (simulator, demo bundle id `br.com.flowbiz.onsite.FlowbizDemo`):
+
+1. `xcrun simctl spawn booted log stream --level debug --predicate 'subsystem == "br.com.flowbiz.onsite"'`
+2. `xcrun simctl launch booted br.com.flowbiz.onsite.FlowbizDemo`, then send
+   it to the background with `xcrun simctl launch booted com.apple.Preferences`:
+   the log shows `background task begun`, `flush requested: appBackground`
+   and, once the flush is over, a single `background task ended`.
+   `background task not granted` instead of the pair means iOS gave the
+   flush no background time.
+3. Launch the demo again: same process id, `flush requested: appForeground`.
 
 ### Releasing a new version
 

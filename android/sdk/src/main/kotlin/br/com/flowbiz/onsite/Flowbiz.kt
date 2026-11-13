@@ -18,6 +18,11 @@ object Flowbiz {
     @Volatile
     private var core: FlowbizCore? = null
 
+    // Links forwarded before initialize; their UTMs are captured when it runs. Guarded by this.
+    // Capped: initialize may never succeed, and the newest links win the merge anyway.
+    private val pendingLinks = ArrayDeque<String>()
+    private const val MAX_PENDING_LINKS = 20
+
     /** Call once, from `Application.onCreate`; later calls are ignored. */
     @JvmStatic
     fun initialize(context: Context?, config: FlowbizConfig?) {
@@ -36,20 +41,23 @@ object Flowbiz {
                 }
                 val sanitized = ConfigSanitizer.sanitize(config) ?: return
                 val appContext = context.applicationContext
-                val executor = Executors.newSingleThreadScheduledExecutor { runnable ->
-                    Thread(runnable, "flowbiz-onsite").apply { isDaemon = true }
-                }
+                fun serialScheduler(name: String) = ExecutorTaskScheduler(
+                    Executors.newSingleThreadScheduledExecutor { runnable -> Thread(runnable, name).apply { isDaemon = true } }
+                )
                 val created = FlowbizCore(
                     config = sanitized,
                     store = SharedPreferencesStore(appContext, sanitized.appId),
-                    queueFactory = { EventQueue(EventQueue.defaultFile(appContext, sanitized.appId)) },
+                    queueFactory = { EventQueue(EventQueue.defaultFile(appContext, sanitized.appId), nowMillis = AndroidClock::wallMillis) },
+                    pushTokenFile = { PushTokenStore.defaultFile(appContext, sanitized.appId) },
                     sender = HttpUrlSender(sanitized.collectorUrl, FlowbizCore.PLATFORM),
-                    scheduler = ExecutorTaskScheduler(executor),
+                    scheduler = serialScheduler("flowbiz-onsite"),
                     clock = AndroidClock,
                     deviceContext = AndroidDeviceContext(appContext),
                     reachability = AndroidReachability(appContext),
+                    transportScheduler = serialScheduler("flowbiz-onsite-transport"),
+                    backgroundFlush = JobSchedulerBackgroundFlush(appContext),
                 )
-                core = created
+                install(created)
                 val application = appContext as? Application
                 if (application != null) {
                     application.registerActivityLifecycleCallbacks(
@@ -109,9 +117,36 @@ object Flowbiz {
     /** Decodes a cart-recovery link and captures its campaign UTMs; forward every incoming link. */
     @JvmStatic
     fun handleLink(url: Uri?): RecoveryPayload? = try {
-        handleLink(url?.toString(), core)
+        forwardLink(url?.toString())
     } catch (t: Throwable) {
         null
+    }
+
+    /** For the background job: false when there is no core to flush with, else [finished] gets whether the queue is empty. */
+    internal fun backgroundFlush(finished: (queueEmpty: Boolean) -> Unit): Boolean = try {
+        val current = core
+        current?.flushFromJob(finished)
+        current != null
+    } catch (t: Throwable) {
+        SdkLog.debug("background flush failed: ${t.javaClass.simpleName}")
+        false
+    }
+
+    internal fun install(created: FlowbizCore) = synchronized(this) {
+        core = created
+        while (pendingLinks.isNotEmpty()) created.captureUtm(pendingLinks.removeFirst())
+    }
+
+    internal fun forwardLink(link: String?): RecoveryPayload? {
+        if (link == null) return null
+        val current = synchronized(this) {
+            if (core == null) {
+                if (pendingLinks.size >= MAX_PENDING_LINKS) pendingLinks.removeFirst()
+                pendingLinks.addLast(link)
+            }
+            core
+        }
+        return handleLink(link, current)
     }
 
     internal fun handleLink(link: String?, current: FlowbizCore?): RecoveryPayload? {
@@ -123,7 +158,7 @@ object Flowbiz {
     /** Call on notification tap: [handleLink] over the push's raw deep link. */
     @JvmStatic
     fun handlePushOpened(push: FlowbizPush?): RecoveryPayload? = try {
-        handleLink(push?.deepLinkString, core)
+        forwardLink(push?.deepLinkString)
     } catch (t: Throwable) {
         null
     }

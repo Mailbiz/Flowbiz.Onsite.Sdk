@@ -1,8 +1,9 @@
 package br.com.flowbiz.onsite
 
+/** At least one of [userId] and [email]; both are sent lowercased, an invalid one is left out, as on web. */
 data class User(
-    val userId: String,
-    val email: String,
+    val userId: String? = null,
+    val email: String? = null,
     val phone: String? = null,
     val name: String? = null,
     val plan: String? = null,
@@ -58,7 +59,6 @@ data class Address(
     val neighborhood: String? = null,
 )
 
-/** Unlike on web, an empty cart is still sent: emptying a cart is signal. */
 data class Cart(
     val cartId: String,
     val subtotal: Double,
@@ -67,7 +67,8 @@ data class Cart(
     val tax: Double,
     val discounts: Double,
     val currency: String? = null,
-    val coupons: List<String>? = null,
+    /** One string, as the web tag sends it; join several codes with a comma. */
+    val coupons: String? = null,
     val items: List<CartItem>? = null,
     val deliveryAddress: Address? = null,
 )
@@ -98,7 +99,8 @@ data class Order(
     val tax: Double,
     val discounts: Double,
     val currency: String? = null,
-    val coupons: List<String>? = null,
+    /** One string, as the web tag sends it; join several codes with a comma. */
+    val coupons: String? = null,
     val items: List<CartItem>? = null,
     val deliveryAddress: Address? = null,
     val paymentMethods: List<PaymentMethod>? = null,

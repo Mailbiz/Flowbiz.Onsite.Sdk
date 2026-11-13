@@ -204,7 +204,7 @@ final class DemoStore: ObservableObject {
             tax: 0,
             discounts: discounts,
             currency: "BRL",
-            coupons: coupon.map { [$0] },
+            coupons: coupon,
             items: lines.map { cartItem($0.product, quantity: $0.quantity) },
             deliveryAddress: deliveryAddress()
         )
@@ -220,7 +220,7 @@ final class DemoStore: ObservableObject {
             tax: 0,
             discounts: discounts,
             currency: "BRL",
-            coupons: coupon.map { [$0] },
+            coupons: coupon,
             items: lines.map { cartItem($0.product, quantity: $0.quantity) },
             deliveryAddress: deliveryAddress(),
             paymentMethods: [PaymentMethod(type: "credit_card", amount: total)],

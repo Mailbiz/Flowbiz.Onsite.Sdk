@@ -52,8 +52,8 @@ internal object EventSerializer {
         .putIfPresent("url", UrlResolver.resolve(event.path, baseUri))
 
     private fun userObject(user: User): JSONObject = JSONObject()
-        .put("user_id", user.userId)
-        .put("email", user.email)
+        .putIfPresent("user_id", user.userId)
+        .putIfPresent("email", user.email)
         .putIfPresent("phone", user.phone)
         .putIfPresent("name", user.name)
         .putIfPresent("plan", user.plan)
@@ -110,7 +110,7 @@ internal object EventSerializer {
         .put("tax", cart.tax)
         .put("discounts", cart.discounts)
         .putIfPresent("currency", cart.currency)
-        .putIfPresent("coupons", cart.coupons?.let { JSONArray(it) })
+        .putIfPresent("coupons", cart.coupons)
         .putIfPresent("items", cart.items?.let { items -> JSONArray(items.map { cartItemObject(it, baseUri) }) })
         .putIfPresent("delivery_address", cart.deliveryAddress?.let { addressObject(it) })
 
@@ -129,7 +129,7 @@ internal object EventSerializer {
         .put("tax", order.tax)
         .put("discounts", order.discounts)
         .putIfPresent("currency", order.currency)
-        .putIfPresent("coupons", order.coupons?.let { JSONArray(it) })
+        .putIfPresent("coupons", order.coupons)
         .putIfPresent("items", order.items?.let { items -> JSONArray(items.map { cartItemObject(it, baseUri) }) })
         .putIfPresent("delivery_address", order.deliveryAddress?.let { addressObject(it) })
         .putIfPresent("payment_methods", order.paymentMethods?.let { methods ->

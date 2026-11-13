@@ -32,17 +32,27 @@ final class CoreHarness: @unchecked Sendable {
     let offset: OffsetBox
     let queue: EventQueue
     let core: FlowbizCore
+    private let pushTokenFile: URL
+
+    var pushToken: String? {
+        try? String(contentsOf: pushTokenFile, encoding: .utf8)
+    }
 
     init(
         config: FlowbizConfig = FlowbizConfig(appId: "77777", baseUri: "https://store.com"),
         store: FakeKeyValueStore = FakeKeyValueStore(),
-        clock: FakeClock = FakeClock()
+        clock: FakeClock = FakeClock(),
+        backgroundTask: BackgroundFlush.Runner? = nil,
+        transportScheduler: FakeTaskScheduler? = nil
     ) {
         let sender = FakeHttpSender()
         let scheduler = FakeTaskScheduler()
         let reachability = FakeReachability()
         let offset = OffsetBox(-180)
-        let queue = EventQueue(fileURL: temporaryQueueFile())
+        let queueFile = temporaryQueueFile()
+        let queue = EventQueue(fileURL: queueFile)
+        let pushTokenFile = queueFile.deletingLastPathComponent().appendingPathComponent("push_token")
+        self.pushTokenFile = pushTokenFile
         self.config = config
         self.store = store
         self.clock = clock
@@ -55,6 +65,7 @@ final class CoreHarness: @unchecked Sendable {
             config: config,
             store: store,
             queueFactory: { queue },
+            pushTokenFileURL: { pushTokenFile },
             sender: sender,
             scheduler: scheduler,
             clock: clock,
@@ -63,7 +74,9 @@ final class CoreHarness: @unchecked Sendable {
                 screen: { "1170x2532" },
                 timezoneOffsetMinutes: { _ in offset.value }
             ),
-            reachability: reachability
+            reachability: reachability,
+            transportScheduler: transportScheduler,
+            backgroundTask: backgroundTask
         )
     }
 

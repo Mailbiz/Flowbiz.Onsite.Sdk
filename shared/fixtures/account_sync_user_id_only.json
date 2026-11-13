@@ -1,0 +1,19 @@
+{
+  "name": "account_sync_user_id_only",
+  "event": "accountSync",
+  "input": {
+    "user": {
+      "userId": "ABC-98412"
+    }
+  },
+  "expected": {
+    "wire_event": "account.sync",
+    "data": {
+      "user": {
+        "user_id": "abc-98412"
+      }
+    },
+    "data_canonical": "{\"user\":{\"user_id\":\"abc-98412\"}}",
+    "identity_user_id": "abc-98412"
+  }
+}

@@ -14,7 +14,8 @@ their unit tests.
   "expected": {
     "wire_event": "cart.sync",
     "data": { "...": "exact snake_case wire payload object" },
-    "data_canonical": "exact canonical wire string, byte-for-byte"
+    "data_canonical": "exact canonical wire string, byte-for-byte",
+    "identity_user_id": "account events only: identity.user_id of the envelope"
   }
 }
 ```
@@ -40,13 +41,31 @@ their unit tests.
   `JSON.stringify` of each scalar.
 - Optional fields absent from `input` must be entirely absent from the wire
   (`"key": null` never appears).
+- Account events go through `UserSanitizer` first, the port of the web's
+  account pipeline (the universal vendor's `userSchema`, then onsite-core's
+  `sanitizeAccountUser`): `user_id` and `email` lowercased, an invalid email
+  and a `user_id` that identifies nobody left out. `expected.identity_user_id`
+  is the envelope's `identity.user_id` from that event on (`user_id`, or the
+  email without one), also what the SDK stores. `"dropped": true` replaces
+  `data`, `data_canonical` and `identity_user_id` when neither is left: the
+  event is not sent and the identity does not change.
+- One deliberate divergence from the web, pinned by
+  `account_login_email_without_at`: the web validates the user with yup
+  before sanitizing, so an email that fails yup's `.email()` (no `@`, a
+  space: `"maria"`) rejects the whole account event there, valid `user_id`
+  or not. The SDK only leaves that email out and still sends the event: an
+  identified user is worth more than strict parity. (An email yup accepts
+  but the sanitizer rejects, `maria@gmail`, loses only the email on both.)
 
 Covered edge cases: pageView with path+title, path only, title only, an empty
 call, and an absolute URL with no `baseUri`; productView and addToCart with
 relative/protocol-relative/absolute URLs resolved against `baseUri`; cartSync
 full vs empty-cart; productView multi-variant with nested `properties` /
 `recovery_properties`; orderComplete with payment/delivery methods and minimal;
-orderCancel with only `order_id`, only `cart_id`, and both ids; multi-item
+account events with mixed case, only an email, only a `user_id`, an invalid
+email, an email the web's yup validation rejects, a placeholder `user_id`, a `user_id` that is another email or the same
+one, and no valid identity at all; orderCancel with only `order_id`, only
+`cart_id`, and both ids; multi-item
 addToCart; and number/escaping edge cases (`19.99`, `0.1`, whole-number double
 `19.0`, `10000000`, `1e21`, `1e-7`, `-0.0`, URLs with slashes, unicode
 including non-BMP emoji) in `cart_sync_number_edge_cases`.
@@ -65,7 +84,8 @@ entries. Each entry:
   device wall clock, ISO-8601 UTC with milliseconds; `timezone` is the UTC
   offset, e.g. `-03:00`.
 - `identity`: `anonymous_id`, `session_id`, `visit_count`, and `user_id` from
-  an `accountLogin`/`accountSync` until `logout()`.
+  an `accountLogin`/`accountSync` until `logout()` (the user's `user_id`, or
+  the email without one, as the web's `setUserId(user_id || email)`).
 - `context`: `platform`, `language`, `screen`, `vendor`
   (`flowbiz-<platform>-sdk`), `onsite_version`, and when set: `url` (resolved
   URL of the latest `pageView` with a path or title), `baseuri`, `recoveryUrl`,
@@ -83,10 +103,26 @@ backend that will associate push tokens with users.
 The SDK relies on these collector facts: every field is optional and
 `platform` is free-form (browser-only context fields are simply absent);
 `ip` and `user_agent` are derived server-side from the request; a request is
-capped at 3 MB; a disabled tenant gets a 200 and its events are dropped.
+capped at 3 MB. The collector answers 200 to everything, malformed bodies and
+unknown or disabled tenants included: check ingestion in the indexes, not by
+the status.
+
+Backend facts the fixtures pin or rely on: `coupons` is one string (the
+backend's `Coupons` is a `string`; an array makes Cart.Worker drop the event);
+`user.created_at` must parse as ISO 8601 or the account event is dropped; a
+`cart.sync` without `items` keeps the stored products, `items: []` empties
+them; no cart email goes out until an account event ties the `anonymous_id`
+to a contact; an `order.complete` whose `order_id` is absent or blank closes
+the cart without crediting the order's `context.utm` (one with a real id
+replaces the cart's UTMs with its own), and `order_id` `"0"` closes nothing.
+`identity.visit_count` is sent as a number, as on web, but the
+collector reads a string, so it is lost on both.
 
 Responses: 2xx is delivered; 5xx, 408, 429 and network errors are retried with
 backoff; a 413 splits the batch; entries rejected with any other 4xx or a 3xx
-are dropped. Delivery is at-least-once (a batch is resent if the app dies
-between the POST and the dequeue), so consumers must treat `hash` as the
-idempotency key.
+are dropped. An entry still queued 7 days after its `created_at` is dropped when the
+queue loads, at a process start, instead of being sent: the backend reads
+`created_at` as the cart's last update. The age is judged by the device
+clock and only at that load, so a process alive for longer still sends it. Delivery is at-least-once (a batch is resent if the app dies
+between the POST and the dequeue), and the collector does not deduplicate on
+`hash`, so a resent event can be ingested twice.

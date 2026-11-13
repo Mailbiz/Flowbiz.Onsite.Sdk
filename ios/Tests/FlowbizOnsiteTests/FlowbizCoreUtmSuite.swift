@@ -61,11 +61,13 @@ import Testing
         let release = DispatchSemaphore(value: 0)
         sender.onSend = { _ in sent.signal() }
         serialQueue.async { release.wait() }
-        let queue = EventQueue(fileURL: temporaryQueueFile())
+        let queueFile = temporaryQueueFile()
+        let queue = EventQueue(fileURL: queueFile)
         let core = FlowbizCore(
             config: FlowbizConfig(appId: "77777", baseUri: "https://store.com"),
             store: store,
             queueFactory: { queue },
+            pushTokenFileURL: { queueFile.deletingLastPathComponent().appendingPathComponent("push_token") },
             sender: sender,
             scheduler: DispatchTaskScheduler(queue: serialQueue),
             clock: FakeClock(),
@@ -188,7 +190,6 @@ import Testing
         try Flowbiz.$taskCore.withValue(h.core) {
             let push = try #require(Flowbiz.handlePush(["flowbiz": String(decoding: marker, as: UTF8.self)]))
             #expect(push.deepLink?.absoluteString.contains("carrinho%20abandonado") == true)
-            _ = push.recoveryPayload
             #expect(try trackProbe(h) == nil)
             #expect(Flowbiz.handlePushOpened(push)?.cartId == "cart-abc-001")
         }
@@ -205,6 +206,25 @@ import Testing
         h.core.track(.cartSetCoupon(cartId: "c-1", coupon: "same"))
         #expect(try h.sentEntries().count == 3)
         #expect(utm(try last(h, "page.view")) == journey.expected)
+    }
+
+    @Test func aLinkForwardedBeforeInitializeIsCapturedWhenItRuns() throws {
+        let state = Flowbiz.State()
+        let h = harness()
+        #expect(Flowbiz.forwardLink(journey.url, state: state)?.cartId == "cart-abc-001")
+        _ = state.installIfAbsent { h.core }
+        #expect(try trackProbe(h) == journey.expected)
+    }
+
+    @Test func onlyTheLastTwentyLinksForwardedBeforeInitializeAreKept() throws {
+        let state = Flowbiz.State()
+        let h = harness()
+        _ = Flowbiz.forwardLink("https://store.com/?utm_medium=the-oldest", state: state)
+        for index in 1...20 {
+            _ = Flowbiz.forwardLink("https://store.com/?utm_source=link-\(index)", state: state)
+        }
+        _ = state.installIfAbsent { h.core }
+        #expect(try trackProbe(h) == #"{"utm_source":"link-20"}"#)
     }
 
     @Test func thePublicHandleLinkReachesTheInstalledCore() throws {

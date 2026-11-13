@@ -41,6 +41,32 @@ class HeartbeatSchedulerTest {
     }
 
     @Test
+    fun aPingWaitingOnTheTransportIsNotSentAfterTheOptOut() {
+        val transport = FakeTaskScheduler().apply { deferExecute = true }
+        val h = CoreHarness(temp.newFolder(), transportScheduler = transport)
+        h.core.onForeground()
+        h.scheduler.tickRepeating() // built while enabled; waits behind a slow drain
+
+        h.core.setEnabled(false)
+        while (transport.deferred.isNotEmpty()) transport.runNextDeferred()
+
+        assertEquals(emptyList<String>(), h.sender.bodies)
+    }
+
+    @Test
+    fun aPingWaitingOnTheTransportIsSentWhileEnabled() {
+        val transport = FakeTaskScheduler().apply { deferExecute = true }
+        val h = CoreHarness(temp.newFolder(), transportScheduler = transport)
+        h.core.onForeground()
+        h.scheduler.tickRepeating()
+
+        while (transport.deferred.isNotEmpty()) transport.runNextDeferred()
+
+        assertEquals(1, h.sender.bodies.size)
+        assertTrue("page.ping" in h.sender.bodies.single())
+    }
+
+    @Test
     fun stopCancelsTheTimer() {
         heartbeat.start(60_000)
         val handle = scheduler.activeRepeating()!!

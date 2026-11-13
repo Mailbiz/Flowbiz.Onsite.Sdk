@@ -8,7 +8,7 @@ struct LoginView: View {
     var body: some View {
         Form {
             Section(header: Text("Usuária fake")) {
-                Text("\(DemoStore.fakeUser.name ?? "-") <\(DemoStore.fakeUser.email)>")
+                Text("\(DemoStore.fakeUser.name ?? "-") <\(DemoStore.fakeUser.email ?? "-")>")
                 Text(store.loggedIn ? "Logada" : "Anônima").font(.footnote)
             }
             Section {

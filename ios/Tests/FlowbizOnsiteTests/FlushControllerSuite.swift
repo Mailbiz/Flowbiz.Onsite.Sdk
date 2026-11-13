@@ -49,7 +49,7 @@ import Testing
         (1...5).forEach { queue.append(entry($0)) }
         sender.results = [.success, .retriableError]
         c.requestFlush(.explicit)
-        #expect(queue.peek(10) == [entry(4), entry(5)])
+        #expect(queue.peek(10).entries == [entry(4), entry(5)])
     }
 
     @Test func emptyQueueDrainSendsNothing() {
@@ -117,7 +117,7 @@ import Testing
         sender.results = [.success]
         sender.defaultResult = .retriableError
         c.requestFlush(.explicit)
-        #expect(queue.peek(10) == [entry(3), entry(4), entry(5)])
+        #expect(queue.peek(10).entries == [entry(3), entry(4), entry(5)])
         #expect(sender.bodies.count == 2)
         #expect(scheduler.allScheduleDelays == [FlushController.initialBackoffMillis])
     }

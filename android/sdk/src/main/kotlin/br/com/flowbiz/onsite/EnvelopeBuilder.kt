@@ -187,7 +187,7 @@ internal object EnvelopeBuilder {
         return JSONObject()
             .put("event", wireName)
             .put("hash", hash)
-            .put("data", dataJson) // a JSON string, not an object, as the web sends it (so is context.utm)
+            .put("data", dataJson) // a JSON string
             .put("timings", timings)
             .put("identity", identity)
             .put("context", context)

@@ -1,0 +1,20 @@
+{
+  "name": "account_login_placeholder_user_id",
+  "event": "accountLogin",
+  "input": {
+    "user": {
+      "userId": "NULL",
+      "email": "maria.oliveira@gmail.com"
+    }
+  },
+  "expected": {
+    "wire_event": "account.login",
+    "data": {
+      "user": {
+        "email": "maria.oliveira@gmail.com"
+      }
+    },
+    "data_canonical": "{\"user\":{\"email\":\"maria.oliveira@gmail.com\"}}",
+    "identity_user_id": "maria.oliveira@gmail.com"
+  }
+}

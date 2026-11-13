@@ -4,7 +4,8 @@ protocol ScheduledHandle {
     func cancel()
 }
 
-// Must be serial: EventQueue and DedupStore rely on it instead of locks.
+// Must be serial. The SDK has two: its own, where pipeline state is confined, and the transport's, the only
+// one that blocks on the network. EventQueue is what they share.
 protocol TaskScheduler {
     func execute(_ task: @escaping @Sendable () -> Void)
 

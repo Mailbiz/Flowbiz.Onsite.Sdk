@@ -9,7 +9,8 @@ internal interface ScheduledHandle {
     fun cancel()
 }
 
-// Must be serial: queue and flush state rely on thread confinement instead of locks.
+// Must be serial. The SDK has two: its own, where pipeline state is confined, and the transport's, the only
+// one that blocks on the network. EventQueue is what they share.
 internal interface TaskScheduler {
     fun execute(task: Runnable)
 

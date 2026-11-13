@@ -7,7 +7,7 @@ enum SendResult: Equatable, Sendable {
     case payloadTooLarge
 }
 
-// Blocking by design: only ever called on the SDK's serial queue, never the caller's thread.
+// Blocking by design: only ever called on the transport's serial queue, never the caller's or the SDK's.
 protocol HttpSender {
     func send(body: String) -> SendResult
 }

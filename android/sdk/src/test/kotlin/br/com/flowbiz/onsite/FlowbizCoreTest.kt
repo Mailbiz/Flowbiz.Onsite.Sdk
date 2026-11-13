@@ -5,6 +5,7 @@ import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -155,7 +156,7 @@ class FlowbizCoreTest {
         assertNotEquals(before.getString("session_id"), after.getString("session_id"))
         assertEquals(before.getInt("visit_count") + 1, after.getInt("visit_count"))
         assertEquals(before.getString("anonymous_id"), after.getString("anonymous_id"))
-        assertFalse(h.store.values.containsKey(StorageKeys.PUSH_TOKEN))
+        assertNull(h.pushToken)
         assertFalse(h.store.values.containsKey(StorageKeys.USER_ID))
         assertFalse(h.store.values.containsKey(StorageKeys.EMAIL))
     }
@@ -237,6 +238,7 @@ class FlowbizCoreTest {
             config = h.config,
             store = FakeKeyValueStore(),
             queueFactory = { h.queue },
+            pushTokenFile = { File(temp.newFolder(), "push_token") },
             sender = h.sender,
             scheduler = throwing,
             clock = h.clock,

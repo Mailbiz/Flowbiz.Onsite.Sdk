@@ -35,17 +35,25 @@ internal class CoreHarness(
     val scheduler: FakeTaskScheduler = FakeTaskScheduler(),
     val device: FakeDeviceContext = FakeDeviceContext(),
     val reachability: FakeReachability = FakeReachability(),
+    backgroundFlush: BackgroundFlush = BackgroundFlush.None,
+    transportScheduler: TaskScheduler = scheduler,
 ) {
     val queue = EventQueue(File(queueDir, "queue.jsonl"))
+    private val pushTokenFile = File(queueDir, "push_token")
+    val pushToken: String?
+        get() = pushTokenFile.takeIf { it.exists() }?.readText()
     val core = FlowbizCore(
         config = config,
         store = store,
         queueFactory = { queue },
+        pushTokenFile = { pushTokenFile },
         sender = sender,
         scheduler = scheduler,
         clock = clock,
         deviceContext = device,
         reachability = reachability,
+        transportScheduler = transportScheduler,
+        backgroundFlush = backgroundFlush,
     )
 
     fun sentEntries(): List<JSONObject> = sender.bodies.flatMap { body ->

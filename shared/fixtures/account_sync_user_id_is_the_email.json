@@ -1,0 +1,21 @@
+{
+  "name": "account_sync_user_id_is_the_email",
+  "event": "accountSync",
+  "input": {
+    "user": {
+      "userId": "Maria.Oliveira@gmail.com",
+      "email": "maria.oliveira@GMAIL.com"
+    }
+  },
+  "expected": {
+    "wire_event": "account.sync",
+    "data": {
+      "user": {
+        "user_id": "maria.oliveira@gmail.com",
+        "email": "maria.oliveira@gmail.com"
+      }
+    },
+    "data_canonical": "{\"user\":{\"email\":\"maria.oliveira@gmail.com\",\"user_id\":\"maria.oliveira@gmail.com\"}}",
+    "identity_user_id": "maria.oliveira@gmail.com"
+  }
+}

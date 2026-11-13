@@ -7,26 +7,36 @@ internal class FlowbizCore(
     internal val config: FlowbizConfig,
     store: KeyValueStore,
     queueFactory: () -> EventQueue,
+    pushTokenFile: () -> java.io.File,
     private val sender: HttpSender,
     private val scheduler: TaskScheduler,
     private val clock: Clock,
     private val deviceContext: DeviceContext,
     reachability: ReachabilityMonitor,
+    // Its own serial thread: a blocking POST must not hold the SDK thread, where track() persists the event.
+    private val transportScheduler: TaskScheduler = scheduler,
+    private val backgroundFlush: BackgroundFlush = BackgroundFlush.None,
 ) {
 
     private val identityStore = IdentityStore(store)
     private val sessionManager = SessionManager(store, clock)
     private val enabledState = EnabledState(store)
-    private val pushTokenStore = PushTokenStore(store)
+    private val pushTokenStore = PushTokenStore(pushTokenFile, store)
     private val dedupStore = DedupStore(store, clock)
 
     // Lazy: the constructor reads the queue file, which must not happen on the caller's main thread.
     private val queue: EventQueue by lazy(queueFactory)
     private val flushController: FlushController by lazy {
-        FlushController(queue, sender, scheduler, clock, isActive = { enabledState.isEnabled })
+        FlushController(
+            queue, sender, transportScheduler, clock,
+            isActive = { enabledState.isEnabled },
+            onDrainEnded = ::onDrainEnded,
+        )
     }
 
-    private val heartbeat = HeartbeatScheduler(scheduler, sender) { buildPingEntry() }
+    private val heartbeat = HeartbeatScheduler(
+        scheduler, sender, transportScheduler, isActive = { enabledState.isEnabled },
+    ) { buildPingEntry() }
     private val heartbeatIntervalMillis = config.heartbeatIntervalSeconds * 1000L
 
     internal data class PageState(val title: String?, val url: String?)
@@ -34,35 +44,51 @@ internal class FlowbizCore(
 
     private var foregrounded = false
 
+    // Whether the system holds the flush job. Scheduling it again would replace it, backoff included:
+    // with the network up and the collector failing, each retry would start the job at once, and the
+    // job the next retry. Seeded in init: the job may be one a previous process left.
+    private var flushJobScheduled = false
+
     // Declared before init: an inline scheduler runs the startup refresh during construction.
     private val utmStore = UtmStore(store, clock)
 
     private var utmContext: String? = null
 
     init {
+        // Through submit: the callback arrives on the system's connectivity thread.
         reachability.start {
-            try {
+            submit("networkRestored") {
                 if (enabledState.isEnabled) {
                     flushController.requestFlush(FlushController.FlushReason.NETWORK_RESTORED)
                 }
-            } catch (t: Throwable) {
-                SdkLog.debug("network-restored flush failed: ${t.javaClass.simpleName}")
             }
         }
+        // Once per process, on the SDK thread: a job pending from a killed process is held too, and has
+        // to be cancelled once the queue is empty.
+        submit("flushJobSeed") { flushJobScheduled = backgroundFlush.isPending() }
         // A process start may be a push or a background job, not a visit: load without sliding the expiry.
         submit("utmStartup") { refreshUtm(link = null, slideExpiry = false) }
     }
 
-    fun track(event: Event) = submit("track") {
+    fun track(tracked: Event) = submit("track") {
         if (!enabledState.isEnabled) {
             SdkLog.debug("track dropped: SDK disabled")
             return@submit
         }
+        val event = UserSanitizer.sanitize(tracked)
+        if (event == null) {
+            SdkLog.debug("account event dropped: no valid user_id or email")
+            return@submit
+        }
         // Before the envelope is built, so the login event itself carries user_id.
         when (event) {
-            is Event.AccountLogin -> identityStore.setUser(event.user.userId, event.user.email)
-            is Event.AccountSync -> identityStore.setUser(event.user.userId, event.user.email)
+            is Event.AccountLogin -> identify(event.user)
+            is Event.AccountSync -> identify(event.user)
             else -> Unit
+        }
+        // Sent anyway: Cart.Worker still closes the cart, but credits no UTMs to an order without a real id.
+        if (event is Event.OrderComplete && !isRealOrderId(event.order.orderId)) {
+            SdkLog.debug("order.complete without a real orderId: its campaign is not credited; track it once the order is confirmed")
         }
         sessionManager.touch()
         val session = sessionManager.currentSession()
@@ -137,6 +163,8 @@ internal class FlowbizCore(
         enabledState.setEnabled(enabled)
         if (!enabled) {
             heartbeat.stop()
+            // The job would send nothing, but it would still start the app's process after the opt-out.
+            cancelFlushJob()
             SdkLog.debug("SDK disabled: heartbeat stopped, events dropped, network gated")
         } else if (!wasEnabled) {
             if (foregrounded) heartbeat.start(heartbeatIntervalMillis)
@@ -151,12 +179,25 @@ internal class FlowbizCore(
 
     fun captureUtm(link: String) = submit("captureUtm") { refreshUtm(link, slideExpiry = true) }
 
-    fun flush() = submit("flush") {
+    /** [drained] gets whether nothing is left for a later attempt: the queue is empty, or the SDK is disabled. */
+    fun flush(drained: ((Boolean) -> Unit)? = null) = submit("flush") {
         if (!enabledState.isEnabled) {
             SdkLog.debug("flush ignored: SDK disabled")
+            drained?.invoke(true)
             return@submit
         }
-        flushController.requestFlush(FlushController.FlushReason.EXPLICIT)
+        flushController.requestFlush(FlushController.FlushReason.EXPLICIT, drained?.let { { it(queue.size == 0) } })
+    }
+
+    /** The job's flush. The system holds the job while it runs, and reschedules it when [finished] gets false. */
+    fun flushFromJob(finished: (queueEmpty: Boolean) -> Unit) {
+        submit("jobStarted") { flushJobScheduled = true }
+        flush { queueEmpty ->
+            finished(queueEmpty)
+            // Cancelled, not only forgotten: stopped mid-run the job was rescheduled (onStopJob returns
+            // true) and its jobFinished is ignored, so it would run once more for nothing.
+            if (queueEmpty) submit("jobFinished") { cancelFlushJob() }
+        }
     }
 
     fun onForeground() = submit("onForeground") {
@@ -173,6 +214,44 @@ internal class FlowbizCore(
     fun onBackground() = submit("onBackground") {
         foregrounded = false
         heartbeat.stop()
+        if (!enabledState.isEnabled) return@submit
+        // The last cart.sync before the user leaves: without this it waited for the next app open, and
+        // a user who never returns was never seen abandoning the cart. Try now; the job is for a
+        // connection too poor for that, and is scheduled first in case the process dies meanwhile.
+        if (queue.size > 0) {
+            scheduleFlushJob()
+            flushController.requestFlush(FlushController.FlushReason.APP_BACKGROUND)
+        }
+    }
+
+    // An event tracked after onBackground (a CartSync in onStop, from a service or a receiver) that could
+    // not be sent: the in-process retry dies with the process, so the job has to carry it.
+    // Nothing left: the job would wake the process for nothing, whichever flush emptied the queue.
+    // Through submit, serialized with the scheduling: decided on the transport thread, a cancel could land
+    // after an event was tracked and a second onBackground had scheduled its job.
+    private fun onDrainEnded(retryScheduled: Boolean) = submit("drainEnded") {
+        if (queue.size == 0) {
+            cancelFlushJob()
+        } else if (retryScheduled && !foregrounded && enabledState.isEnabled) {
+            // !foregrounded on purpose (iOS gates on "backgrounded"): a cold launch for a service or receiver counts.
+            scheduleFlushJob()
+        }
+    }
+
+    private fun scheduleFlushJob() {
+        if (flushJobScheduled) return
+        // Refused: not held, so the next retry or onBackground asks again.
+        flushJobScheduled = backgroundFlush.schedule()
+    }
+
+    private fun cancelFlushJob() {
+        if (!flushJobScheduled) return
+        flushJobScheduled = false
+        backgroundFlush.cancel()
+    }
+
+    private fun identify(user: User) {
+        UserSanitizer.identityUserId(user)?.let { identityStore.setUser(it, user.email) }
     }
 
     private fun buildPingEntry(): String? = try {
@@ -301,6 +380,9 @@ internal class FlowbizCore(
 
     companion object {
         const val PLATFORM = "android"
+
+        // The backend's OrderUtmAttribution.IsRealOrderId.
+        fun isRealOrderId(orderId: String?): Boolean = !orderId.isNullOrBlank() && orderId.trim() != "0"
 
         fun formatTimezoneOffset(offsetMinutes: Int): String {
             val sign = if (offsetMinutes < 0) "-" else "+"

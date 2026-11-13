@@ -1,0 +1,15 @@
+{
+  "name": "account_login_no_valid_identity",
+  "event": "accountLogin",
+  "input": {
+    "user": {
+      "userId": "0",
+      "email": "maria",
+      "name": "Maria Oliveira"
+    }
+  },
+  "expected": {
+    "wire_event": "account.login",
+    "dropped": true
+  }
+}

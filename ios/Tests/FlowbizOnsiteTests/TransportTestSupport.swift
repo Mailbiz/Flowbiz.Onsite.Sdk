@@ -24,8 +24,16 @@ final class FakeTaskScheduler: TaskScheduler, @unchecked Sendable {
         scheduled.filter { !$0.repeating }.map(\.delayMillis)
     }
 
+    // Set to hold execute() tasks until runDeferred(), as a busy serial queue would.
+    var deferExecute = false
+    var deferred: [@Sendable () -> Void] = []
+
     func execute(_ task: @escaping @Sendable () -> Void) {
-        task()
+        if deferExecute { deferred.append(task) } else { task() }
+    }
+
+    func runDeferred() {
+        while !deferred.isEmpty { deferred.removeFirst()() }
     }
 
     func schedule(afterMillis: Int64, _ task: @escaping @Sendable () -> Void) -> any ScheduledHandle {

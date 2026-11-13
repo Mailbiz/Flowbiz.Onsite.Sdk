@@ -29,7 +29,7 @@ class DemoCartTest {
         assertEquals(cart.subtotal - cart.discounts + cart.freight, cart.total, 0.001)
         assertEquals(2, cart.items!!.single().quantity)
         assertEquals("01310-100", cart.deliveryAddress!!.postalCode)
-        assertEquals(listOf("BEMVINDA10"), cart.coupons)
+        assertEquals("BEMVINDA10", cart.coupons)
     }
 
     @Test

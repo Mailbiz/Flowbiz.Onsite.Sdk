@@ -15,14 +15,24 @@ import Testing
                 let fixture = try FixtureSupport.loadFixture(file)
                 guard let eventName = fixture["event"] as? String,
                       let expected = fixture["expected"] as? [String: Any],
-                      let expectedWireEvent = expected["wire_event"] as? String,
-                      let expectedData = expected["data"] as? [String: Any]
+                      let expectedWireEvent = expected["wire_event"] as? String
                 else {
                     failures.append("\(file.lastPathComponent): malformed fixture")
                     continue
                 }
                 let input = fixture["input"] as? [String: Any] ?? [:]
-                let event = try FixtureSupport.buildEvent(eventName, input: input)
+                let dropped = expected["dropped"] as? Bool ?? false
+                let sanitized = UserSanitizer.sanitize(try FixtureSupport.buildEvent(eventName, input: input))
+                guard let event = sanitized, !dropped else {
+                    if (sanitized == nil) != dropped {
+                        failures.append("\(file.lastPathComponent): expected dropped=\(dropped)")
+                    }
+                    continue
+                }
+                guard let expectedData = expected["data"] as? [String: Any] else {
+                    failures.append("\(file.lastPathComponent): malformed fixture")
+                    continue
+                }
                 let baseUri = fixture["baseUri"] as? String
 
                 let wireName = EventSerializer.wireName(event)
@@ -56,6 +66,32 @@ import Testing
             }
         }
         #expect(failures.isEmpty, "fixture mismatches:\n\(failures.joined(separator: "\n"))")
+    }
+
+    @Test func accountFixturesPinTheIdentityOfTheEnvelope() throws {
+        let accounts = try FixtureSupport.fixtureFiles().map(FixtureSupport.loadFixture)
+            .filter { ($0["event"] as? String)?.hasPrefix("account") == true }
+        #expect(accounts.count >= 10)
+        for fixture in accounts {
+            let name = try #require(fixture["name"] as? String)
+            let expected = try #require(fixture["expected"] as? [String: Any])
+            let h = CoreHarness()
+            h.core.track(try FixtureSupport.buildEvent(
+                try #require(fixture["event"] as? String), input: try #require(fixture["input"] as? [String: Any])
+            ))
+            if expected["dropped"] as? Bool == true {
+                #expect(h.sender.bodies.isEmpty, "\(name)")
+                #expect(h.store[StorageKeys.userId] == nil, "\(name)")
+                continue
+            }
+            let entry = try h.lastEntry()
+            let identity = try #require(expected["identity_user_id"] as? String, "\(name)")
+            #expect(entry["data"] as? String == expected["data_canonical"] as? String, "\(name)")
+            #expect(object(entry, "identity")["user_id"] as? String == identity, "\(name)")
+            #expect(h.store[StorageKeys.userId] as? String == identity, "\(name)")
+            let email = (expected["data"] as? [String: Any]).flatMap { $0["user"] as? [String: Any] }?["email"] as? String
+            #expect(h.store[StorageKeys.email] as? String == email, "\(name)")
+        }
     }
 
     @Test func fixturesCoverAllTwelveEventTypes() throws {

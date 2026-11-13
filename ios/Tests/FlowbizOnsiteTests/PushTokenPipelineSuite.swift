@@ -17,7 +17,7 @@ import Testing
         #expect(entry["data"] as? String == #"{"platform":"ios","token":"apns-token-1"}"#)
         #expect(object(entry, "identity")["session_id"] != nil)
         #expect(object(entry, "context")["platform"] as? String == "ios")
-        #expect(harness.store[StorageKeys.pushToken] as? String == "apns-token-1")
+        #expect(harness.pushToken == "apns-token-1")
     }
 
     @Test func identicalTokenWithinDedupWindowIsSuppressed() throws {
@@ -36,7 +36,7 @@ import Testing
         let entry = try harness.lastEntry()
         #expect(entry["event"] as? String == "push.token.remove")
         #expect(entry["data"] as? String == #"{"platform":"ios","token":"apns-token-1"}"#)
-        #expect(harness.store[StorageKeys.pushToken] == nil)
+        #expect(harness.pushToken == nil)
         let sentBefore = try harness.sentEntries().count
         harness.core.removePushToken()
         #expect(try harness.sentEntries().count == sentBefore)
@@ -56,7 +56,7 @@ import Testing
         let removal = try #require(try entries(harness, event: "push.token.remove").last)
         #expect(object(removal, "identity")["user_id"] as? String == "u-42")
         #expect(removal["data"] as? String == #"{"platform":"ios","token":"apns-token-1"}"#)
-        #expect(harness.store[StorageKeys.pushToken] == nil)
+        #expect(harness.pushToken == nil)
         #expect(harness.store[StorageKeys.userId] == nil)
     }
 
@@ -72,13 +72,13 @@ import Testing
         harness.core.setEnabled(false)
         harness.core.setPushToken("apns-token-1")
         #expect(try harness.sentEntries().isEmpty)
-        #expect(harness.store[StorageKeys.pushToken] as? String == "apns-token-1")
+        #expect(harness.pushToken == "apns-token-1")
         harness.core.setEnabled(true)
         harness.core.removePushToken()
         let entry = try harness.lastEntry()
         #expect(entry["event"] as? String == "push.token.remove")
         #expect(entry["data"] as? String == #"{"platform":"ios","token":"apns-token-1"}"#)
-        #expect(harness.store[StorageKeys.pushToken] == nil)
+        #expect(harness.pushToken == nil)
     }
 
     @Test func removeClearsTheSyncDedupAnchorSoTheSameTokenResyncs() throws {
@@ -130,7 +130,7 @@ import Testing
         let sentBefore = try harness.sentEntries().count
         harness.core.removePushToken()
         #expect(try harness.sentEntries().count == sentBefore)
-        #expect(harness.store[StorageKeys.pushToken] == nil)
+        #expect(harness.pushToken == nil)
     }
 
     @Test func facadeBlankTokenIsANoOp() {

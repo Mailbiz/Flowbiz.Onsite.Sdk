@@ -74,6 +74,7 @@ class DebugLogRedactionTest {
                 config = FlowbizConfig(appId = "77777", baseUri = "https://store.com"),
                 store = store,
                 queueFactory = { EventQueue(File(temp.newFolder(), "queue.jsonl")) },
+                pushTokenFile = { File(temp.newFolder(), "push_token") },
                 sender = sender,
                 scheduler = FakeTaskScheduler(),
                 clock = clock,
@@ -104,6 +105,30 @@ class DebugLogRedactionTest {
         }
         for (probe in listOf("probe", "eyJ0", "store.com", "utm_", "{", "=")) {
             assertFalse("'$probe' leaked in $captured", captured.any { probe in it })
+        }
+    }
+
+    @Test
+    fun anOrderWithoutARealOrderIdIsSentWithAWarningThatOmitsTheId() {
+        val warning = "order.complete without a real orderId"
+        fun order(orderId: String?) = Event.OrderComplete(
+            Order(cartId = "cart-probe", orderId = orderId, subtotal = 1.0, total = 1.0, freight = 0.0, tax = 0.0, discounts = 0.0)
+        )
+        val captured = mutableListOf<String>()
+        SdkLog.sink = { captured += it }
+        try {
+            for (orderId in listOf(null, "", " \t", "0", " 0 ")) {
+                captured.clear()
+                val harness = CoreHarness(temp.newFolder())
+                harness.core.track(order(orderId))
+                assertTrue("'$orderId' must still be sent", harness.lastEntry().getString("event") == "order.complete")
+                assertTrue("no warning for '$orderId' in $captured", captured.count { warning in it } == 1)
+            }
+            captured.clear()
+            CoreHarness(temp.newFolder()).core.track(order("PED-probe-778812"))
+            assertFalse("$captured", captured.any { warning in it || "probe" in it })
+        } finally {
+            SdkLog.sink = null
         }
     }
 }

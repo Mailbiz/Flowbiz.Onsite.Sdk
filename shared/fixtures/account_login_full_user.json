@@ -23,6 +23,7 @@
         "created_at": "2024-03-15T14:22:00.000Z"
       }
     },
-    "data_canonical": "{\"user\":{\"created_at\":\"2024-03-15T14:22:00.000Z\",\"email\":\"maria.oliveira@gmail.com\",\"name\":\"Maria Oliveira\",\"phone\":\"+5511987654321\",\"plan\":\"vip\",\"user_id\":\"98412\"}}"
+    "data_canonical": "{\"user\":{\"created_at\":\"2024-03-15T14:22:00.000Z\",\"email\":\"maria.oliveira@gmail.com\",\"name\":\"Maria Oliveira\",\"phone\":\"+5511987654321\",\"plan\":\"vip\",\"user_id\":\"98412\"}}",
+    "identity_user_id": "98412"
   }
 }

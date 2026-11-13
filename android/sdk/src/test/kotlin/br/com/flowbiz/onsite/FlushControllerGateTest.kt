@@ -47,4 +47,38 @@ class FlushControllerGateTest {
         assertEquals(2, sender.bodies.size)
         assertEquals(0, queue.size)
     }
+
+    @Test
+    fun disablingMidDrainStopsBeforeTheNextBatch() {
+        queue = EventQueue(File(temp.newFolder(), "queue.jsonl"))
+        val controller = FlushController(queue, sender, scheduler, clock, batchSize = 2, isActive = { active })
+        (1..5).forEach { queue.append(entry(it)) }
+        sender.onSend = { active = false } // setEnabled(false) lands while the first POST is out
+        controller.requestFlush(FlushController.FlushReason.EVENT_TRACKED)
+
+        assertEquals(1, sender.bodies.size)
+        assertEquals(3, queue.size)
+        assertEquals(emptyList<Long>(), scheduler.allScheduleDelays)
+    }
+
+    @Test
+    fun triggersThatArriveWhileADrainWaitsShareIt() {
+        val waiting = ArrayDeque<Runnable>()
+        val deferring = object : TaskScheduler by scheduler {
+            override fun execute(task: Runnable) { waiting += task }
+        }
+        queue = EventQueue(File(temp.newFolder(), "queue.jsonl"))
+        val controller = FlushController(queue, sender, deferring, clock)
+        queue.append(entry(1))
+        repeat(3) { controller.requestFlush(FlushController.FlushReason.EVENT_TRACKED) }
+        assertEquals(1, waiting.size)
+
+        waiting.removeFirst().run()
+        assertEquals(1, sender.bodies.size)
+        queue.append(entry(2))
+        controller.requestFlush(FlushController.FlushReason.EVENT_TRACKED)
+        assertEquals(1, waiting.size)
+        waiting.removeFirst().run()
+        assertEquals(0, queue.size)
+    }
 }

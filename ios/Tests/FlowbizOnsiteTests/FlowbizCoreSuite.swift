@@ -139,7 +139,7 @@ import Testing
         #expect(after["session_id"] as? String != before["session_id"] as? String)
         #expect(after["visit_count"] as? Int == (before["visit_count"] as? Int ?? 0) + 1)
         #expect(after["anonymous_id"] as? String == before["anonymous_id"] as? String)
-        #expect(h.store[StorageKeys.pushToken] == nil)
+        #expect(h.pushToken == nil)
         #expect(h.store[StorageKeys.userId] == nil)
         #expect(h.store[StorageKeys.email] == nil)
     }

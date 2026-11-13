@@ -1,0 +1,22 @@
+{
+  "name": "account_login_email_without_at",
+  "event": "accountLogin",
+  "input": {
+    "user": {
+      "userId": "98412",
+      "email": "maria",
+      "name": "Maria Oliveira"
+    }
+  },
+  "expected": {
+    "wire_event": "account.login",
+    "data": {
+      "user": {
+        "user_id": "98412",
+        "name": "Maria Oliveira"
+      }
+    },
+    "data_canonical": "{\"user\":{\"name\":\"Maria Oliveira\",\"user_id\":\"98412\"}}",
+    "identity_user_id": "98412"
+  }
+}

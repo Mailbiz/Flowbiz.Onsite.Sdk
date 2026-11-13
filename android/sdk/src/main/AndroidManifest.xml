@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- For the network-restored flush trigger (registerDefaultNetworkCallback). -->
+    <!-- For the network-restored flush trigger (registerDefaultNetworkCallback) and the job's network constraint. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application>
+        <!-- Flushes the event queue once the network is back after the app went to the background. -->
+        <service
+            android:name="br.com.flowbiz.onsite.FlowbizFlushJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+    </application>
 </manifest>
