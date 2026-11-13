@@ -28,7 +28,7 @@ strict concurrency checking.
 
 ```kotlin
 dependencies {
-    implementation("br.com.flowbiz:onsite-sdk:0.1.0")
+    implementation("br.com.flowbiz:onsite-sdk:0.2.0")
 }
 ```
 
@@ -38,7 +38,7 @@ Host apps need no R8/ProGuard keep rules for the SDK.
 
 ```swift
 // Package.swift — or Xcode ▸ Add Package Dependencies with the same URL.
-.package(url: "https://github.com/Mailbiz/Flowbiz.Onsite.Sdk.git", from: "0.1.0")
+.package(url: "https://github.com/Mailbiz/Flowbiz.Onsite.Sdk.git", from: "0.2.0")
 ```
 
 There is no CocoaPods pod. Both SDKs version in lockstep; one `vX.Y.Z` tag
